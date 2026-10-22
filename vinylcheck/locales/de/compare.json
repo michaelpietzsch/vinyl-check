@@ -1,0 +1,4 @@
+{
+  "no_anchors": "Keine gemeinsame Musik gefunden (0 Anker): Die Aufnahmen lassen sich nicht übereinanderlegen. Vorher/Nachher braucht zwei Aufnahmen derselben Plattenseite.",
+  "too_few_anchors": "Nur {used} von mindestens {needed} nötigen Ankern gefunden: Die Aufnahmen passen nicht zuverlässig übereinander (andere Seite, andere Pressung oder zu wenig Musik)."
+}

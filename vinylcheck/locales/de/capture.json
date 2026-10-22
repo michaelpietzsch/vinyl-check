@@ -1,0 +1,8 @@
+{
+  "channel_mismatch": "input_channels {pick} passt nicht zu channels = {channels} und capture_channels = {cap}",
+  "arecord_missing": "arecord nicht gefunden (Paket alsa-utils)",
+  "test_file_mismatch": "Testdatei hat {file_rate} Hz/{file_channels} Kanäle, erwartet {rate} Hz/{channels}",
+  "busy": "Es läuft bereits eine Aufnahme/Pegelkontrolle",
+  "stopped_end_groove": "Endrille erkannt, automatisch gestoppt",
+  "stopped_max_duration": "Maximaldauer erreicht"
+}

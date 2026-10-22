@@ -1,0 +1,16 @@
+{
+  "worker_crashed": "Processing worker crashed (out of memory?): {error}",
+  "audio_deleted": "Original audio was deleted after the retention period (measurements are kept)",
+  "audio_missing": "Audio file missing: {path}",
+  "integrity_error": "Integrity error: the checksum of recording #{id} has changed since it was recorded. The file is damaged, do not use it any further.",
+  "calibration_too_loud": "Chain noise of {db:.1f} dBFS is too loud (expected < {max:.0f} dBFS). The stylus was probably down; please repeat with the stylus UP.",
+  "no_master": "No master stored for side {side}",
+  "master_file_missing": "Master file missing: {path}",
+  "analyze_first": "The recording must be analyzed first",
+  "both_analyze_first": "Both recordings must be analyzed first",
+  "copy_unnamed": "unnamed",
+  "copy_note": "Two copies of the same record ({a} / {b}): the differences are differences between the copies, not the effect of cleaning.",
+  "no_profile": "no profile",
+  "profile_note": "The recordings come from different turntables ({a} / {b}): differences may come from the turntable, not only from the record.",
+  "sample_rate_mismatch": "Different sample rates ({a} / {b} Hz)"
+}

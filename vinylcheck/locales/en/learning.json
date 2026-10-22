@@ -1,0 +1,16 @@
+{
+  "kind_click": "Clicks",
+  "kind_tick": "Crackle",
+  "kind_pop": "Pops",
+  "noun_click": "clicks",
+  "noun_tick": "crackle",
+  "noun_pop": "pops",
+  "no_examples": "no examples yet",
+  "too_few_examples": "too few examples: {real} real, {false_alarms} false alarms (at least {min} of each needed)",
+  "not_verifiable_master": "learning, but not verifiable yet: needs at least {min} recordings with a master ({n} so far)",
+  "not_verifiable_clicks": "not verifiable yet (too few real clicks per recording)",
+  "check_one_record": "per recording (all from one record)",
+  "check_per_recording": "per recording",
+  "usable": "estimates the real {kind} per recording to within ±{est}% (raw count ±{raw}%)",
+  "too_inaccurate": "estimate too inaccurate: ±{est}% per recording (raw count ±{raw}%, at most ±{max}% required)"
+}

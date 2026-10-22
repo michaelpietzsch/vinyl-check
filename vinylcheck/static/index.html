@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vinyl-check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%239da1a5' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%23e05a48'/%3E%3Ccircle cx='27' cy='5' r='2.5' fill='%239da1a5'/%3E%3Cpath d='M25.2 6.8 18.5 13.5' fill='none' stroke='%239da1a5' stroke-width='3' stroke-linecap='square'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css?v=__VERSION__">
+</head>
+<body>
+<header>
+  <h1 class="brand"><svg class="logo" viewBox="0 0 204 32" height="30" role="img" aria-label="vinyl-check">
+<g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g>
+<g transform="translate(42 0)"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></g>
+</svg><span class="sr">vinyl-check</span></h1>
+  <nav id="tabs">
+    <button data-mode="station" title="State of the station, latest recordings, what to do next" data-i18n-title="shell.tab_overview_title"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-tonearm"/></svg> <span data-i18n="shell.tab_overview">Overview</span></button>
+    <button data-mode="platte" title="Measure the condition of a record, before and after cleaning" data-i18n-title="shell.tab_record_title"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-disc"/></svg> <span data-i18n="shell.tab_record">Record check</span></button>
+    <button data-mode="justage" title="Set up and check the turntable with the test record" data-i18n-title="shell.tab_turntable_title"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-sliders"/></svg> <span data-i18n="shell.tab_turntable">Turntable check</span></button>
+    <button data-mode="jobs" title="Running and queued analyses, system load" data-i18n-title="shell.tab_system_title"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-clock"/></svg> <span data-i18n="shell.tab_system">System</span></button>
+    <button data-mode="system" class="tab-settings" title="Settings, device and service" data-i18n-title="shell.tab_settings_title"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-nut"/></svg> <span data-i18n="shell.tab_settings">Settings</span></button>
+  </nav>
+  <div id="pills"></div>
+</header>
+
+<section id="deck" class="card">
+  <div class="deck-row">
+    <div id="meter">
+      <div class="ch"><span>L</span><div class="bar"><i class="rms"></i><i class="peak"></i><i class="hold"></i></div><b class="val">–</b></div>
+      <div class="ch"><span>R</span><div class="bar"><i class="rms"></i><i class="peak"></i><i class="hold"></i></div><b class="val">–</b></div>
+      <div class="scale"><span>-60</span><span>-40</span><span>-20</span><span>-12</span><span>-6</span><span>0 dBFS</span></div>
+    </div>
+    <div id="rec-state">
+      <div id="rec-label" data-i18n="shell.rec_ready">ready</div>
+      <div id="rec-time">0:00</div>
+      <div id="rec-warn"></div>
+    </div>
+  </div>
+  <canvas id="rta" class="chart rta hidden" title="31-band analyzer: level per third-octave band, left/right, with peak hold" data-i18n-title="shell.rta_title"></canvas>
+  <div id="live" class="hidden">
+    <div id="live-values"></div>
+    <canvas id="live-fr" class="chart"></canvas>
+    <canvas id="live-freq" class="chart small"></canvas>
+    <canvas id="live-level" class="chart small"></canvas>
+    <canvas id="live-chart" class="chart small"></canvas>
+  </div>
+  <div class="deck-row buttons">
+    <button id="btn-monitor" class="secondary" title="Show the level and live measurement without recording" data-i18n-title="shell.monitor_title"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-level"/></svg><span class="lbl" data-i18n="shell.monitor">Check level</span></button>
+    <button id="btn-calibrate" class="secondary" title="Record 20–30 s with the stylus UP: measures the noise of the signal chain" data-i18n-title="shell.calibrate_title"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-calibrate"/></svg><span class="lbl" data-i18n="shell.calibrate">Calibration (stylus up)</span></button>
+    <button id="btn-listen" class="secondary" title="Preview without recording, or monitor the running recording (≈ 0.5 s delay)" data-i18n-title="shell.listen_title"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-listen"/></svg><span class="lbl" data-i18n="shell.listen">Monitor</span></button>
+    <span id="listen-ctl" class="hidden"><button class="secondary" data-seek="-30" title="30 s back (within the running recording)" data-i18n-title="shell.seek_back_30"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-rew"/></svg> 30 s</button><button class="secondary" data-seek="-5" title="5 s back" data-i18n-title="shell.seek_back_5"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-prev"/></svg> 5 s</button><button class="secondary" data-seek="5" title="5 s forward (at most up to live)" data-i18n-title="shell.seek_fwd_5">5 s <svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-next"/></svg></button><button class="secondary" data-seek="30" title="30 s forward (at most up to live)" data-i18n-title="shell.seek_fwd_30">30 s <svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-fwd"/></svg></button><button id="listen-live" class="secondary" title="back to live" data-i18n-title="shell.back_to_live"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-live"/></svg> Live</button><span id="listen-pos"></span></span>
+    <button id="btn-stop" class="danger" disabled><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-stop"/></svg> <span data-i18n="shell.stop">Stop</span></button>
+  </div>
+</section>
+
+<main id="main-station" class="hidden single">
+  <section class="card" id="station"><p class="empty" data-i18n="shell.loading_station">Loading the station …</p></section>
+</main>
+
+<main id="main-system" class="hidden single">
+  <section class="card" id="system"><p class="empty" data-i18n="shell.loading_settings">Loading the settings …</p></section>
+</main>
+
+<main id="main-jobs" class="hidden single">
+  <section class="card" id="jobs"><p class="empty" data-i18n="shell.loading_jobs">Loading the jobs …</p></section>
+</main>
+
+<!-- Documentation page: the texts live in the catalog (shell.doc_*), applied by i18n.js -->
+<main id="main-doku" class="hidden single">
+  <section class="card doku" id="doku">
+    <div class="row" style="justify-content:space-between"><h2 data-i18n="shell.doc_title">Documentation</h2><button class="link" data-go="system" data-i18n="shell.doc_back">← Settings</button></div>
+    <p class="hint" data-i18n="shell.doc_intro"></p>
+    <nav class="doku-nav" data-i18n-html="shell.doc_nav"></nav>
+
+    <h3 id="doc-grades" data-i18n="shell.doc_grades_head"></h3>
+    <p data-i18n-html="shell.doc_grades_p1"></p>
+    <p data-i18n-html="shell.doc_grades_p2"></p>
+    <p data-i18n-html="shell.doc_grades_p3"></p>
+
+    <h3 id="doc-stickers" data-i18n="shell.doc_stickers_head"></h3>
+    <table><tr><th data-i18n="shell.doc_stickers_grade">Grade</th><th data-i18n="shell.doc_stickers_sticker">Sticker</th></tr>
+      <tr><td>NM</td><td data-i18n="shell.doc_sticker_nm"></td></tr><tr><td>VG+</td><td data-i18n="shell.doc_sticker_vgp"></td></tr><tr><td>VG</td><td data-i18n="shell.doc_sticker_vg"></td></tr>
+      <tr><td>G+</td><td data-i18n="shell.doc_sticker_gp"></td></tr><tr><td>G</td><td data-i18n="shell.doc_sticker_g"></td></tr><tr><td>F</td><td data-i18n="shell.doc_sticker_f"></td></tr></table>
+    <p data-i18n-html="shell.doc_stickers_p"></p>
+
+    <h3 id="doc-measures" data-i18n="shell.doc_measures_head"></h3>
+    <ul>
+      <li data-i18n-html="shell.doc_measures_tick"></li>
+      <li data-i18n-html="shell.doc_measures_click"></li>
+      <li data-i18n-html="shell.doc_measures_pop"></li>
+      <li data-i18n-html="shell.doc_measures_rates"></li>
+      <li data-i18n-html="shell.doc_measures_raw_net"></li>
+      <li data-i18n-html="shell.doc_measures_noise"></li>
+      <li data-i18n-html="shell.doc_measures_scratch"></li>
+    </ul>
+
+    <h3 id="doc-baseline" data-i18n="shell.doc_baseline_head"></h3>
+    <p data-i18n-html="shell.doc_baseline_p"></p>
+
+    <h3 id="doc-ai" data-i18n="shell.doc_ai_head"></h3>
+    <p data-i18n-html="shell.doc_ai_p1"></p>
+    <p data-i18n-html="shell.doc_ai_p2"></p>
+
+    <h3 id="doc-skips" data-i18n="shell.doc_skips_head"></h3>
+    <p data-i18n-html="shell.doc_skips_p"></p>
+
+    <h3 id="doc-tracks" data-i18n="shell.doc_tracks_head"></h3>
+    <p data-i18n-html="shell.doc_tracks_p"></p>
+
+    <h3 id="doc-copies" data-i18n="shell.doc_copies_head"></h3>
+    <p data-i18n-html="shell.doc_copies_p"></p>
+
+    <h3 id="doc-compare" data-i18n="shell.doc_compare_head"></h3>
+    <p data-i18n-html="shell.doc_compare_p"></p>
+
+    <h3 id="doc-learning" data-i18n="shell.doc_learning_head"></h3>
+    <p data-i18n-html="shell.doc_learning_p"></p>
+    <h3 id="doc-condition" data-i18n="shell.doc_condition_head"></h3>
+    <p data-i18n-html="shell.doc_condition_p"></p>
+
+    <h3 id="doc-operation" data-i18n="shell.doc_operation_head"></h3>
+    <ul>
+      <li data-i18n-html="shell.doc_op_preview"></li>
+      <li data-i18n-html="shell.doc_op_graphs"></li>
+      <li data-i18n-html="shell.doc_op_events"></li>
+      <li data-i18n-html="shell.doc_op_sensitivity"></li>
+      <li data-i18n-html="shell.doc_op_fixed_gain"></li>
+      <li data-i18n-html="shell.doc_op_system"></li>
+    </ul>
+
+    <h3 id="doc-limits" data-i18n="shell.doc_limits_head"></h3>
+    <p data-i18n-html="shell.doc_limits_p"></p>
+  </section>
+</main>
+
+<main id="main-platte">
+  <aside class="card" id="records-panel">
+    <h2><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-disc"/></svg> <span data-i18n="records.panel_head">Records</span></h2>
+    <form id="new-record">
+      <input id="nr-search" type="search" aria-label="Search records" placeholder="Search the Discogs collection …" data-i18n-aria-label="records.search_aria" data-i18n-placeholder="records.search_placeholder" autocomplete="off">
+      <div id="nr-results"></div>
+      <div class="two">
+        <input id="nr-artist" placeholder="Artist" data-i18n-placeholder="records.artist_placeholder" required>
+        <input id="nr-title" placeholder="Title" data-i18n-placeholder="records.title_placeholder" required>
+      </div>
+      <input type="hidden" id="nr-release"><input type="hidden" id="nr-cond">
+      <button type="submit"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-disc"/></svg> <span data-i18n="records.add_record">Add record</span></button>
+    </form>
+    <ul id="records"></ul>
+  </aside>
+
+  <section class="card" id="detail">
+    <p class="empty" data-i18n="records.select_hint">Select or add a record on the left.</p>
+  </section>
+</main>
+
+<main id="main-justage" class="hidden">
+  <aside class="card" id="setups-panel">
+    <h2><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-tonearm"/></svg> <span data-i18n="shell.turntables_head">Turntables</span></h2>
+    <ul id="profiles"></ul>
+    <button id="btn-new-profile" class="secondary"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-tonearm"/></svg> <span data-i18n="shell.add_turntable">Add turntable</span></button>
+    <h3 id="runs-head" data-i18n="shell.runs_head">Alignment runs</h3>
+    <p class="hint" data-i18n="shell.runs_hint">One run = one setting of the turntable, measured with both sides of the test record.</p>
+    <form id="new-setup">
+      <div class="two">
+        <input id="ns-force" type="number" step="0.01" min="0" placeholder="Tracking force (g)" data-i18n-placeholder="shell.run_force">
+        <input id="ns-bias" placeholder="Anti-skating (e.g. 1)" data-i18n-placeholder="shell.run_bias">
+      </div>
+      <div class="two">
+        <input id="ns-vta" placeholder="Arm height / VTA" data-i18n-placeholder="shell.run_vta">
+        <input id="ns-hours" type="number" step="1" min="0" placeholder="Stylus hours" data-i18n-placeholder="shell.run_hours">
+      </div>
+      <input id="ns-input" placeholder="Interface input level (e.g. line, level 100)" data-i18n-placeholder="shell.run_input">
+      <input id="ns-label" placeholder="Label (optional)" data-i18n-placeholder="shell.run_label">
+      <button type="submit"><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-sliders"/></svg> <span data-i18n="shell.run_add">Add run</span></button>
+    </form>
+    <ul id="setups"></ul>
+    <button id="btn-cmp-setups" class="secondary" disabled><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-compare"/></svg> <span data-i18n="shell.runs_compare">Compare two selected runs</span></button>
+  </aside>
+
+  <section class="card" id="setup-detail">
+    <p class="empty" data-i18n="shell.turntable_select_hint">Select or add a turntable on the left.</p>
+  </section>
+</main>
+
+<section class="card hidden" id="view"></section>
+
+<div id="toast"></div>
+<div id="mini-player" class="hidden" role="status"><span class="mp-label"></span><span class="mp-time hint"></span><div class="mp-bar"><div class="mp-fill"></div></div><button class="link mp-again" title="play again" data-i18n-title="shell.play_again">↻</button><button class="link mp-stop" title="Stop" data-i18n-title="shell.stop">■</button></div>
+<div id="pop" class="pop hidden" role="tooltip"></div>
+<audio id="player" preload="none"></audio>
+<script>window.VC_V="__VERSION__";</script>
+<script src="i18n/catalog.js?v=__VERSION__"></script>
+<script src="i18n.js?v=__VERSION__"></script>
+<script src="app.js?v=__VERSION__"></script>
+</body>
+</html>

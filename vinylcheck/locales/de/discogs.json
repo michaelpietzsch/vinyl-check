@@ -1,0 +1,13 @@
+{
+  "http_error": "Discogs {code}: {reason}",
+  "token_invalid": "Token ungültig oder abgelaufen (Discogs → Settings → Developers)",
+  "rate_limited": "Discogs-Ratenlimit (60 Anfragen je Minute), gleich noch einmal",
+  "unreachable": "Discogs nicht erreichbar: {error}",
+  "app_not_configured": "Discogs-App nicht eingerichtet (discogs_consumer_key/secret)",
+  "no_request_token": "Discogs hat kein Request-Token geliefert",
+  "no_access_token": "Discogs hat kein Access-Token geliefert",
+  "not_configured": "Discogs nicht eingerichtet (discogs_token, discogs_username)",
+  "unknown_grade": "Unbekannte Note '{grade}'",
+  "not_in_collection": "Platte ist nicht in der Sammlung (oder Sammlung noch nicht abgeglichen)",
+  "instance_unknown": "Sammlungsinstanz unbekannt: Sammlung abgleichen"
+}

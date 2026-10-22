@@ -1,0 +1,17 @@
+{
+  "steps": 12000,
+  "batch": 16,
+  "segment_seconds": 1.0,
+  "train_clicks": 426667,
+  "train_clips": 357,
+  "calibration": {
+    "hi": 0.9525741268224334,
+    "lo": 0.549833997312478
+  },
+  "held_out": {
+    "f1": 0.9944,
+    "precision": 0.9986,
+    "recall": 0.9903,
+    "fp_per_minute_on_clean": 0.0
+  }
+}

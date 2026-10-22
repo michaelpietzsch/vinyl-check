@@ -1,0 +1,23 @@
+{
+  "part_start": "Start",
+  "part_middle": "Middle",
+  "part_end": "End",
+  "wow_unremarkable": "unremarkable",
+  "wow_eccentric": "center hole off-center (variation increases toward the inside)",
+  "wow_constant": "constant: more likely the platter or the drive",
+  "wow_increases_slightly": "increases slightly toward the inside",
+  "channels_swapped": "Channels swapped (left ↔ right)",
+  "reason_other_side": "The recording does not match this master, but it matches the master of side {side}: wrong side played or labels swapped.",
+  "reason_no_match": "The recording does not match this master: a different record, a different side, or too little music recorded.",
+  "warn_polarity_inverted": "Polarity: inverted. Both channels are inverted relative to the master. This can happen anywhere in the chain (cut, cartridge, phono preamp) and is audible at most in a direct comparison.",
+  "warn_polarity_left": "Polarity: left channel inverted. One channel is inverted relative to the master: bass and center content partly cancel and the stereo image becomes diffuse. Check the cartridge connections and cables first; otherwise it is in the cut.",
+  "warn_polarity_right": "Polarity: right channel inverted. One channel is inverted relative to the master: bass and center content partly cancel and the stereo image becomes diffuse. Check the cartridge connections and cables first; otherwise it is in the cut.",
+  "warn_channels_swapped": "Channels swapped: left on the vinyl is right in the master. Check the cables and cartridge connections; otherwise it is in the cut.",
+  "warn_eccentric": "Wow per revolution up to ±{wow:.2f} %, increasing toward the inside: center hole about {ecc:.2f} mm off-center.",
+  "warn_ends_early": "The recording ends {s} s before the end of the music in the master.",
+  "warn_starts_late": "The recording starts only after the music in the master has begun.",
+  "warn_pre_echo": {
+    "one": "Pre-echo in {n} gap, strongest {db:.0f} dB relative to the music: audible before quiet entries.",
+    "other": "Pre-echo in {n} gaps, strongest {db:.0f} dB relative to the music: audible before quiet entries."
+  }
+}

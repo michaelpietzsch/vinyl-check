@@ -1,0 +1,16 @@
+{
+  "worker_crashed": "Rechenprozess abgestürzt (zu wenig Speicher?): {error}",
+  "audio_deleted": "Original-Audio wurde nach Ablauf der Aufbewahrungsfrist gelöscht (Messwerte sind erhalten)",
+  "audio_missing": "Audiodatei fehlt: {path}",
+  "integrity_error": "Integritätsfehler: Prüfsumme der Aufnahme #{id} hat sich seit der Aufnahme verändert. Datei beschädigt, nicht weiterverwenden.",
+  "calibration_too_loud": "Kettenrauschen {db:.1f} dBFS ist zu laut (erwartet < {max:.0f} dBFS). Nadel war wohl aufgesetzt, bitte mit Nadel OBEN wiederholen.",
+  "no_master": "Kein Master für Seite {side} hinterlegt",
+  "master_file_missing": "Master-Datei fehlt: {path}",
+  "analyze_first": "Die Aufnahme muss zuerst analysiert sein",
+  "both_analyze_first": "Beide Aufnahmen müssen zuerst analysiert sein",
+  "copy_unnamed": "ohne Angabe",
+  "copy_note": "Zwei Exemplare derselben Platte ({a} / {b}): Die Unterschiede sind Unterschiede der Exemplare, nicht der Reinigung.",
+  "no_profile": "ohne Profil",
+  "profile_note": "Die Aufnahmen stammen von verschiedenen Plattenspielern ({a} / {b}): Unterschiede können vom Laufwerk kommen, nicht nur von der Platte.",
+  "sample_rate_mismatch": "Unterschiedliche Abtastraten ({a} / {b} Hz)"
+}
