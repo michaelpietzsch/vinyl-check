@@ -85,7 +85,7 @@ jobs:
               assert needed in names, f"missing in wheel: {needed}"
           print(f"{len(names)} files in wheel, all required assets present")
           EOF
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
