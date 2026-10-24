@@ -19,6 +19,12 @@ off by at most MAX_EST_ERROR per recording in the cross-check and beats the raw 
 with fixed weights in the estimate (real and "unsure" 1, false alarm 0).
 
 Status texts in the model (`label`, `reason`, `check`) are i18n messages; the model is stored as JSON.
+
+**Shared scaling and prior (Vinyl-Mind).** A fitted model standardizes the features with its own mean and spread, so
+its weights only mean something together with that normalisation. To compare or combine weights across turntable
+profiles and stations, they are re-expressed in a fixed common scaling (`FIXED_SCALING`, tied to `FEATURE_VERSION`):
+`to_fixed` and `predict_fixed`. `train(..., prior=...)` takes weights in that scaling and lets the ridge penalty pull
+towards them instead of towards zero (docs/vinyl-mind-protocol.md, docs/architecture.md).
 """
 from __future__ import annotations
 
@@ -42,6 +48,31 @@ MANUAL_WEIGHT = 5.0        # one verdict by hand counts like five master classif
 MAX_EST_ERROR = 0.30       # largest mean deviation of the estimate per recording in the cross-check
 L2 = 1.0                   # ridge penalty on the standardized features
 DENSITY_S = 0.5            # window (±s) for the event density feature
+
+# Version of the feature definitions above (names, order, how they are computed). Weights computed on different
+# versions must never be combined, so any change to `features()` or FEATURES needs a new version. Version "1" is
+# relative to the music reference of each recording, not yet to the turntable profile (stage 0 of the architecture).
+FEATURE_VERSION = "1"
+# Fixed common scaling of feature version "1": (centre, scale) per feature, chosen from the typical range of each
+# feature so that a weight of 1 means a similar effect for every feature. The values are a convention shared with
+# Vinyl-Mind (docs/vinyl-mind-protocol.md), not statistics of any data set; changing them needs a new FEATURE_VERSION.
+FIXED_SCALING = {
+    "log_strength": (4.0, 1.0),     # log1p of the detector peak; ~2.4 (strength 10) … 6.2 (strength 500)
+    "amp_rel": (-15.0, 10.0),       # dB relative to the music reference; real clicks −40 … −15, music −5 … +5
+    "log_dur": (0.5, 0.5),          # log1p of the duration in ms; ~0.1 … 1.5
+    "gc": (0.5, 0.25),              # second-opinion score 0 … 1 (0.5 when missing)
+    "gc_missing": (0.5, 0.5),       # 0/1
+    "music": (0.5, 0.5),            # 0/1
+    "both_ch": (0.5, 0.5),          # 0/1
+    "log_density": (0.5, 0.75),     # log1p of the neighbours within ±DENSITY_S; 0 … ~3
+    "amp_rel2": (3.0, 3.0),         # amp_rel² / 100; 0 … ~16
+    "strength_x_amp": (-6.0, 5.0),  # log_strength × amp_rel / 10; ~−25 … +3
+}
+# Ridge penalty towards a prior (weights from other profiles or a global model) instead of L2 towards zero. One
+# example with p(1 − p) ≈ 0.2 adds about 0.2 to the curvature of a standardized weight, so 20 lets a prior hold like
+# roughly a hundred master-classified events: a profile with a handful of judgements stays close to it, one with
+# thousands of events follows its own data.
+PRIOR_L2 = 20.0
 
 
 def features(events: list[dict], music_ref_dbfs: float | None) -> np.ndarray:
@@ -71,24 +102,61 @@ def features(events: list[dict], music_ref_dbfs: float | None) -> np.ndarray:
                             amp_rel ** 2 / 100.0, ls * amp_rel / 10.0])
 
 
-def _fit(X: np.ndarray, y: np.ndarray, w: np.ndarray, l2: float = L2, iters: int = 60) -> dict:
-    """Weighted logistic regression with ridge penalty (Newton's method) on standardized features."""
+def _scaling() -> tuple[np.ndarray, np.ndarray]:
+    """Centres and scales of FIXED_SCALING in the order of FEATURES."""
+    return (np.array([FIXED_SCALING[f][0] for f in FEATURES]), np.array([FIXED_SCALING[f][1] for f in FEATURES]))
+
+
+def _prior_local(prior: dict, mu: np.ndarray, sd: np.ndarray) -> np.ndarray:
+    """A prior in the fixed scaling ({"intercept", "weights"}) as coefficients on the locally standardized features.
+    The logit a + Σ v·(x − c)/s equals b0 + Σ b·(x − mu)/sd with b = v·sd/s and b0 = a + Σ v·(mu − c)/s."""
+    c, s = _scaling()
+    v = np.asarray(prior["weights"], float)
+    return np.concatenate([[float(prior["intercept"]) + float(np.sum(v * (mu - c) / s))], v * sd / s])
+
+
+def _fit(X: np.ndarray, y: np.ndarray, w: np.ndarray, l2: float = L2, iters: int = 60, prior: dict | None = None,
+         prior_l2: float = PRIOR_L2) -> dict:
+    """Weighted logistic regression with ridge penalty (Newton's method) on standardized features. With `prior`
+    (weights in the fixed scaling), the penalty pulls towards the prior with strength `prior_l2` instead of towards
+    zero.
+
+    The fit always starts at zero: started at a prior that disagrees with the data, every probability is saturated at
+    the wrong end, the curvature of the unpenalized intercept vanishes and Newton's first step overshoots wildly."""
     mu = X.mean(axis=0)
     sd = X.std(axis=0)
     sd[sd < 1e-9] = 1.0
     Z = np.column_stack([np.ones(len(X)), (X - mu) / sd])
+    b0 = np.zeros(Z.shape[1]) if prior is None else _prior_local(prior, mu, sd)
     b = np.zeros(Z.shape[1])
-    R = np.eye(Z.shape[1]) * l2
+    R = np.eye(Z.shape[1]) * (l2 if prior is None else prior_l2)
     R[0, 0] = 0.0                                   # no penalty on the intercept
     for _ in range(iters):
         p = 1.0 / (1.0 + np.exp(-np.clip(Z @ b, -30, 30)))
-        g = Z.T @ (w * (y - p)) - R @ b
+        g = Z.T @ (w * (y - p)) - R @ (b - b0)
         H = (Z * (w * p * (1 - p) + 1e-9)[:, None]).T @ Z + R
         step = np.linalg.solve(H, g)
         b += step
         if np.max(np.abs(step)) < 1e-7:
             break
     return {"mu": mu.round(6).tolist(), "sd": sd.round(6).tolist(), "b": b.round(6).tolist()}
+
+
+def to_fixed(m: dict) -> dict:
+    """A fitted model ({"mu", "sd", "b"}) in the fixed common scaling: {"intercept", "weights"}, the same function of
+    the features. Weights of features without spread in the training data are 0 (they carried no information)."""
+    c, s = _scaling()
+    mu, sd, b = np.array(m["mu"]), np.array(m["sd"]), np.array(m["b"])
+    v = b[1:] * s / sd
+    a = b[0] - float(np.sum(b[1:] * (mu - c) / sd))
+    return {"intercept": round(float(a), 6), "weights": [round(float(x), 6) for x in v]}
+
+
+def predict_fixed(fixed: dict, X: np.ndarray) -> np.ndarray:
+    """Probability "real click" from weights in the fixed scaling (a contribution, a global model, a prior)."""
+    c, s = _scaling()
+    z = float(fixed["intercept"]) + ((X - c) / s) @ np.asarray(fixed["weights"], float)
+    return 1.0 / (1.0 + np.exp(-np.clip(z, -30, 30)))
 
 
 def _predict(m: dict, X: np.ndarray) -> np.ndarray:
@@ -105,15 +173,21 @@ def _auc(p: np.ndarray, y: np.ndarray) -> float | None:
     return float((r[:len(pos)].sum() - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
 
 
-def train(data: dict, now: float | None = None) -> dict:
+def train(data: dict, now: float | None = None, prior: dict | None = None) -> dict:
     """Train one model per kind and cross-check its estimate.
 
     data[kind] = {"X", "y" (1 real, 0 music), "w" (weight), "rec" (recording per row), "record" (record per row),
     "manual" (bool), "master" (row comes from a fully classified recording), "raw_n" {recording: events}}.
-    Returns the model with a status per kind (JSON-serializable).
+    prior: optional {kind: {"intercept", "weights"}} in the fixed scaling (FIXED_SCALING of FEATURE_VERSION); for the
+    kinds it covers, the ridge penalty pulls towards it instead of towards zero, in the fit and in the cross-check.
+    Returns the model with a status per kind (JSON-serializable); with a prior, `prior_kinds` lists the kinds it
+    applied to.
     """
     model = {"version": VERSION, "trained_at": now or time.time(), "features": list(FEATURES), "kinds": {}}
+    if prior:
+        model["prior_kinds"] = sorted(k for k in prior if k in KINDS)
     for kind in KINDS:
+        kp = (prior or {}).get(kind)
         d = data.get(kind)
         info: dict = {"label": KIND_LABEL[kind], "usable": False}
         if d is None or not len(d["y"]):
@@ -131,19 +205,20 @@ def train(data: dict, now: float | None = None) -> dict:
                                       min=MIN_PER_CLASS)
             model["kinds"][kind] = info
             continue
-        info["model"] = _fit(X, y, w)
+        info["model"] = _fit(X, y, w, prior=kp)
         if len(mrecs) < MIN_MASTER_RECORDINGS:
             info["reason"] = i18n.msg("learning.not_verifiable_master", min=MIN_MASTER_RECORDINGS, n=len(mrecs))
             model["kinds"][kind] = info
             continue
         # Cross-check: leave out each master recording once, train on the rest, estimate its real clicks
-        errs_raw, errs_est, rows = [], [], []
+        errs_raw, errs_est, rows, oof_p, oof_y = [], [], [], [], []
         for g in mrecs:
             te = (rec == g) & master
             tr = rec != g
             if np.sum(y[tr] == 1) < 5 or np.sum(y[tr] == 0) < 5 or not te.any():
                 continue
-            p = _predict(_fit(X[tr], y[tr], w[tr]), X[te])
+            p = _predict(_fit(X[tr], y[tr], w[tr], prior=kp), X[te])
+            oof_p.append(p); oof_y.append(y[te])
             true, raw, est = float(y[te].sum()), float(d["raw_n"].get(int(g), int(te.sum()))), float(p.sum())
             if true < 3:                                    # relative errors of tiny counts say nothing
                 continue
@@ -155,8 +230,10 @@ def train(data: dict, now: float | None = None) -> dict:
             model["kinds"][kind] = info
             continue
         er, ee = float(np.mean(np.abs(errs_raw))), float(np.mean(np.abs(errs_est)))
+        # separation of the held-out events (all folds together): a quality figure for Vinyl-Mind contributions
+        auc = _auc(np.concatenate(oof_p), np.concatenate(oof_y))
         info.update(cv_err_raw=round(er, 3), cv_err_est=round(ee, 3), cv_bias_est=round(float(np.mean(errs_est)), 3),
-                    cv=rows, check=i18n.msg("learning.check_one_record" if info["master_records"] < 2
+                    cv_auc=None if auc is None else round(auc, 3), cv=rows, check=i18n.msg("learning.check_one_record" if info["master_records"] < 2
                                             else "learning.check_per_recording"))
         if ee <= MAX_EST_ERROR and ee < er:
             info["usable"] = True
@@ -198,14 +275,16 @@ def estimate(events: list[dict], model: dict | None, music_ref_dbfs: float | Non
     return weight, p
 
 
-def training_data(db) -> tuple[dict, dict]:
+def training_data(db, profile_id: int | None = None) -> tuple[dict, dict]:
     """Examples from the database: all recordings with a master comparison (classification per event) or with
-    verdicts given by hand. Returns (data per kind for train(), overview counts)."""
-    rows = db.q("""SELECT a.recording_id, r.record_id, a.metrics,
+    verdicts given by hand; with `profile_id` only the recordings made with that turntable profile. Returns (data per
+    kind for train(), overview counts)."""
+    where, args = ("AND r.profile_id = ?", (profile_id,)) if profile_id is not None else ("", ())
+    rows = db.q(f"""SELECT a.recording_id, r.record_id, a.metrics,
                           (SELECT m.result FROM master_checks m WHERE m.recording_id = a.recording_id AND m.status = 'done') AS master,
                           (SELECT COUNT(*) FROM event_labels l WHERE l.recording_id = a.recording_id) AS n_labels
                      FROM analyses a JOIN recordings r ON r.id = a.recording_id
-                    WHERE r.kind NOT IN ('calibration', 'alignment')""")
+                    WHERE r.kind NOT IN ('calibration', 'alignment') {where}""", args)
     acc = {k: {"X": [], "y": [], "w": [], "rec": [], "record": [], "manual": [], "master": [], "raw_n": {}} for k in KINDS}
     overview = {"recordings_master": 0, "recordings_manual": 0, "events_master": 0, "events_manual": 0}
     for r in rows:

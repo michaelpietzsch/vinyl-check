@@ -87,3 +87,76 @@ def test_recount_shows_estimate_and_grades_only_when_asked():
     m2, g2 = analysis.recount(metrics, ev, learned=model, learn_grade=True)
     assert m2["learned"]["graded"]
     assert g2["per_metric"]["clicks_music_per_min"]["value"] == m2["learned"]["clicks_music_per_min"]
+
+
+def _flipped(rng, n_real, n_music):
+    """The opposite world: real clicks as loud as the music, false alarms quiet. A prior learned there is wrong here."""
+    ev = _events(rng, n_real, n_music)
+    for e in ev:
+        e["_y"] = 1.0 - e["_y"]
+    return ev
+
+
+def _dist(a: dict, b: dict) -> float:
+    return float(np.linalg.norm(np.array(a["weights"]) - np.array(b["weights"])))
+
+
+def test_fixed_scaling_is_the_same_function():
+    rng = np.random.default_rng(5)
+    model = learning.train(_data([(i, 1, _events(rng, 40, 25)) for i in range(1, 4)]))
+    m = model["kinds"]["click"]["model"]
+    fixed = learning.to_fixed(m)
+    assert set(learning.FIXED_SCALING) == set(learning.FEATURES) and len(fixed["weights"]) == len(learning.FEATURES)
+    X = learning.features(_events(rng, 20, 20), -15.0)
+    assert np.allclose(learning.predict_fixed(fixed, X), learning._predict(m, X), atol=1e-4)
+
+
+def test_without_prior_nothing_changes():
+    rng = np.random.default_rng(6)
+    data = _data([(i, 1, _events(rng, 40, 25)) for i in range(1, 4)])
+    a, b = learning.train(data, now=1.0), learning.train(data, now=1.0, prior=None)
+    assert a == b and "prior_kinds" not in a
+    assert a["kinds"]["click"]["cv_auc"] > 0.9
+
+
+def test_prior_pulls_with_few_examples_and_fades_with_many():
+    rng = np.random.default_rng(7)
+    prior_model = learning.train(_data([(i, 1, _flipped(rng, 60, 60)) for i in range(1, 4)]))
+    prior = {"click": learning.to_fixed(prior_model["kinds"]["click"]["model"])}
+
+    few = _data([(1, 1, _events(rng, 12, 12))])
+    own = learning.to_fixed(learning.train(few)["kinds"]["click"]["model"])
+    pulled = learning.train(few, prior=prior)
+    assert pulled["prior_kinds"] == ["click"]
+    got = learning.to_fixed(pulled["kinds"]["click"]["model"])
+    assert _dist(got, prior["click"]) < _dist(got, own)                # few examples: close to the prior
+
+    many = _data([(i, 1, _events(rng, 400, 300)) for i in range(1, 6)])
+    own = learning.to_fixed(learning.train(many)["kinds"]["click"]["model"])
+    got = learning.to_fixed(learning.train(many, prior=prior)["kinds"]["click"]["model"])
+    assert _dist(got, own) < _dist(got, prior["click"])
+    X = learning.features(_events(rng, 50, 50), -15.0)                 # many examples: the own data win
+    p_got, p_own, p_prior = (learning.predict_fixed(f, X) for f in (got, own, prior["click"]))
+    assert np.mean(np.abs(p_got - p_own)) < 0.1 and np.mean(np.abs(p_got - p_prior)) > 0.8
+    # the cross-check uses the prior as well, and a wrong prior does not stop a well-fed model from being usable
+    assert learning.train(many, prior=prior)["kinds"]["click"]["usable"]
+
+
+def test_training_data_per_profile(tmp_path):
+    from vinylcheck.db import DB
+    db = DB(tmp_path / "t.sqlite")
+    rid = db.add_record("A", "B")
+    p1, p2 = db.add_profile(name="one"), db.add_profile(name="two")
+    rng = np.random.default_rng(8)
+    for pid in (p1, p1, p2):
+        rec = db.add_recording(record_id=rid, profile_id=pid, side="A", kind="before", status="analyzed")
+        ev = _events(rng, 15, 10)
+        db.save_analysis(rec, {"metrics": {"music_ref_dbfs": -15.0}, "grading": {"grade": None, "score": None},
+                               "warnings": [], "overview": {},
+                               "events": [{k: e.get(k) for k in ("t", "dur_ms", "strength", "amp_dbfs", "ch", "kind",
+                                                                 "region", "gc")} for e in ev]}, "test", 1.0)
+        db.set_master_check(rec, status="done", result={"clicks": {"events": [[round(e["t"], 3), "v" if e["_y"] else "m"]
+                                                                              for e in ev]}})
+    n = lambda d: len(d["click"]["y"])
+    assert n(learning.training_data(db)[0]) == 75
+    assert n(learning.training_data(db, p1)[0]) == 50 and n(learning.training_data(db, p2)[0]) == 25
