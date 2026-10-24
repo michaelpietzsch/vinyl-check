@@ -257,6 +257,7 @@ geometry. Sizes are 16 (in text), 20 (buttons, tables) and 24 (navigation). Ever
 | `sweep` | sweep | `wave` | hum and rumble, master |
 | `trash` | delete | `export` | export (WAV, CSV) |
 | `close` | close | `chevron` | next, expand |
+| `hub` | Vinyl-Mind (stations learning together) | | |
 
 Rules: important actions always have icon **and** word ("■ Stop"). Icon-only buttons are only for close, expand and
 play, with `aria-label` and a tooltip. Never two icons for the same function.

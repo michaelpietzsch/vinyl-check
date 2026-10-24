@@ -398,3 +398,22 @@ canvas.ap-sg { display: block; width: 100%; height: 170px; border-radius: 4px; }
 /* Network access (desktop app). The QR code stays black on white in both themes, so phone cameras read it. */
 .net-qr svg { display: block; width: 200px; height: 200px; margin: .4rem 0; border-radius: 6px; }
 .net-code { font-size: 1.6rem; font-weight: 700; letter-spacing: .12em; color: var(--ink); }
+
+/* Vinyl-Mind (settings): the server key reads like the fingerprint the operator publishes, the payload preview is
+   the exact JSON that leaves the station */
+.vm-url { display: flex; gap: .5rem; align-items: center; }
+.vm-url input { flex: 1 1 auto; min-width: 0; }
+.vm-url button { flex: 0 0 auto; }
+.vm-fp { font-size: .9rem; color: var(--ink); max-width: 25rem; line-height: 1.6; word-spacing: .15em; }
+.vm-join { max-width: 460px; }
+#vm-box h4 { font-size: .9rem; margin: 1.1rem 0 .3rem; }
+#vm-box .row { margin-top: .6rem; }
+.vm-join input { flex: 1 1 12rem; }
+#vm-preview > summary { cursor: pointer; font-weight: 600; margin: .8rem 0 .4rem; }
+.vm-prof { border-top: 1px solid var(--line); padding: .7rem 0 .2rem; }
+.vm-prof-head { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: baseline; }
+.vm-chain { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .5rem 0; }
+.vm-chain label { display: grid; gap: .2rem; font-size: .85rem; color: var(--muted); }
+.vm-chain select { width: auto; min-width: 12rem; }
+.vm-json { max-height: 22rem; overflow: auto; margin: .4rem 0; padding: .6rem .8rem; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 4px; font: .78rem/1.45 var(--mono); white-space: pre; color: var(--ink); }

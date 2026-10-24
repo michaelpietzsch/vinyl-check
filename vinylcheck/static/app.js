@@ -1913,6 +1913,9 @@ async function loadSystem() {
     <div id="discogs-box"><p class="empty">${T("settings.loading")}</p></div>
     <h3>${ico("sliders", 18)} ${T("settings.targets")}</h3>
     <div id="targets"><p class="empty">${T("settings.targets_loading")}</p></div>
+    <div id="network-slot"></div>
+    <h3 id="settings-vinylmind">${ico("hub", 18)} ${T("vinylmind.title")}</h3>
+    <div id="vm-box"><p class="empty">${T("settings.loading")}</p></div>
     <h3 id="settings-service">${T("settings.device_service")}</h3>
     <p class="hint">${T(info.desktop ? "audioset.service_hint_desktop" : "audioset.service_hint", { file: cfgFile })}</p>
     <table class="kv"><tbody>
@@ -2001,6 +2004,7 @@ async function loadSystem() {
   api("/api/discogs/status").then(renderDiscogs).catch((e) => toast(e.message));
   loadAudio();
   loadNetwork();
+  loadVinylMind();
   $("#set-lang").onchange = (e) => I18N.setLang(e.target.value);  // stores the choice in a cookie and reloads
   $("#settings-form").onsubmit = guard(async (e) => {
     e.preventDefault();
@@ -2035,7 +2039,7 @@ async function loadNetwork() {
   let n;
   try { n = await api("/api/network"); } catch (_) { return; }
   if (!n.desktop || !$("#system")) return;
-  if (!$("#network-box")) $("#system").insertAdjacentHTML("beforeend", `<h3>${ico("wifi", 18)} ${T("network.title")}</h3><div id="network-box"></div>`);
+  if (!$("#network-box")) ($("#network-slot") || $("#system")).insertAdjacentHTML("beforeend", `<h3>${ico("wifi", 18)} ${T("network.title")}</h3><div id="network-box"></div>`);
   const box = $("#network-box");
   const urls = n.urls || [];
   const qr = (i) => (urls[i]?.qr ? `<div class="net-qr">${urls[i].qr}</div><p class="hint">${T("network.qr_hint")}</p>` : (n.local ? `<p class="hint">${T("network.no_qr")}</p>` : ""));
@@ -2071,6 +2075,180 @@ async function loadNetwork() {
     toast(T("network.new_code_done"));
     loadNetwork();
   });
+}
+
+// ─── Vinyl-Mind (settings): contribute to and use the model that several stations learn together ─────────────
+// Both switches are off until the user turns them on. Joining shows the server key's fingerprint first and stops if
+// the server presents another key; "What is sent" shows the exact payloads before anything leaves the station.
+const vmKinds = (ks) => (ks || []).map((k) => EVKIND[k] || k).join(", ");
+// Pretty-printed JSON with arrays of plain values on one line, so ten weights read as one row
+function vmJson(v, ind = "") {
+  if (Array.isArray(v)) return v.every((x) => x === null || typeof x !== "object") ? JSON.stringify(v).replace(/,/g, ", ")
+    : `[\n${v.map((x) => ind + "  " + vmJson(x, ind + "  ")).join(",\n")}\n${ind}]`;
+  if (v && typeof v === "object") return `{\n${Object.entries(v).map(([k, x]) => `${ind}  ${JSON.stringify(k)}: ${vmJson(x, ind + "  ")}`).join(",\n")}\n${ind}}`;
+  return JSON.stringify(v);
+}
+async function loadVinylMind() {
+  const box = $("#vm-box"); if (!box) return;
+  try { renderVinylMind(await api("/api/vinylmind")); }
+  catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
+}
+function renderVinylMind(s) {
+  const box = $("#vm-box"); if (!box) return;
+  const joined = s.state === "pending" || s.state === "approved";
+  const stCls = { approved: "ok", pending: "warn", revoked: "bad" }[s.state] || "info";
+  const model = s.model ? (s.model.adopted.length ? T("vinylmind.model_value", { version: esc(s.model.version), kinds: vmKinds(s.model.adopted) })
+    : T("vinylmind.model_unused", { version: esc(s.model.version) })) : T("vinylmind.model_none");
+  const p = s.prior;
+  const prior = !p ? T("vinylmind.prior_none")
+    : (p.source === "server" ? T("vinylmind.prior_server", { ref: esc(p.ref), kinds: vmKinds(p.kinds) })
+      : T("vinylmind.prior_import", { type: T(`vinylmind.type_${p.type}`), ref: esc(p.ref), kinds: vmKinds(p.kinds) }))
+      + (p.in_use ? "" : ` · <span class="hint">${T("vinylmind.prior_inactive")}</span>`)
+      + ` <button type="button" class="link" id="vm-prior-rm">${T("vinylmind.prior_remove")}</button>`;
+  const row = (label, value) => `<tr><th scope="row">${label}</th><td>${value}</td></tr>`;
+  box.innerHTML = `
+    <p class="hint">${T("vinylmind.intro")}</p>
+    ${s.recording ? `<p class="warnbox">${T("vinylmind.waiting_recording")}</p>` : ""}
+    <div class="sfield"><label class="check"><input type="checkbox" id="vm-contribute" ${s.contribute ? "checked" : ""}> ${T("vinylmind.contribute")}</label>
+      <div class="help">${T("vinylmind.contribute_help")}</div></div>
+    <div class="sfield"><label class="check"><input type="checkbox" id="vm-use" ${s.use_model ? "checked" : ""}> ${T("vinylmind.use")}</label>
+      <div class="help">${T("vinylmind.use_help")}</div></div>
+    <div class="sfield"><label for="vm-url">${T("vinylmind.server")}</label>
+      <div class="vm-url"><input type="url" id="vm-url" value="${esc(s.url)}" placeholder="https://" spellcheck="false" autocomplete="off" ${joined ? "disabled" : ""}>
+        <button type="button" class="secondary" id="vm-url-save" ${joined ? "disabled" : ""}>${T("vinylmind.save_url")}</button></div>
+      <div class="help">${s.preset_url ? T("vinylmind.preset", { url: `<span class="mono">${esc(s.preset_url)}</span>` }) : T("vinylmind.no_default")}
+        ${!s.url_is_preset && !joined ? `<button type="button" class="link" id="vm-url-reset">${T("vinylmind.reset_url")}</button>` : ""}</div>
+      ${joined ? `<div class="help">${T("vinylmind.url_locked")}</div>` : ""}
+      <div class="err" id="vm-url-err" role="alert"></div></div>
+    ${s.joined ? `<div class="sfield"><label>${T("vinylmind.server_key")}</label><div class="vm-fp mono">${esc(s.joined.fingerprint)}</div>
+      <div class="help">${T("vinylmind.server_key_help")}</div></div>` : ""}
+    <table class="kv"><tbody>
+      ${row(T("vinylmind.status"), `<span class="st ${stCls}">${T(`vinylmind.state_${s.state}`)}</span>${s.joined?.name ? ` <span class="hint">${esc(s.joined.name)}</span>` : ""}`)}
+      ${joined ? row(T("vinylmind.last_contribution"), s.last_contribution ? T("vinylmind.last_contribution_value", { date: dateStr(s.last_contribution.at), n: s.last_contribution.profiles }) : T("vinylmind.never")) : ""}
+      ${joined ? row(T("vinylmind.model"), model) : ""}
+      ${row(T("vinylmind.prior"), prior)}
+      ${s.last_error ? row(T("vinylmind.last_error"), `<span class="bad">${esc(s.last_error)}</span>`) : ""}
+    </tbody></table>
+    ${joined ? `<div class="row">
+        <button type="button" class="secondary" id="vm-sync" title="${T("vinylmind.send_now_hint")}" ${s.contribute || s.use_model ? "" : "disabled"}>${ico("hub", 18)} ${T("vinylmind.send_now")}</button>
+        <button type="button" class="link" id="vm-leave">${T("vinylmind.leave")}</button></div>`
+      : `<div class="row vm-join"><input id="vm-invite" placeholder="${T("vinylmind.invitation_placeholder")}" aria-label="${T("vinylmind.invitation_placeholder")}" autocomplete="off" spellcheck="false">
+        <button type="button" id="vm-join" ${s.url ? "" : "disabled"} title="${s.url ? "" : T("vinylmind.join_no_url")}">${ico("hub", 18)} ${T("vinylmind.join")}</button></div>`}
+    <details id="vm-preview"><summary>${T("vinylmind.preview")}</summary><div id="vm-preview-box"><p class="empty">${T("settings.loading")}</p></div></details>
+    <h4>${T("vinylmind.files")}</h4>
+    <p class="hint">${T("vinylmind.files_hint")}</p>
+    <div class="row vm-join"><select id="vm-exp" aria-label="${T("vinylmind.export_profile")}"></select>
+      <button type="button" class="secondary" id="vm-export">${ico("export", 18)} ${T("vinylmind.export")}</button>
+      <button type="button" class="secondary" id="vm-import">${T("vinylmind.import")}</button>
+      <input type="file" id="vm-file" accept=".json,application/json" class="hidden"></div>`;
+  const put = async (body, msg) => { renderVinylMind(await api("/api/vinylmind", { method: "PUT", body })); if (msg) toast(msg); };
+  for (const [id, key] of [["vm-contribute", "contribute"], ["vm-use", "use_model"]]) {
+    const el = $("#" + id);
+    el.onchange = guard(async () => {
+      el.disabled = true;
+      try { await put({ [key]: el.checked }, T(`vinylmind.${key === "contribute" ? "contribute" : "use"}_${el.checked ? "on" : "off"}`)); }
+      catch (e) { loadVinylMind(); throw e; }
+    });
+  }
+  const saveUrl = guard(async () => {
+    $("#vm-url-err").textContent = "";
+    try { await put({ url: $("#vm-url").value.trim() }, T("vinylmind.url_saved")); }
+    catch (e) { $("#vm-url-err").textContent = e.message; }
+  });
+  $("#vm-url-save").onclick = saveUrl;
+  $("#vm-url").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); saveUrl(); } };
+  const rs = $("#vm-url-reset"); if (rs) rs.onclick = guard(() => put({ reset_url: true }, T("vinylmind.url_reset_done")));
+  const pr = $("#vm-prior-rm"); if (pr) pr.onclick = guard(async () => {
+    if (!confirm(T("vinylmind.prior_remove_confirm"))) return;
+    renderVinylMind(await api("/api/vinylmind/prior", { method: "DELETE" })); toast(T("vinylmind.prior_removed"));
+  });
+  const jn = $("#vm-join"); if (jn) jn.onclick = guard(async () => {
+    jn.disabled = true;
+    try {
+      const info = await api("/api/vinylmind/server");
+      if (!info.supported) toast(T("vinylmind.join_unsupported", { version: s.feature_version }), 6000);
+      if (!confirm(T("vinylmind.join_confirm", { name: info.name || info.url, fp: info.fingerprint_display }))) return;
+      const r = await api("/api/vinylmind/join", { method: "POST", body: { invitation: $("#vm-invite").value.trim() || null, fingerprint: info.fingerprint } });
+      renderVinylMind(r); toast(T(r.state === "approved" ? "vinylmind.joined_approved" : "vinylmind.joined_pending"), 5000);
+    } finally { if (document.body.contains(jn)) jn.disabled = false; }
+  });
+  const sy = $("#vm-sync"); if (sy) sy.onclick = guard(async () => {
+    sy.disabled = true;
+    try {
+      const r = await api("/api/vinylmind/sync", { method: "POST" });
+      const res = r.result || {}, n = res.contributions?.sent || 0;
+      renderVinylMind(r.status);
+      toast(res.status === "pending" ? T("vinylmind.sync_pending") : [n ? T("vinylmind.sync_sent", { n }) : "", res.model === "new" ? T("vinylmind.sync_model") : ""].filter(Boolean).join(" ") || T("vinylmind.sync_done"));
+    } catch (e) { loadVinylMind(); throw e; }
+  });
+  const lv = $("#vm-leave"); if (lv) lv.onclick = guard(async () => {
+    if (!confirm(T("vinylmind.leave_confirm"))) return;
+    let r;
+    try { r = await api("/api/vinylmind/leave", { method: "POST", body: {} }); }
+    catch (e) {
+      if (!confirm(T("vinylmind.forget_confirm", { error: e.message }))) return;
+      r = await api("/api/vinylmind/leave", { method: "POST", body: { forget: true } });
+    }
+    renderVinylMind(r); toast(T("vinylmind.left"));
+  });
+  $("#vm-preview").ontoggle = () => { if ($("#vm-preview").open) loadVmPreview(); };
+  api("/api/profiles").then((ps) => {
+    const sel = $("#vm-exp"); if (!sel) return;
+    sel.innerHTML = ps.map((x) => `<option value="${x.id}" ${x.active ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    $("#vm-export").disabled = !ps.length;
+  }).catch(() => {});
+  $("#vm-export").onclick = guard(async () => {
+    const pkg = await api(`/api/vinylmind/export?profile=${encodeURIComponent($("#vm-exp").value)}`);
+    const file = `vinyl-mind-contribution-${pkg.profile_id.slice(0, 8)}.json`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(pkg, null, 2) + "\n"], { type: "application/json" }));
+    a.download = file; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(T("vinylmind.export_done", { file }));
+  });
+  $("#vm-import").onclick = () => $("#vm-file").click();
+  $("#vm-file").onchange = guard(async (ev) => {
+    const f = ev.target.files[0]; ev.target.value = "";
+    if (!f) return;
+    const text = await f.text();
+    const { package: d } = await api("/api/vinylmind/import", { method: "POST", body: text });
+    const kinds = Object.entries(d.kinds).map(([k, v]) => T("vinylmind.import_kind", { kind: EVKIND[k] || k, n: v.examples ?? "–" })).join("\n");
+    const ask = d.type === "model"
+      ? T("vinylmind.import_confirm_model", { ref: d.ref, version: d.feature_version, signature: T(`vinylmind.signature_${d.signature}`), kinds })
+      : T("vinylmind.import_confirm_contribution", { ref: d.ref, version: d.feature_version, kinds });
+    if (!confirm(ask)) return;
+    const r = await api("/api/vinylmind/import?confirm=true", { method: "POST", body: text });
+    renderVinylMind(r.status); toast(T("vinylmind.imported"), 5000);
+  });
+}
+// The payloads of the next contribution, per turntable profile, with the chain class that goes with them
+async function loadVmPreview() {
+  const box = $("#vm-preview-box"); if (!box) return;
+  let d;
+  try { d = await api("/api/vinylmind/preview"); } catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; return; }
+  if (!d.profiles.length) { box.innerHTML = `<p class="hint">${T("vinylmind.preview_none")}</p>`; return; }
+  const opts = (kind, values, cur, guess, set) => values.map((v) => {
+    const label = T(`vinylmind.${kind}_${v}`);
+    return `<option value="${v}" ${v === cur ? "selected" : ""}>${!set && v === guess ? T("vinylmind.guessed", { value: label }) : label}</option>`;
+  }).join("");
+  box.innerHTML = `<p class="hint">${T("vinylmind.preview_hint")}</p>` + d.profiles.map((x) => `
+    <div class="vm-prof">
+      <div class="vm-prof-head"><b>${esc(x.name)}</b>${x.active ? ` <span class="st ok">${T("vinylmind.active")}</span>` : ""}
+        <span class="hint mono">${T("vinylmind.profile_id", { id: esc(x.vm_id) })}</span>
+        ${x.payload ? `<span class="hint">${x.unchanged ? T("vinylmind.preview_sent", { date: dateStr(x.sent_at) }) : x.sent_at ? T("vinylmind.preview_changed") : T("vinylmind.preview_not_sent")}</span>` : ""}</div>
+      <div class="vm-chain">
+        <label>${T("vinylmind.connection")}<select data-vm-chain="${x.id}" data-part="connection">${opts("connection", ["usb_turntable", "interface", "unknown"], x.chain.connection, x.chain_guess.connection, x.chain_set)}</select></label>
+        <label>${T("vinylmind.cartridge")}<select data-vm-chain="${x.id}" data-part="cartridge">${opts("cartridge", ["mm", "mc", "unknown"], x.chain.cartridge, x.chain_guess.cartridge, x.chain_set)}</select></label>
+      </div>
+      ${x.payload ? `<pre class="vm-json">${esc(vmJson(x.payload))}</pre>` : `<p class="hint">${esc(x.reason || "")}</p>`}
+    </div>`).join("");
+  box.querySelectorAll("[data-vm-chain]").forEach((el) => el.addEventListener("change", guard(async () => {
+    const id = el.dataset.vmChain;
+    const part = (n) => box.querySelector(`[data-vm-chain="${id}"][data-part="${n}"]`).value;
+    await api("/api/vinylmind", { method: "PUT", body: { chain: { [id]: { connection: part("connection"), cartridge: part("cartridge") } } } });
+    toast(T("vinylmind.chain_saved"));
+    loadVmPreview();
+  })));
 }
 
 // ─── Audio interface (settings): device, sample rate, bit depth, inputs, WASAPI/ASIO ───────────────────────────
