@@ -5,6 +5,41 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Planned as 1.1.0.
+
+### Added
+
+- [Vinyl-Mind protocol](docs/vinyl-mind-protocol.md), draft v0: the contract between a station and a Vinyl-Mind hub
+  (contribution, global model, check report with JSON schemas; endpoints; Ed25519 request and model signing; errors,
+  limits, versioning) and the list of what leaves a station. Never audio.
+- *Settings → Vinyl-Mind*, the station side of learning together with other stations: the switches *Contribute to
+  Vinyl-Mind* and *Use the global model* (both off by default), the server address with *Reset to default* (no
+  default server yet; configuration key `vinyl_mind_url` presets one), *Join* with an optional invitation code after
+  confirming the server key's fingerprint, status, *Send now*, *Leave*, *What is sent* with the exact payload per
+  turntable profile, and export and import of package files. API: `/api/vinylmind` with `/server`, `/preview`,
+  `/join`, `/leave`, `/sync`, `/export`, `/import` and `/prior`.
+- The station identifies itself with an Ed25519 key pair, created on joining as a file in the state directory
+  (mode 600, never in the database or the logs) and deleted on leaving. Every request is signed; plain HTTP is
+  refused except to the computer itself; redirects are not followed; models are verified against the accepted server
+  key before anything in them is used.
+- Contributions per turntable profile: the learning model trained on the recordings made with that profile, without
+  any prior, in a fixed common feature scaling, with example counts, cross-check quality (estimate error, AUC) and a
+  coarse chain class (USB turntable or interface; MM or MC; guessed from the profile, can be corrected). Each
+  profile gets a random id. Nothing is sent while a recording runs or while both switches are off; contributions
+  only when they changed, at most hourly per profile.
+- A fetched global model is checked on the station's own master recordings and becomes the starting point (prior)
+  of the training per kind only where the estimate does not get worse; the check is reported to the hub.
+- Learning: weights in a fixed common scaling per feature version (`FIXED_SCALING`, feature version 1),
+  `train(prior=...)` pulls towards a prior instead of towards zero (without a prior nothing changes), the cross-check
+  also reports the AUC, training data can be limited to one turntable profile, and the detector has a version.
+- Dependency `cryptography` (Debian: `python3-cryptography`, installed by `deploy.sh`).
+
+### Changed
+
+- *Settings → Network access* (desktop app) now appears above *Device and service*, followed by *Vinyl-Mind*.
+
 ## [1.0.1] – 2026-10-26
 
 ### Added

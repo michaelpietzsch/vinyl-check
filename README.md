@@ -286,6 +286,7 @@ Linux (XDG). The most important keys:
 | `retention_days` | `30` | delete original audio after this many days; measurements are kept |
 | `discogs_token`, `discogs_username` | — | Discogs access via personal token; a token entered under *Settings → Discogs* takes precedence |
 | `discogs_consumer_key`, `discogs_consumer_secret` | — | Discogs access via OAuth app ("Connect with Discogs" in the settings) |
+| `vinyl_mind_url` | `""` | Vinyl-Mind server that *Settings → Vinyl-Mind* offers and *Reset to default* restores; no default server yet ([protocol](docs/vinyl-mind-protocol.md)) |
 
 Device, sample rate, bit depth, the input pair and the Windows options can also be set in the interface under
 *Settings → Audio interface*: values saved there take precedence over the file, apply from the next recording without
@@ -315,6 +316,7 @@ the conventions of the chosen language. To add a language, see [docs/translating
 | [User guide](docs/user-guide.md) | the workflow in the interface |
 | [Measurement](docs/measurement.md) | how detection, grading, comparison and alignment work |
 | [Architecture](docs/architecture.md) | design of stations learning together through Vinyl-Mind (roadmap) |
+| [Vinyl-Mind protocol](docs/vinyl-mind-protocol.md) | contract between a station and a Vinyl-Mind hub (draft v0), what leaves a station |
 | [Design system](docs/design-system.md) | interface principles, tokens, components ([preview](docs/design-preview.html)) |
 | [Translating](docs/translating.md) | adding a language |
 | [Code signing](docs/code-signing.md) | signing status of the desktop apps, first start on macOS and Windows |
@@ -326,7 +328,8 @@ the conventions of the chosen language. To add a language, see [docs/translating
 - **Vinyl-Mind**: stations learn together. Each turntable profile trains its model locally, with the measured
   profile as the zero point so that setups become comparable; only model weights and counts are shared,
   never audio. A separate hub project combines them (federated averaging) and hands back a global model
-  that each station checks on its own data before using it ([architecture](docs/architecture.md)).
+  that each station checks on its own data before using it ([architecture](docs/architecture.md)). The station
+  side is in place (*Settings → Vinyl-Mind*, [protocol](docs/vinyl-mind-protocol.md)); the hub is next.
 - **More test records**: band layouts beyond the Analogue Productions AAPT 1, 45 rpm alignment tones.
 - **Grade calibration** against a larger set of records with known condition.
 - **WAV import** of recordings made elsewhere.

@@ -300,6 +300,7 @@ In short:
 | *Display* | colour scheme (light, dark or system) and interface language; both are stored in this browser |
 | *Discogs connection* | personal access token and user name (save, test, remove), connect or disconnect a Discogs app, sync the collection now |
 | *Targets* | target presets for the turntable check: edit, copy, reset, set active |
+| *Vinyl-Mind* | learning together with other stations: *Contribute* and *Use the global model* (both off), server, *Join*, status, *What is sent*, export and import of package files |
 | *Device and service* | version, the capture device and format in use, the audio system (Core Audio, ASIO and WASAPI, ALSA), paths. Read-only: everything except the audio interface and the Discogs access lives in the configuration file; restart the service after changing it. |
 
 **Audio interface.** Choose which input records the turntable and in which format. The device list shows the audio
@@ -337,6 +338,31 @@ Discogs once. That access token is stored in vinyl-check's database too, and *Di
 
 Without access, Discogs features are off and everything else works. The collection is cached locally. If a search
 finds nothing and the cache is older than a minute, vinyl-check syncs immediately and searches again.
+
+**Vinyl-Mind.** Several stations can pool what their learning models learn (see
+[architecture](architecture.md#federated-learning-with-vinyl-mind)). Only weights and counts per turntable profile
+leave the station, never audio, record titles or names; the [protocol](vinyl-mind-protocol.md#what-leaves-a-station)
+lists everything that is sent.
+
+- *Contribute to Vinyl-Mind* sends, after each retraining of the learning model, the contribution of every turntable
+  profile whose data changed (at most once an hour per profile). *Use the global model* fetches the shared model
+  every few hours, checks it on your own master recordings and uses it as the **starting point** of the training
+  only for the kinds where the estimate does not get worse. Both are off until you turn them on; with both off,
+  nothing is sent at all, and nothing is sent while a recording runs.
+- *Server* is the address of the Vinyl-Mind server, `https://` only. There is no default server yet; a configuration
+  file can preset one (`vinyl_mind_url`), and *Reset to default* restores it.
+- *Join* (with an invitation code, if the operator gave you one) first shows the fingerprint of the server's key:
+  compare it with the one the operator publishes. After joining, the station waits for approval unless the code
+  admitted it directly, and the fingerprint stays visible under *Server key*. Every model is checked against that key
+  before it is used. *Send now* sends changed contributions and asks for a newer model at once. *Leave* deletes the
+  station's contributions on the server and its key on the station; if the server is gone, the station can forget it
+  locally.
+- *What is sent* shows the exact data of the next contribution per profile, with a random profile ID (never the
+  name) and the coarse chain class: USB turntable or turntable and interface, MM or MC. The class is guessed from the
+  profile's device and cartridge; correct it there if the guess is wrong.
+- *Package files* work without a server: *Export* saves a profile's contribution as a file, *Import* reads a
+  contribution or model file from another station, says what it is and, after you confirm, uses it as the starting
+  point of the training. *Starting point → Remove* trains from zero again.
 
 ## System and jobs
 

@@ -351,7 +351,9 @@ per profile and kind, with `POST /v0/reports`. The hub withdraws a version that 
 An estimate error is the mean over recordings of `|estimate − true| / true`, where `true` is the number of events the
 master comparison classified as real and `estimate` the sum of the model's probabilities over the classified events.
 Any of the three errors is `null` where it cannot be computed (too few examples or master recordings). A profile
-without any master recording is left out; a report without profiles is not sent.
+without any master recording is left out; a report without profiles is not sent. A station may report the same model
+version again (after *Use the global model* was switched off and on, it fetches and checks anew); the hub keeps the
+latest report per profile and model version.
 
 ### JSON Schema
 

@@ -329,6 +329,15 @@ default. Computing it from the estimate is a setting, best enabled only once rec
 pressings with a master are included. A background thread checks every 30 s for new judgements or master comparisons,
 retrains, and recounts analyses made with an older model.
 
+**Starting point from other stations (Vinyl-Mind).** Weights are exchanged in a fixed common scaling per feature
+(`FIXED_SCALING` of feature version 1), not in each station's own standardisation, so the same weight means the same
+everywhere. With a starting point (an adopted global model or an imported package), the ridge penalty pulls the
+weights towards it instead of towards zero, with a strength of about a hundred master-classified events
+(`PRIOR_L2`): with a handful of examples the model stays close to the starting point, with thousands it follows the
+own data. The cross-check uses the same starting point, so *usable* still means verified on the station's own
+recordings. The cross-check also reports the AUC of the held-out detections. Details:
+[architecture](architecture.md#how-a-station-uses-the-global-model), [protocol](vinyl-mind-protocol.md).
+
 ## Technical data, spectrogram, analyzer
 
 **Technical data** (`technical.py`), computed only over the groove and blockwise so that a 30-minute side fits in
