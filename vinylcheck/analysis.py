@@ -222,12 +222,14 @@ def track_stats(bounds: list[dict], t: np.ndarray, kind: np.ndarray, region: np.
 
 
 def learned_metrics(m: dict, events: list[dict], kind: np.ndarray, region: np.ndarray, model: dict | None,
-                    quiet_min: float, music_min: float, groove_min: float) -> dict | None:
+                    quiet_min: float, music_min: float, groove_min: float,
+                    zero_point: dict | None = None) -> dict | None:
     """Estimated genuine clicks from the learning model (learning.estimate): the same metrics as the raw count,
-    only weighted. None without a model."""
+    only weighted. None without a model. `zero_point`: the recording's turntable profile (learning.zero_point), used
+    by models of feature version 2."""
     if not model:
         return None
-    wts, _ = learning.estimate(events, model, m.get("music_ref_dbfs"))
+    wts, _ = learning.estimate(events, model, m.get("music_ref_dbfs"), zero_point)
     est = tally(kind, region, wts, None, quiet_min, music_min, groove_min, m.get("floor"))
     usable = [k for k, v in (model.get("kinds") or {}).items() if v.get("usable")]
     return {"model_id": model.get("id"), "usable": usable, "counts": est["counts"],
@@ -251,11 +253,13 @@ def graded_view(m: dict, learn_grade: bool) -> dict:
 
 def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConfig(),
             skip_labels: dict | None = None, warnings: list | None = None,
-            learned: dict | None = None, learn_grade: bool = False) -> tuple[dict, dict]:
+            learned: dict | None = None, learn_grade: bool = False,
+            zero_point: dict | None = None) -> tuple[dict, dict]:
     """Recompute counts and grade of a stored analysis after labels have changed.
 
     Returns (metrics, grading) with the same keys as analyze(). With `skip_labels` the groove skips are
-    reclassified as well; the `warnings` list (if given) is then updated in place with the new skip warning."""
+    reclassified as well; the `warnings` list (if given) is then updated in place with the new skip warning.
+    `zero_point` is the recording's turntable profile for a learned model of feature version 2."""
     kind = np.array([e["kind"] for e in events], dtype=object)
     region = np.array([e["region"] for e in events], dtype=object)
     counted = np.array([e.get("label") != "music" for e in events], dtype=bool)
@@ -266,7 +270,7 @@ def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConf
     music_min = max(groove_min - quiet_min, 0.0)
     m = dict(metrics)
     m.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, metrics.get("floor")))
-    m["learned"] = learned_metrics(m, events, kind, region, learned, quiet_min, music_min, groove_min)
+    m["learned"] = learned_metrics(m, events, kind, region, learned, quiet_min, music_min, groove_min, zero_point)
     if m["learned"] is not None:
         m["learned"]["graded"] = bool(learn_grade and m["learned"]["usable"])
     if skip_labels is not None:
@@ -288,7 +292,8 @@ def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConf
 
 def what_if(metrics: dict, events: list[dict], skip_labels: dict | None, ignore_events=(), ignore_skips=(),
             gcfg: GradingConfig = GradingConfig(), learned: dict | None = None, learn_grade: bool = False,
-            tol_ev_s: float = 0.003, tol_skip_s: float = 2.0) -> tuple[dict, dict, dict]:
+            tol_ev_s: float = 0.003, tol_skip_s: float = 2.0,
+            zero_point: dict | None = None) -> tuple[dict, dict, dict]:
     """What-if: count and grade as if the given detections were not there ("what would the grade be without
     this skip?").
 
@@ -314,7 +319,8 @@ def what_if(metrics: dict, events: list[dict], skip_labels: dict | None, ignore_
         sl = {k: v for k, v in sl.items() if abs(k - t) > tol_skip_s}
         sl[t] = "no_skip"
         hit_sk += 1
-    m, g = recount(metrics, kept, gcfg, skip_labels=sl, warnings=None, learned=learned, learn_grade=learn_grade)
+    m, g = recount(metrics, kept, gcfg, skip_labels=sl, warnings=None, learned=learned, learn_grade=learn_grade,
+                   zero_point=zero_point)
     return m, g, {"events": hit_ev, "skips": hit_sk}
 
 
@@ -713,6 +719,11 @@ def chain_noise_db(path) -> float:
     """Chain noise from a calibration recording (stylus up): mean power in dBFS, 20 Hz high-pass."""
     import soundfile as sf
     audio, sr = sf.read(str(path), dtype="float32", always_2d=True)
+    return chain_noise_dbfs(audio, sr)
+
+
+def chain_noise_dbfs(audio: np.ndarray, sr: int) -> float:
+    """chain_noise_db on samples ((n, channels) float in ±1) instead of a file (tools/eval_features.py)."""
     hp = signal.butter(2, 20, btype="high", fs=sr, output="sos")
     skip = min(len(audio) // 4, int(0.2 * sr))
     p = np.mean([np.mean(signal.sosfilt(hp, audio[:, c])[skip:] ** 2) for c in range(audio.shape[1])])

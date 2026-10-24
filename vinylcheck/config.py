@@ -28,6 +28,7 @@ from .analysis import AnalysisConfig
 from .detect import DetectParams
 from .grading import GradingConfig
 from .alignment import AlignmentConfig
+from .learning import FEATURE_VERSIONS
 from .vinylmind import DEFAULT_VINYL_MIND_URL
 
 log = logging.getLogger("vinylcheck.config")
@@ -59,6 +60,10 @@ class Config:
     engineer_mode: bool = False        # engineer mode: measure recordings against the master of their side
     learn_enabled: bool = True         # learn from master comparisons and verdicts, show estimated real clicks
     learn_grade: bool = False          # … and compute the grade from the estimate (once verified on more records)
+    # Feature version of the learning model (learning.FEATURE_VERSIONS): "1" relative to each recording's music
+    # reference; "2" (experimental) also relative to the recording's turntable profile. Vinyl-Mind contributions and
+    # global models always carry the version in use, and versions are never mixed.
+    feature_version: str = "1"
     # Vinyl-Mind server (docs/vinyl-mind-protocol.md): the preset that "Reset to default" in the settings restores, so
     # a group of stations can be pointed at a self-hosted hub; contributing and using the model are switched there
     vinyl_mind_url: str = DEFAULT_VINYL_MIND_URL
@@ -184,6 +189,11 @@ def _load(path: str, user_mode: bool) -> Config:
             data[k] = Path(data[k])
     cfg = replace(_build(Config, data), analysis=analysis, grading=grading, alignment=alignment,
                   file_keys=frozenset(data))
+    # TOML may give the version as a number (feature_version = 2); an unknown one is an error like an unknown key
+    fv = str(cfg.feature_version)
+    if fv not in FEATURE_VERSIONS:
+        raise ValueError(f"feature_version must be one of {', '.join(FEATURE_VERSIONS)}, not {cfg.feature_version!r}")
+    cfg = replace(cfg, feature_version=fv)
 
     env = {
         "VINYLCHECK_DATA_DIR": ("data_dir", Path),
