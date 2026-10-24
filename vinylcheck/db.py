@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import secrets
 import sqlite3
 import threading
 import time
@@ -159,6 +160,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     fixed_gain INTEGER NOT NULL DEFAULT 0,
     baseline TEXT,
     accepted_at REAL,
+    vm_id TEXT,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -311,7 +313,8 @@ class DB:
         pcols = {r[1] for r in self.conn.execute("PRAGMA table_info(profiles)")}
         for col in ("wizard_setup_id INTEGER", "target_map TEXT",                     # 0.4.x: profile columns
                     "floor_clicks_per_min REAL", "floor_ticks_per_min REAL", "sensitivity REAL",    # 0.6.0: floor
-                    "fixed_gain INTEGER NOT NULL DEFAULT 0"):                                       # 0.7.0: fixed gain
+                    "fixed_gain INTEGER NOT NULL DEFAULT 0",                                        # 0.7.0: fixed gain
+                    "vm_id TEXT"):                                                                  # 1.1.0: Vinyl-Mind
             if col.split()[0] not in pcols:
                 self.conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
         if "sensitivity" not in rcols:                                                 # 0.6.0: per-recording override
@@ -401,6 +404,19 @@ class DB:
 
     def delete_profile(self, pid: int) -> None:
         self.x("DELETE FROM profiles WHERE id = ?", (pid,))
+
+    def profile_vm_id(self, pid: int) -> str | None:
+        """The profile's id for Vinyl-Mind: 128 random bits, created on first use and never derived from names or
+        hardware, so contributions cannot be traced to a turntable. None if the profile does not exist."""
+        with self.lock:
+            row = self.conn.execute("SELECT vm_id FROM profiles WHERE id = ?", (pid,)).fetchone()
+            if row is None:
+                return None
+            if row[0]:
+                return row[0]
+            vid = secrets.token_hex(16)
+            self.conn.execute("UPDATE profiles SET vm_id = ? WHERE id = ?", (vid, pid))
+            return vid
 
     def _migrate_copy_findings(self) -> None:
         """Visual findings (scratch, warp …) belong to the record, per copy and side (`copy_findings`), not to a

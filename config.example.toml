@@ -43,6 +43,11 @@ discogs_sync_minutes = 15               # sync the collection this often; a sear
 # discogs_consumer_secret = ""
 # discogs_url = ""                      # deprecated, ignored (was an external service, e.g. "http://<host>:4990")
 
+# Vinyl-Mind (docs/vinyl-mind-protocol.md): the server that Settings → Vinyl-Mind offers and "Reset to default"
+# restores. There is no default server yet; a group of stations can be preset to a self-hosted one. Contributing and
+# using the global model are switched on in the interface (both off by default).
+# vinyl_mind_url = "https://vinyl-mind.example"
+
 # [detect]                               # click detection
 # threshold = 8.0                        # higher = fewer but surer hits
 # order = 32

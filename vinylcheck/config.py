@@ -28,6 +28,7 @@ from .analysis import AnalysisConfig
 from .detect import DetectParams
 from .grading import GradingConfig
 from .alignment import AlignmentConfig
+from .vinylmind import DEFAULT_VINYL_MIND_URL
 
 log = logging.getLogger("vinylcheck.config")
 
@@ -58,6 +59,9 @@ class Config:
     engineer_mode: bool = False        # engineer mode: measure recordings against the master of their side
     learn_enabled: bool = True         # learn from master comparisons and verdicts, show estimated real clicks
     learn_grade: bool = False          # … and compute the grade from the estimate (once verified on more records)
+    # Vinyl-Mind server (docs/vinyl-mind-protocol.md): the preset that "Reset to default" in the settings restores, so
+    # a group of stations can be pointed at a self-hosted hub; contributing and using the model are switched there
+    vinyl_mind_url: str = DEFAULT_VINYL_MIND_URL
     discogs_token: str = ""        # personal access token (Discogs → Settings → Developers); empty = Discogs off
     discogs_username: str = ""     # Discogs user name (collection of this account); with OAuth it comes from Discogs
     discogs_consumer_key: str = ""     # OAuth app (Discogs → Settings → Developers → Applications) …

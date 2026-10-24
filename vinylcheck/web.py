@@ -45,7 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
-from . import audio_settings, licenses, network
+from . import audio_settings, licenses, network, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key
 from .jobs import MASTER_KINDS, Worker
@@ -651,15 +651,23 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return metrics, grading_
 
     def learn_train() -> dict:
-        """Retrain (takes a fraction of a second) and store the model."""
+        """Retrain (takes a fraction of a second) and store the model. A Vinyl-Mind prior (an adopted global model or
+        an imported package) is where the ridge penalty pulls the weights instead of towards zero."""
         with learn["lock"]:
             data, overview = learning.training_data(db)
-            model = learning.train(data)
+            prior = vm.prior_info()
+            model = learning.train(data, prior=prior["kinds"] if prior else None)
             model["data"] = overview
+            if prior:
+                model["prior"] = {k: prior[k] for k in ("source", "type", "ref")}
             learn["model"], learn["data"] = model, overview
             db.set_setting("learn_model", json.dumps(model))
             log.info("Learned model %s: %s", model["id"], {k: v.get("usable") for k, v in model["kinds"].items()})
-            return model
+        vm.note_retrained()                       # contributions may have changed: the next round looks
+        return model
+
+    # Vinyl-Mind (vinylmind.py): contributions and the global model; nothing is sent while a recording runs
+    vm = vinylmind.VinylMind(cfg, db, busy=lambda: recorder.active, retrain=learn_train)
 
     def learn_apply(limit: int | None = None) -> int:
         """Recount every analysis whose estimate does not match the current model and switches."""
@@ -745,7 +753,9 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if not desktop:
             threading.Thread(target=_restart_loop, daemon=True, name="vinylcheck-restart").start()
         threading.Thread(target=_learn_loop, daemon=True, name="vinylcheck-learning").start()
+        vm.start()
         yield
+        vm.stop()
         worker.close()
         if recorder.active:
             recorder.stop()
@@ -753,6 +763,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     app = FastAPI(title="vinyl-check", version=__version__, lifespan=lifespan, default_response_class=LocalizedJSONResponse)
     network.install(app, cfg, db, desktop)        # access check + /access, /api/network; inside the language middleware
     licenses.install(app)                         # /licenses: own license and third-party notices
+    vinylmind.install(app, vm)                    # /api/vinylmind*: Settings → Vinyl-Mind
     if cfg.language != "auto" and not i18n.supported(cfg.language):
         raise ValueError(f"Unknown language {cfg.language!r}: use 'auto' or one of {', '.join(i18n.languages())}")
     app.add_middleware(LanguageMiddleware, default=cfg.language)

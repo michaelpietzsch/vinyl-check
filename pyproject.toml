@@ -37,6 +37,8 @@ dependencies = [
     "websockets>=12",
     "reportlab>=4.0",
     "pillow>=10",
+    # Ed25519 keys and signatures for Vinyl-Mind (station identity, signed requests, signed models)
+    "cryptography>=41",
     # Recording through PortAudio (Core Audio, WASAPI, ASIO); the wheels bring PortAudio along. Linux records with
     # arecord and only needs it with the extra [portaudio].
     "sounddevice>=0.5; sys_platform == 'darwin' or sys_platform == 'win32'",

@@ -49,7 +49,8 @@ echo "=== vinyl-check $VERSION deploy → $TARGET ==="
 echo "[1/5] Debian packages (kept up to date by unattended-upgrades)"
 "${SSH[@]}" "sudo DEBIAN_FRONTEND=noninteractive apt-get -y -q install --no-install-recommends \
   python3-numpy python3-scipy python3-soundfile python3-fastapi python3-uvicorn python3-websockets \
-  python3-pytest python3-httpx python3-torch python3-reportlab python3-pil fonts-ibm-plex alsa-utils >/dev/null && echo '    ok'"
+  python3-pytest python3-httpx python3-torch python3-reportlab python3-pil python3-cryptography \
+  fonts-ibm-plex alsa-utils >/dev/null && echo '    ok'"
 
 echo "[2/5] User + directories"
 "${SSH[@]}" 'sudo bash -s' <<'REMOTE'

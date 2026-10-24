@@ -233,8 +233,9 @@ def train(data: dict, now: float | None = None, prior: dict | None = None) -> di
         # separation of the held-out events (all folds together): a quality figure for Vinyl-Mind contributions
         auc = _auc(np.concatenate(oof_p), np.concatenate(oof_y))
         info.update(cv_err_raw=round(er, 3), cv_err_est=round(ee, 3), cv_bias_est=round(float(np.mean(errs_est)), 3),
-                    cv_auc=None if auc is None else round(auc, 3), cv=rows, check=i18n.msg("learning.check_one_record" if info["master_records"] < 2
-                                            else "learning.check_per_recording"))
+                    cv_auc=None if auc is None else round(auc, 3), cv=rows,
+                    check=i18n.msg("learning.check_one_record" if info["master_records"] < 2
+                                   else "learning.check_per_recording"))
         if ee <= MAX_EST_ERROR and ee < er:
             info["usable"] = True
             info["reason"] = i18n.msg("learning.usable", kind=KIND_NOUN[kind], est=round(ee * 100), raw=round(er * 100))
