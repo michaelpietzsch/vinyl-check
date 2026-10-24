@@ -448,7 +448,7 @@ def test_join_contribute_adopt_report_leave(station, hub):
     r = station.post("/api/vinylmind/sync").json()
     assert r["result"]["model"] == "new", r
     st = r["status"]
-    assert st["model"]["version"] == "t-1" and st["model"]["adopted"] == ["click"]
+    assert st["model"]["version"] == "t-1" and st["model"]["adopted"] == ["click"] and st["model"]["in_use"]
     assert st["prior"]["source"] == "server" and st["prior"]["in_use"]
     learned = json.loads(app.state.db.setting("learn_model"))
     assert learned["prior"] == {"source": "server", "type": "model", "ref": "t-1"}
@@ -466,7 +466,12 @@ def test_join_contribute_adopt_report_leave(station, hub):
     assert model_req[2].get("if-none-match") == '"t-1"' and len(hub.reports) == 1
     # turning the switch off removes the adopted model from the training
     st = station.put("/api/vinylmind", json={"use_model": False}).json()
-    assert st["prior"] is None and "prior" not in json.loads(app.state.db.setting("learn_model"))
+    assert st["prior"] is None and st["model"] is None
+    assert "prior" not in json.loads(app.state.db.setting("learn_model"))
+    # switched on again, the model is fetched and checked anew (no ETag left over)
+    assert station.put("/api/vinylmind", json={"use_model": True}).json()["model"] is None
+    assert station.post("/api/vinylmind/sync").json()["result"]["model"] == "new"
+    station.put("/api/vinylmind", json={"use_model": False})
 
     # a deleted profile's contribution is withdrawn
     victim = next(p for p in app.state.db.profiles() if p["name"] == "Studio deck")

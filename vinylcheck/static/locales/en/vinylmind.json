@@ -33,6 +33,7 @@
   "model": "Global model",
   "model_value": "Version {version}, used for {kinds}",
   "model_unused": "Version {version}, not used: not better on your master recordings",
+  "model_idle": "Version {version}, not in use: the imported starting point replaced it",
   "model_none": "none yet",
   "prior": "Starting point",
   "prior_none": "none, the training starts from zero",

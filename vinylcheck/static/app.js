@@ -2097,8 +2097,9 @@ function renderVinylMind(s) {
   const box = $("#vm-box"); if (!box) return;
   const joined = s.state === "pending" || s.state === "approved";
   const stCls = { approved: "ok", pending: "warn", revoked: "bad" }[s.state] || "info";
-  const model = s.model ? (s.model.adopted.length ? T("vinylmind.model_value", { version: esc(s.model.version), kinds: vmKinds(s.model.adopted) })
-    : T("vinylmind.model_unused", { version: esc(s.model.version) })) : T("vinylmind.model_none");
+  const model = !s.model ? T("vinylmind.model_none")
+    : s.model.in_use ? T("vinylmind.model_value", { version: esc(s.model.version), kinds: vmKinds(s.model.adopted) })
+    : T(s.model.adopted.length ? "vinylmind.model_idle" : "vinylmind.model_unused", { version: esc(s.model.version) });
   const p = s.prior;
   const prior = !p ? T("vinylmind.prior_none")
     : (p.source === "server" ? T("vinylmind.prior_server", { ref: esc(p.ref), kinds: vmKinds(p.kinds) })

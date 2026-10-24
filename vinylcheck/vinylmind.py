@@ -853,6 +853,8 @@ class VinylMind:
             "model": {"version": model.get("version"), "created": model.get("created"),
                       "chain_class": model.get("chain_class"), "checked_at": m.get("checked_at"),
                       "adopted": sorted(k for k, v in (m.get("adopted") or {}).items() if v),
+                      "in_use": isinstance(prior, dict) and prior.get("source") == "server"
+                      and prior.get("ref") == model.get("version") and self.use_model(),
                       "check": m.get("check")} if isinstance(model, dict) else None,
             "polled_at": m.get("polled_at"),
             "prior": {"source": prior.get("source"), "type": prior.get("type"), "ref": prior.get("ref"),
@@ -896,9 +898,12 @@ class VinylMind:
             if "use_model" in body:
                 self.db.set_setting(S_USE, "true" if body["use_model"] else "false")
                 prior = self._get(S_PRIOR)
-                if not body["use_model"] and isinstance(prior, dict) and prior.get("source") == "server":
-                    self._put(S_PRIOR, None)           # the adopted model goes with the switch
-                    self._retrain()
+                if not body["use_model"]:
+                    # the fetched model goes with the switch; switched on again, the station fetches and checks anew
+                    self._put(S_MODEL, None)
+                    if isinstance(prior, dict) and prior.get("source") == "server":
+                        self._put(S_PRIOR, None)
+                        self._retrain()
                 if body["use_model"]:
                     self.next_attempt = 0.0
         return self.status()
