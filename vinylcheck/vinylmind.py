@@ -640,9 +640,7 @@ class Client:
                 raise HubError(i18n.msg("vinylmind.recording"), code="recording")
             try:
                 status, hdrs, raw = self._once(method, path, body, signed, headers or {})
-            except HubError:
-                raise
-            except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
+            except OSError as e:                         # URLError, timeouts, refused connections, TLS failures
                 reason = getattr(e, "reason", e)
                 last = HubError(i18n.msg("vinylmind.unreachable", url=self.base, error=str(reason)), code="unreachable")
                 self._wait(attempt, None)
@@ -959,10 +957,10 @@ class VinylMind:
             if not j:
                 StationKey.delete(self.key_path)
                 return self.status()
-            if self.busy() and not forget:
+            if self.busy():
                 raise HubError(i18n.msg("vinylmind.recording"), code="recording")
             key = StationKey.load(self.key_path)
-            if key and j.get("status") != "revoked" and not self.busy():
+            if key and j.get("status") != "revoked":
                 try:
                     self._client(j["url"], key).leave()
                 except HubError as e:
