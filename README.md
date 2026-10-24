@@ -287,6 +287,7 @@ Linux (XDG). The most important keys:
 | `discogs_token`, `discogs_username` | — | Discogs access via personal token; a token entered under *Settings → Discogs* takes precedence |
 | `discogs_consumer_key`, `discogs_consumer_secret` | — | Discogs access via OAuth app ("Connect with Discogs" in the settings) |
 | `vinyl_mind_url` | `""` | Vinyl-Mind server that *Settings → Vinyl-Mind* offers and *Reset to default* restores; no default server yet ([protocol](docs/vinyl-mind-protocol.md)) |
+| `feature_version` | `"1"` | features of the learning model; `"2"` (experimental) takes the turntable profile as the zero point ([measurement](docs/measurement.md#learning)) |
 
 Device, sample rate, bit depth, the input pair and the Windows options can also be set in the interface under
 *Settings → Audio interface*: values saved there take precedence over the file, apply from the next recording without

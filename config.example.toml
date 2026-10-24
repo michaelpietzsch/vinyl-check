@@ -48,6 +48,12 @@ discogs_sync_minutes = 15               # sync the collection this often; a sear
 # using the global model are switched on in the interface (both off by default).
 # vinyl_mind_url = "https://vinyl-mind.example"
 
+# Feature version of the learning model (docs/measurement.md, "Learning"): "1" = relative to each recording's music
+# reference (default); "2" = experimental, also relative to the recording's turntable profile (chain noise, reference
+# level and click floor of an accepted profile). Changing it retrains the model; Vinyl-Mind contributions and global
+# models carry the version and are never mixed.
+# feature_version = "1"
+
 # [detect]                               # click detection
 # threshold = 8.0                        # higher = fewer but surer hits
 # order = 32

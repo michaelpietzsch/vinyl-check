@@ -439,13 +439,13 @@ def validate_report(obj) -> list[str]:
     return c.errors
 
 
-def check_versions(obj: dict) -> None:
-    """A model or package must have exactly this station's feature version, feature list and detector version."""
-    if obj.get("feature_version") != learning.FEATURE_VERSION:
-        raise HubError(i18n.msg("vinylmind.version_mismatch", got=str(obj.get("feature_version")),
-                                want=learning.FEATURE_VERSION))
-    if obj.get("features") != list(learning.FEATURES):
-        raise HubError(i18n.msg("vinylmind.features_mismatch", version=learning.FEATURE_VERSION))
+def check_versions(obj: dict, version: str = learning.FEATURE_VERSION) -> None:
+    """A model or package must have exactly this station's feature version (`version`, the configured one), feature
+    list and detector version. Another version is refused, never converted."""
+    if obj.get("feature_version") != version:
+        raise HubError(i18n.msg("vinylmind.version_mismatch", got=str(obj.get("feature_version")), want=version))
+    if obj.get("features") != list(learning.feature_names(version)):
+        raise HubError(i18n.msg("vinylmind.features_mismatch", version=version))
     if obj.get("detector_version") != detect.VERSION:
         raise HubError(i18n.msg("vinylmind.detector_mismatch", got=str(obj.get("detector_version")),
                                 want=detect.VERSION))
@@ -489,20 +489,28 @@ def guess_chain_class(profile: dict) -> dict:
     return {"connection": connection, "cartridge": cartridge}
 
 
-def build_contribution(db, profile: dict, chain: dict | None = None) -> tuple[dict | None, dict | None]:
+def build_contribution(db, profile: dict, chain: dict | None = None,
+                       version: str = learning.FEATURE_VERSION) -> tuple[dict | None, dict | None]:
     """(contribution, None), or (None, reason) when no event kind of the profile has a trained model yet.
 
     The profile's own recordings only, trained without any prior: weights pulled towards the global model would feed
     the hub's own result back to it. Kinds that are trained but not verifiable are included with null quality; the
-    hub decides what it uses."""
-    data, _ = learning.training_data(db, profile["id"])
-    model = learning.train(data, now=0.0)
+    hub decides what it uses. Features of feature version `version`, which the payload names. For version 2 only
+    recordings with a complete zero point count (learning.drop_fallback): a profile that was never measured and
+    accepted has nothing to contribute, because its weights would not mean the same as everybody else's."""
+    data, _ = learning.training_data(db, profile["id"], version=version)
+    if version != "1":
+        had = sum(len(d["y"]) for d in data.values())
+        data = learning.drop_fallback(data)
+        if had and not sum(len(d["y"]) for d in data.values()):
+            return None, i18n.msg("vinylmind.profile_not_measured", version=version)
+    model = learning.train(data, now=0.0, version=version)
     kinds = {}
     for kind in KINDS:
         info = model["kinds"][kind]
         if not info.get("model"):
             continue
-        fixed = learning.to_fixed(info["model"])
+        fixed = learning.to_fixed(info["model"], version)
         informative = [bool(x) for x in data[kind]["X"].std(axis=0) >= 1e-9]
         n_manual, n_all = int(info["manual"]), int(info["n_real"]) + int(info["n_false"])
         kinds[kind] = {
@@ -521,8 +529,8 @@ def build_contribution(db, profile: dict, chain: dict | None = None) -> tuple[di
         "type": "vinyl-mind/contribution",
         "protocol": PROTOCOL,
         "profile_id": db.profile_vm_id(profile["id"]),
-        "feature_version": learning.FEATURE_VERSION,
-        "features": list(learning.FEATURES),
+        "feature_version": str(version),
+        "features": list(learning.feature_names(version)),
         "detector_version": detect.VERSION,
         "vinyl_check_version": __version__,
         "chain_class": dict(chain or guess_chain_class(profile)),
@@ -536,7 +544,7 @@ def payload_sha256(payload: dict) -> str:
 
 # ─── Checking a global model on the station's own master recordings ─────────
 
-def _direct_error(fixed: dict, d: dict) -> tuple[float | None, int]:
+def _direct_error(fixed: dict, d: dict, version: str = learning.FEATURE_VERSION) -> tuple[float | None, int]:
     """Estimate error of weights applied without any training, per master recording as in learning.train's
     cross-check (recordings with fewer than 3 real events say nothing). Returns (error, recordings)."""
     if d is None or not len(d["y"]):
@@ -548,20 +556,20 @@ def _direct_error(fixed: dict, d: dict) -> tuple[float | None, int]:
         true = float(y[te].sum())
         if true < 3:
             continue
-        errs.append(abs(float(learning.predict_fixed(fixed, d["X"][te]).sum()) - true) / true)
+        errs.append(abs(float(learning.predict_fixed(fixed, d["X"][te], version).sum()) - true) / true)
     return (round(float(np.mean(errs)), 3), len(errs)) if errs else (None, 0)
 
 
-def check_model(data: dict, model_kinds: dict) -> dict:
+def check_model(data: dict, model_kinds: dict, version: str = learning.FEATURE_VERSION) -> dict:
     """Per kind of the model: {"recordings", "local_error", "global_error", "prior_error"} on the given training data
-    (learning.training_data): the local cross-check without prior, the model applied directly, and the local
-    cross-check with the model as prior."""
+    (learning.training_data of the same feature version): the local cross-check without prior, the model applied
+    directly, and the local cross-check with the model as prior."""
     prior = {k: {"intercept": v["intercept"], "weights": v["weights"]} for k, v in model_kinds.items() if k in KINDS}
-    local = learning.train(data, now=0.0)
-    with_prior = learning.train(data, now=0.0, prior=prior)
+    local = learning.train(data, now=0.0, version=version)
+    with_prior = learning.train(data, now=0.0, prior=prior, version=version)
     out = {}
     for kind, fixed in prior.items():
-        g_err, n = _direct_error(fixed, data.get(kind))
+        g_err, n = _direct_error(fixed, data.get(kind), version)
         out[kind] = {"recordings": n, "local_error": local["kinds"][kind].get("cv_err_est"), "global_error": g_err,
                      "prior_error": with_prior["kinds"][kind].get("cv_err_est")}
     return out
@@ -712,9 +720,11 @@ class Client:
     def delete_contribution(self, profile_id: str) -> None:
         self.request("DELETE", f"{API}/contributions/{profile_id}", ok=(200, 204, 404))
 
-    def current_model(self, chain: dict, etag: str | None) -> tuple[int, dict | None, str | None]:
-        """(200, model, etag), (304, None, etag) or (404, None, None) when the hub has no model yet."""
-        q = urllib.parse.urlencode({"feature_version": learning.FEATURE_VERSION, "detector_version": detect.VERSION,
+    def current_model(self, chain: dict, etag: str | None,
+                      version: str = learning.FEATURE_VERSION) -> tuple[int, dict | None, str | None]:
+        """(200, model, etag), (304, None, etag) or (404, None, None) when the hub has no model yet for this
+        feature version."""
+        q = urllib.parse.urlencode({"feature_version": version, "detector_version": detect.VERSION,
                                     "connection": chain.get("connection", "unknown"),
                                     "cartridge": chain.get("cartridge", "unknown")})
         try:
@@ -765,6 +775,8 @@ class VinylMind:
 
     def __init__(self, cfg, db, *, busy=lambda: False, retrain=lambda: None):
         self.cfg, self.db, self.busy, self.retrain = cfg, db, busy, retrain
+        # the station's feature version: what its contributions carry and the only version of model or prior it uses
+        self.feature_version = str(getattr(cfg, "feature_version", learning.FEATURE_VERSION))
         self.key_path = Path(cfg.state_dir) / KEY_FILE
         self.lock = threading.RLock()
         self.dirty = True                  # contributions need a look: after start and after every retraining
@@ -860,7 +872,7 @@ class VinylMind:
                       "in_use": self.prior_for_training() is not None} if isinstance(prior, dict) else None,
             "last_error": self.last_error, "last_attempt": self.last_attempt,
             "next_attempt": self.next_attempt or None, "recording": bool(self.busy()),
-            "protocol": PROTOCOL, "feature_version": learning.FEATURE_VERSION, "detector_version": detect.VERSION,
+            "protocol": PROTOCOL, "feature_version": self.feature_version, "detector_version": detect.VERSION,
         }
 
     def update(self, body: dict) -> dict:
@@ -916,7 +928,7 @@ class VinylMind:
         return {"url": url, "name": str(info.get("name") or "")[:100], "fingerprint": info["fingerprint"],
                 "fingerprint_display": show_fingerprint(info["fingerprint"]),
                 "feature_versions": [str(v) for v in info.get("feature_versions") or []][:20],
-                "supported": learning.FEATURE_VERSION in (info.get("feature_versions") or []),
+                "supported": self.feature_version in (info.get("feature_versions") or []),
                 "join": info.get("join") if isinstance(info.get("join"), dict) else {}}
 
     def join(self, invitation: str | None = None, fingerprint: str | None = None) -> dict:
@@ -985,7 +997,7 @@ class VinylMind:
         for p in self.db.profiles():
             vid = self.db.profile_vm_id(p["id"])
             guess = guess_chain_class(p)
-            payload, reason = build_contribution(self.db, p, chains.get(vid) or guess)
+            payload, reason = build_contribution(self.db, p, chains.get(vid) or guess, self.feature_version)
             out.append({"profile": p, "vm_id": vid, "chain": chains.get(vid) or guess, "chain_guess": guess,
                         "chain_set": vid in chains, "payload": payload, "reason": reason})
         return out
@@ -1008,7 +1020,7 @@ class VinylMind:
         if not p:
             raise HubError(i18n.msg("api.profile_not_found"), code="not_found")
         p["vm_id"] = self.db.profile_vm_id(pid)
-        payload, reason = build_contribution(self.db, p, self.chain_of(p))
+        payload, reason = build_contribution(self.db, p, self.chain_of(p), self.feature_version)
         if not payload:
             raise HubError(reason, code="nothing")
         return payload
@@ -1023,7 +1035,7 @@ class VinylMind:
         errs = validate_contribution(pkg) if kind == "contribution" else validate_model(pkg, require_signature=False)
         if errs:
             raise HubError(i18n.msg("vinylmind.package_invalid", error=errs[0], n=len(errs)))
-        check_versions(pkg)
+        check_versions(pkg, self.feature_version)
         if kind == "contribution":
             own = {r["vm_id"] for r in self.db.q("SELECT vm_id FROM profiles WHERE vm_id IS NOT NULL")}
             if pkg["profile_id"] in own:
@@ -1071,7 +1083,7 @@ class VinylMind:
         """The prior in effect for the training ({"source", "type", "ref", "kinds"}), or None. A prior of another
         feature or detector version is ignored; an adopted server model only counts while its switch is on."""
         p = self._get(S_PRIOR)
-        if not isinstance(p, dict) or p.get("feature_version") != learning.FEATURE_VERSION \
+        if not isinstance(p, dict) or p.get("feature_version") != self.feature_version \
                 or p.get("detector_version") != detect.VERSION:
             return None
         if p.get("source") == "server" and not self.use_model():
@@ -1189,7 +1201,10 @@ class VinylMind:
         """Ask for the current global model; a new one is verified, checked on the own master recordings, adopted
         per kind as the prior where it is not worse, and reported."""
         m = self._get(S_MODEL, {}) or {}
-        status, model, etag = client.current_model(self._active_chain(), m.get("etag") if m.get("model") else None)
+        # the ETag names a model of one feature version: after the station switched versions it says nothing
+        same = m.get("model") and (m["model"].get("feature_version") == self.feature_version)
+        status, model, etag = client.current_model(self._active_chain(), m.get("etag") if same else None,
+                                                   self.feature_version)
         if status == 304:
             self._put(S_MODEL, m | {"polled_at": now})
             return "unchanged"
@@ -1205,11 +1220,11 @@ class VinylMind:
         if errs:
             raise HubError(i18n.msg("vinylmind.model_invalid", error=errs[0]), code="model_rejected")
         try:
-            check_versions(model)
+            check_versions(model, self.feature_version)
         except HubError as e:                            # the hub sent a model of another version: its fault
             raise HubError(e.message, code="model_rejected") from None
-        data, _ = learning.training_data(self.db)
-        check = check_model(data, model["kinds"])
+        data, _ = learning.training_data(self.db, version=self.feature_version)
+        check = check_model(data, model["kinds"], self.feature_version)
         adopted = {k: adopt(v) for k, v in check.items()}
         self._put(S_MODEL, {"model": model, "etag": etag, "polled_at": now, "checked_at": time.time(), "check": check,
                             "adopted": adopted})
@@ -1233,11 +1248,14 @@ class VinylMind:
         return "new"
 
     def build_report(self, model: dict, adopted: dict) -> dict | None:
-        """The check report of a model: per profile with master recordings, the three estimate errors per kind."""
+        """The check report of a model: per profile with master recordings, the three estimate errors per kind. As in
+        a contribution, feature version 2 only counts recordings with a complete zero point."""
         profiles = []
         for p in self.db.profiles():
-            data, _ = learning.training_data(self.db, p["id"])
-            kinds = {k: v for k, v in check_model(data, model["kinds"]).items()
+            data, _ = learning.training_data(self.db, p["id"], version=self.feature_version)
+            if self.feature_version != "1":
+                data = learning.drop_fallback(data)
+            kinds = {k: v for k, v in check_model(data, model["kinds"], self.feature_version).items()
                      if v["recordings"] or v["local_error"] is not None}
             if kinds:
                 profiles.append({"profile_id": self.db.profile_vm_id(p["id"]), "kinds": kinds})

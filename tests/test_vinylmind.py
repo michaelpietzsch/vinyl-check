@@ -26,9 +26,12 @@ from vinylcheck import learning, network, vinylmind
 from vinylcheck.config import Config
 from vinylcheck.web import create_app
 
-# The feature list of feature version "1" as the protocol document states it (not taken from learning.py)
+# The feature lists of feature versions "1" and "2" as the protocol document states them (not taken from learning.py)
 FEATURES_V1 = ["log_strength", "amp_rel", "log_dur", "gc", "gc_missing", "music", "both_ch", "log_density", "amp_rel2",
                "strength_x_amp"]
+FEATURES_V2 = ["log_strength", "amp_rel", "log_dur", "gc", "gc_missing", "music", "both_ch", "log_density_net",
+               "amp_rel2", "strength_x_amp", "amp_ref", "chain_margin"]
+HUB_FEATURES = {"1": FEATURES_V1, "2": FEATURES_V2}
 INVITE = "K7QM-2XPA"
 
 
@@ -56,7 +59,7 @@ class FakeHub:
         self.contributions: dict = {}          # (station, profile_id) → payload
         self.reports: list = []
         self.nonces: dict = {}
-        self.requests: list = []               # (method, path, headers) of every request
+        self.requests: list = []               # (method, path, headers, query) of every request
         self.model = None
         self.fail_next: list = []               # statuses to answer before handling the next requests
         self.app = self._build()
@@ -103,9 +106,10 @@ class FakeHub:
             return self.error(403, "pending")
         return sid
 
-    def publish(self, kinds: dict, version: str = "t-1", key=None, tamper: str | None = None) -> dict:
-        model = {"type": "vinyl-mind/model", "protocol": 0, "version": version, "feature_version": "1",
-                 "features": FEATURES_V1, "detector_version": 1,
+    def publish(self, kinds: dict, version: str = "t-1", key=None, tamper: str | None = None,
+                feature_version: str = "1") -> dict:
+        model = {"type": "vinyl-mind/model", "protocol": 0, "version": version, "feature_version": feature_version,
+                 "features": HUB_FEATURES[feature_version], "detector_version": 1,
                  "chain_class": {"connection": "any", "cartridge": "any"}, "created": "2026-10-24T12:00:00Z",
                  "kinds": kinds}
         k = key or self.key
@@ -120,11 +124,13 @@ class FakeHub:
         self.model = model
         return model
 
-    def combine(self) -> dict:
-        """Plain federated averaging of the received weights (the real hub weights and trims)."""
+    def combine(self, feature_version: str = "1") -> dict:
+        """Plain federated averaging of the received weights of one feature version (the real hub weights and trims;
+        versions are never mixed)."""
         out = {}
         for kind in ("click", "tick", "pop"):
-            ws = [c["kinds"][kind] for c in self.contributions.values() if kind in c["kinds"]]
+            ws = [c["kinds"][kind] for c in self.contributions.values()
+                  if kind in c["kinds"] and c["feature_version"] == feature_version]
             if ws:
                 out[kind] = {"intercept": round(float(np.mean([w["intercept"] for w in ws])), 6),
                              "weights": [round(float(x), 6) for x in np.mean([w["weights"] for w in ws], axis=0)],
@@ -136,7 +142,7 @@ class FakeHub:
 
         @app.middleware("http")
         async def log_and_fail(request: Request, call_next):
-            self.requests.append((request.method, request.url.path, dict(request.headers)))
+            self.requests.append((request.method, request.url.path, dict(request.headers), request.url.query))
             if self.fail_next:
                 return self.error(self.fail_next.pop(0), "server_error")
             return await call_next(request)
@@ -144,7 +150,8 @@ class FakeHub:
         @app.get("/v0/server")
         def server():
             return {"type": "vinyl-mind/server", "protocol": 0, "name": "Test hub", "public_key": _b64u(self.pub),
-                    "fingerprint": self.fp, "feature_versions": ["1"], "join": {"invitation": True, "approval": True}}
+                    "fingerprint": self.fp, "feature_versions": ["1", "2"],
+                    "join": {"invitation": True, "approval": True}}
 
         @app.post("/v0/stations")
         async def join(request: Request):
@@ -192,8 +199,9 @@ class FakeHub:
             c = json.loads(body)
             if c.get("profile_id") != pid:
                 return self.error(400, "profile_mismatch")
-            if c.get("type") != "vinyl-mind/contribution" or c.get("features") != FEATURES_V1 or any(
-                    len(k["weights"]) != len(FEATURES_V1) for k in c["kinds"].values()):
+            names = HUB_FEATURES.get(c.get("feature_version"))
+            if c.get("type") != "vinyl-mind/contribution" or names is None or c.get("features") != names or any(
+                    len(k["weights"]) != len(names) for k in c["kinds"].values()):
                 return self.error(422, "invalid_payload")
             self.contributions[(sid, pid)] = c
             return {"profile_id": pid, "received_at": "2026-10-24T13:10:00Z"}
@@ -211,7 +219,7 @@ class FakeHub:
             sid = self.approved(request, await request.body())
             if isinstance(sid, Response):
                 return sid
-            if self.model is None or feature_version != "1" or detector_version != 1:
+            if self.model is None or feature_version != self.model["feature_version"] or detector_version != 1:
                 return self.error(404, "no_model")
             etag = f'"{self.model["version"]}"'
             if request.headers.get("if-none-match") == etag:
@@ -611,3 +619,66 @@ def test_model_check_and_adoption_rule():
     assert worse["global_error"] > 0.5
     assert vinylmind.adopt({"local_error": None, "prior_error": None, "global_error": None, "recordings": 0})
     assert not vinylmind.adopt({"local_error": 0.05, "prior_error": 0.08, "global_error": 0.4, "recordings": 3})
+
+
+# ─── Feature version 2 ───────────────────────────────────────────────────────
+
+def test_feature_version_2_station(tmp_path, hub):
+    """A station on feature version 2 contributes only measured profiles, names the version it used, and never takes
+    a package, a prior or a global model of version 1 (and a version-1 station never takes one of version 2)."""
+    app = _app(tmp_path, "v2", feature_version="2")
+    db = app.state.db
+    measured = _seed(db, "Measured deck", "hw:CARD=Interface,DEV=0", "MC low output", seed=3)
+    db.update_profile(measured, accepted_at=1.0, chain_db=-95.0, ref_dbfs=-19.0, floor_clicks_per_min=4.0,
+                      floor_ticks_per_min=30.0)
+    _seed(db, "Plain deck", "Core Audio: USB Audio CODEC", "Moving magnet", seed=4)          # never measured
+    old = _app(tmp_path, "v1")
+    _seed(old.state.db, "Old deck", "", "", seed=5)
+    with TestClient(app) as c, TestClient(old) as c1:
+        rows = {r["name"]: r for r in c.get("/api/vinylmind/preview").json()["profiles"]}
+        p = rows["Measured deck"]["payload"]
+        assert vinylmind.validate_contribution(p) == [], vinylmind.validate_contribution(p)
+        assert p["feature_version"] == "2" and p["features"] == FEATURES_V2
+        assert all(len(k["weights"]) == len(k["informative"]) == 12 for k in p["kinds"].values())
+        assert p["kinds"]["click"]["recordings"]["master"] == 3
+        assert rows["Plain deck"]["payload"] is None
+        assert "needs a measured turntable profile" in rows["Plain deck"]["reason"]
+        assert c.get("/api/vinylmind").json()["feature_version"] == "2"
+        learned = c.post("/api/learn").json()
+        assert learned["feature_version"] == "2" and learned["data"]["recordings_fallback"] == 3
+        assert c.get("/api/learn").json()["settings"]["feature_version"] == "2"
+
+        # packages of the other version are refused in both directions, never converted
+        pkg1 = c1.get("/api/vinylmind/export", params={"profile": c1.get("/api/vinylmind/preview").json()
+                                                       ["profiles"][0]["id"]}).json()
+        assert pkg1["feature_version"] == "1" and pkg1["features"] == FEATURES_V1
+        r = c.post("/api/vinylmind/import", json=pkg1)
+        assert r.status_code == 422 and "Feature version 1" in r.json()["detail"] and "version 2" in r.json()["detail"]
+        r = c1.post("/api/vinylmind/import", json=p)
+        assert r.status_code == 422 and "Feature version 2" in r.json()["detail"]
+        # a prior of version 1 left over from before the switch is ignored, and training still works
+        vm = app.state.vinylmind
+        vm._put(vinylmind.S_PRIOR, {"source": "import", "type": "contribution", "ref": "x", "feature_version": "1",
+                                    "detector_version": 1, "kinds": {"click": {k: pkg1["kinds"]["click"][k]
+                                                                               for k in ("intercept", "weights")}}})
+        assert vm.prior_info() is None and "prior_kinds" not in c.post("/api/learn").json()
+        vm._put(vinylmind.S_PRIOR, None)
+
+        # with a hub: the contribution carries version 2, the model is asked for in version 2 only
+        _join(c, hub)
+        c.put("/api/vinylmind", json={"contribute": True})
+        assert c.post("/api/vinylmind/sync").json()["result"]["contributions"]["sent"] == 1
+        sent = list(hub.contributions.values())
+        assert len(sent) == 1 and sent[0] == p
+        hub.publish(hub.combine("2"), version="v2-1", feature_version="2")
+        c.put("/api/vinylmind", json={"use_model": True})
+        n = len(hub.requests)
+        st = c.post("/api/vinylmind/sync").json()
+        assert st["result"]["model"] == "new" and st["status"]["model"]["version"] == "v2-1"
+        req = [q for q in hub.requests[n:] if q[1] == "/v0/models/current"][0]
+        assert "feature_version=2" in req[3]
+        assert hub.reports and hub.reports[-1][1]["feature_version"] == "2"
+        # the hub only has a version-1 model: the version-2 station gets none and drops the server prior
+        hub.publish(hub.combine("1") or {"click": {"intercept": 0.0, "weights": [0.0] * 10}}, version="v1-9")
+        st = c.post("/api/vinylmind/sync").json()
+        assert st["result"]["model"] == "none" and st["status"]["prior"] is None

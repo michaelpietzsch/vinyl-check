@@ -31,6 +31,7 @@
   "detector_mismatch": "Detector version {got} does not match this station's detector version {want}.",
   "features_mismatch": "The list of features does not match feature version {version}.",
   "nothing_yet": "Nothing to contribute yet: no kind of event has a trained model (at least {min} real ones and {min} false alarms per kind).",
+  "profile_not_measured": "Nothing to contribute: feature version {version} needs a measured turntable profile (chain noise, and an accepted alignment run with reference level and click floor).",
   "package_type": "The file is neither a Vinyl-Mind contribution nor a global model.",
   "package_invalid": {
     "one": "The file is not a valid Vinyl-Mind package: {error}",

@@ -632,11 +632,25 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         _lm = json.loads(db.setting("learn_model") or "null")
     except ValueError:
         _lm = None
+    if _lm is not None and learning.model_version(_lm) != cfg.feature_version:
+        # a model of another feature version computes other features: never apply it; the learning loop retrains
+        log.info("Stored learned model is feature version %s, configured is %s: retraining",
+                 learning.model_version(_lm), cfg.feature_version)
+        _lm = None
     learn = {"model": _lm, "fp": None, "pending_fp": None, "lock": threading.Lock(), "last_error": None,
              "applied_at": None, "applied": 0, "data": None}
 
     def learn_model() -> dict | None:
         return learn["model"] if cfg.learn_enabled else None
+
+    def learn_zp(rec: dict | None) -> dict | None:
+        """The recording's zero point (learning.zero_point of its turntable profile) for a learned model of feature
+        version 2; None for version 1, which does not use it (and then costs no lookup)."""
+        model = learn_model()
+        if not model or learning.model_version(model) == "1" or not rec:
+            return None
+        pid = rec.get("profile_id")
+        return learning.zero_point(db.profile(pid) if pid else None)
 
     def learn_recount(rec_id: int, r: dict | None = None) -> tuple[dict, dict] | None:
         """Recount a stored analysis with event judgments, skip judgments and the current learned model, and save it."""
@@ -646,17 +660,19 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         warnings = list(r["analysis"].get("warnings") or [])
         metrics, grading_ = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
                                              skip_labels=db.skip_labels(rec_id), warnings=warnings,
-                                             learned=learn_model(), learn_grade=cfg.learn_grade)
+                                             learned=learn_model(), learn_grade=cfg.learn_grade,
+                                             zero_point=learn_zp(r))
         db.update_analysis(rec_id, metrics, grading_, warnings)
         return metrics, grading_
 
     def learn_train() -> dict:
         """Retrain (takes a fraction of a second) and store the model. A Vinyl-Mind prior (an adopted global model or
-        an imported package) is where the ridge penalty pulls the weights instead of towards zero."""
+        an imported package) is where the ridge penalty pulls the weights instead of towards zero. Features of the
+        configured feature version; the prior is only used if it has the same version (vm.prior_info)."""
         with learn["lock"]:
-            data, overview = learning.training_data(db)
+            data, overview = learning.training_data(db, version=cfg.feature_version)
             prior = vm.prior_info()
-            model = learning.train(data, prior=prior["kinds"] if prior else None)
+            model = learning.train(data, prior=prior["kinds"] if prior else None, version=cfg.feature_version)
             model["data"] = overview
             if prior:
                 model["prior"] = {k: prior[k] for k in ("source", "type", "ref")}
@@ -697,7 +713,14 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         r = db.one("SELECT (SELECT COUNT(*) FROM event_labels) AS a, (SELECT MAX(created_at) FROM event_labels) AS b, "
                    "(SELECT COUNT(*) FROM master_checks WHERE status = 'done') AS c, (SELECT MAX(created_at) FROM master_checks "
                    "WHERE status = 'done') AS d") or {}
-        return (r.get("a"), r.get("b"), r.get("c"), r.get("d"))
+        fp = (r.get("a"), r.get("b"), r.get("c"), r.get("d"))
+        if cfg.feature_version != "1":
+            # feature version 2 computes the features from the profiles: a newly accepted or re-measured profile
+            # changes the training data as much as a new judgement
+            fp += tuple((p["id"], p.get("accepted_at"), p.get("chain_db"), p.get("ref_dbfs"),
+                         p.get("floor_clicks_per_min"), p.get("floor_ticks_per_min"))
+                        for p in db.q("SELECT * FROM profiles ORDER BY id"))
+        return fp
 
     def _learn_loop() -> None:
         """Every 30 s: if judgments or master comparisons changed (and stayed so for one more round), retrain; then
@@ -725,7 +748,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if not force and db.setting("grading_version") == str(grading.VERSION):
             return 0
         n = 0
-        for r in db.q("SELECT recording_id, metrics FROM analyses"):
+        for r in db.q("SELECT a.recording_id, a.metrics, r.profile_id FROM analyses a "
+                      "LEFT JOIN recordings r ON r.id = a.recording_id"):
             try:
                 m = json.loads(r["metrics"] or "{}")
             except ValueError:
@@ -735,7 +759,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             # recount from the stored events: a new scheme may also change the metrics (e.g. pops counted only in
             # the music); the audio is not recomputed
             m, g = analysis.recount(m, db.events(r["recording_id"]), cfg.grading,
-                                    learned=learn_model(), learn_grade=cfg.learn_grade)
+                                    learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r))
             db.update_analysis(r["recording_id"], m, g)
             n += 1
         db.set_setting("grading_version", str(grading.VERSION))
@@ -1515,7 +1539,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         ov = db.overview(rec_id) or {}
         evs = db.events(rec_id)
         ov["events"] = [[e["t"], e["kind"], e["region"], e["strength"], e.get("label"), e.get("gc")] for e in evs]
-        _, lp = learning.estimate(evs, learn_model(), m.get("music_ref_dbfs")) if learn_model() else (None, None)
+        _, lp = (learning.estimate(evs, learn_model(), m.get("music_ref_dbfs"), learn_zp(r)) if learn_model()
+                 else (None, None))
         top = sorted((i for i in range(len(evs)) if evs[i].get("region") != "excluded"), key=lambda i: -(evs[i].get("strength") or 0))[:30]
         top_events = [evs[i] | {"lp": None if lp is None or lp[i] != lp[i] else round(float(lp[i]), 3)} for i in sorted(top, key=lambda i: evs[i]["t"])]
         sg = None
@@ -1944,8 +1969,9 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if model and evs:
             # the "density" feature needs all events of the recording, not just the selected ones
             all_evs = db.events(rec_id)
-            r = db.one("SELECT json_extract(metrics, '$.music_ref_dbfs') AS ref FROM analyses WHERE recording_id = ?", (rec_id,)) or {}
-            _, p = learning.estimate(all_evs, model, r.get("ref"))
+            r = db.one("SELECT json_extract(a.metrics, '$.music_ref_dbfs') AS ref, r.profile_id FROM analyses a "
+                       "JOIN recordings r ON r.id = a.recording_id WHERE a.recording_id = ?", (rec_id,)) or {}
+            _, p = learning.estimate(all_evs, model, r.get("ref"), learn_zp(r))
             lp = {round(e["t"], 5): (None if p[i] != p[i] else round(float(p[i]), 3)) for i, e in enumerate(all_evs)}
             for e in evs:
                 e["lp"] = lp.get(round(e["t"], 5))
@@ -1964,7 +1990,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if not hit:
             raise HTTPException(404, i18n.msg("api.no_event_at_time"))
         metrics, grading = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
-                                            learned=learn_model(), learn_grade=cfg.learn_grade)
+                                            learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r))
         db.update_analysis(rec_id, metrics, grading)
         ref_cache["key"] = None
         return {"t": p.t, "label": p.label, "grade": grading.get("grade"), "score": grading.get("score"),
@@ -1986,7 +2012,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         warnings = list(r["analysis"].get("warnings") or [])
         metrics, grading = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
                                             skip_labels=db.skip_labels(rec_id), warnings=warnings,
-                                            learned=learn_model(), learn_grade=cfg.learn_grade)
+                                            learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r))
         db.update_analysis(rec_id, metrics, grading, warnings)
         ref_cache["key"] = None
         return {"t": p.t, "label": p.label, "grade": grading.get("grade"), "skips_back": metrics.get("skips_back"),
@@ -2003,7 +2029,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             raise HTTPException(404, i18n.msg("api.recording_not_analyzed"))
         a = r["analysis"]
         m, g, hit = analysis.what_if(a["metrics"], db.events(rec_id), db.skip_labels(rec_id), p.ignore_events,
-                                     p.ignore_skips, cfg.grading, learned=learn_model(), learn_grade=cfg.learn_grade)
+                                     p.ignore_skips, cfg.grading, learned=learn_model(), learn_grade=cfg.learn_grade,
+                                     zero_point=learn_zp(r))
         base, bm = a.get("grading") or {}, a["metrics"]
         keys = ("clicks_music_per_min", "clicks_quiet_per_min", "ticks_quiet_per_min", "pops_per_min", "skips_back")
         out = {"grade": g.get("grade"), "score": g.get("score"), "explanation": g.get("explanation"), "ignored": hit,
@@ -2032,7 +2059,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return {"enabled": cfg.learn_enabled, "grade": cfg.learn_grade, **learning.summary(learn["model"]),
                 "applied_at": learn["applied_at"], "applied": learn["applied"], "last_error": learn["last_error"],
                 "settings": {"min_per_class": learning.MIN_PER_CLASS, "min_master_recordings": learning.MIN_MASTER_RECORDINGS,
-                             "max_est_error": learning.MAX_EST_ERROR, "manual_weight": learning.MANUAL_WEIGHT}}
+                             "max_est_error": learning.MAX_EST_ERROR, "manual_weight": learning.MANUAL_WEIGHT,
+                             "feature_version": cfg.feature_version}}
 
     @app.post("/api/learn")
     def learn_now():

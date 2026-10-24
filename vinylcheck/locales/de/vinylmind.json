@@ -31,6 +31,7 @@
   "detector_mismatch": "Detektorversion {got} passt nicht zur Detektorversion {want} dieser Station.",
   "features_mismatch": "Die Liste der Merkmale passt nicht zu Merkmalsversion {version}.",
   "nothing_yet": "Noch nichts beizutragen: Keine Ereignisart hat ein trainiertes Modell (je Art mindestens {min} echte und {min} Fehlalarme).",
+  "profile_not_measured": "Nichts beizutragen: Merkmalsversion {version} braucht ein eingemessenes Plattenspieler-Profil (Kettenrauschen und ein übernommener Justagelauf mit Referenzpegel und Laufwerksgrund).",
   "package_type": "Die Datei ist weder ein Vinyl-Mind-Beitrag noch ein globales Modell.",
   "package_invalid": {
     "one": "Die Datei ist kein gültiges Vinyl-Mind-Paket: {error}",
