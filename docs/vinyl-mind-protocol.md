@@ -108,15 +108,36 @@ a station's own standardisation, so the same weight means the same on every stat
 | 8 | `amp_rel2` | `amp_rel`² / 100 | 3.0 | 3.0 |
 | 9 | `strength_x_amp` | `log_strength` × `amp_rel` / 10 | −6.0 | 5.0 |
 
-Feature version 1 is relative to the music reference of each recording, **not yet to the turntable profile** (stage 0
-of the architecture, not implemented yet). Weights of version 1 therefore still carry some of each chain's character
-(noise floor, gain); the hub should combine them per chain class where it can. Profile-relative features will be
-feature version 2, and the two are never mixed.
+Feature version 1 is relative to the music reference of each recording, **not to the turntable profile**. Weights of
+version 1 therefore still carry some of each chain's character (noise floor, click floor); the hub should combine them
+per chain class where it can. It is the default.
+
+**Feature version `"2"`** (experimental; a station uses it only with `feature_version = "2"` in its configuration;
+`learning.py`: `FEATURES_V2`, `FIXED_SCALING_V2`) takes the recording's **turntable profile as the zero point**: its
+chain noise `chain_db` (stylus up, mean power in dBFS), its reference level `ref_dbfs` (the test record's 1 kHz
+reference tone, sine amplitude in dBFS) and its click floor (clicks plus crackle per minute that the detector finds in
+the test record's silent groove), the last two from an accepted alignment run. Features 0–3, 5, 6, 8 and 9 are defined
+and scaled as in version 1; the others:
+
+| # | Name | Definition | Centre c | Scale s |
+|---|---|---|---|---|
+| 4 | `gc_missing` | as in version 1 | 1.0 | 0.5 |
+| 7 | `log_density_net` | ln(1 + max(0, n − λ)): n other events within ±0.5 s, λ = click floor per second × 1 s, the neighbours the chain alone puts there | 0.5 | 0.75 |
+| 10 | `amp_ref` | event level in dBFS minus `ref_dbfs` (−60 dBFS if the event has no level) | −20.0 | 10.0 |
+| 11 | `chain_margin` | (event level − `chain_db`) / 10, clipped to 0 … 4 (40 dB and more: the chain plays no role) | 4.0 | 1.0 |
+
+The reasons for each definition are in [measurement](measurement.md#learning). A station contributes in version 2
+only recordings whose profile has all three values; a profile that was never measured and accepted has nothing to
+contribute. Versions 1 and 2 are never mixed: not in contributions, models, reports, package files or priors.
 
 A station fits its model on its own standardisation and converts the result exactly (`learning.to_fixed`). A weight
 of a feature that did not vary in a profile's training data (for example the second-opinion score on a station
 without the optional network: always missing) carries no information and is sent as 0 with `informative: false`; the
-hub must leave it out of the average for that weight.
+hub must leave it out of the average for that weight. That is exact only where the feature sat at its centre: a
+constant value away from the centre is absorbed by the profile's intercept, and averaging that intercept with others
+biases the result. Version 2 therefore centres the features that are constant on many profiles at that value
+(`gc_missing` at 1, `chain_margin` at its saturation 4). In version 1, `gc_missing` is 1 on stations without the
+network and mostly 0 on stations with it, so the hub should not average intercepts across that line.
 
 ## Contribution
 
@@ -623,6 +644,9 @@ How vinyl-check behaves, so the hub can expect it:
   prior of the station's training if the cross-check with the prior is not worse than without (`prior_error ≤
   local_error`), or if the station has no cross-check of its own yet: the model is then only a starting point, and the
   station's estimates still need its own cross-check before they are used. Kinds that fail keep the local model.
+- **Feature version.** A station works in exactly one feature version, the configured one (`feature_version`,
+  default `"1"`): its contributions, model requests and reports carry it, and models, package files and priors of
+  another version are refused or ignored. After a switch it sends its contributions anew in the new version.
 - **Keys.** The station's private key is a file in its state directory, readable only by the service user (mode
   600), never stored in the database and never logged. *Leave* deletes it; joining again creates a new key and
   therefore a new station id.

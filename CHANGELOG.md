@@ -35,6 +35,17 @@ Planned as 1.1.0.
   `train(prior=...)` pulls towards a prior instead of towards zero (without a prior nothing changes), the cross-check
   also reports the AUC, training data can be limited to one turntable profile, and the detector has a version.
 - Dependency `cryptography` (Debian: `python3-cryptography`, installed by `deploy.sh`).
+- Learning: feature version 2 (experimental, configuration key `feature_version = "2"`), with the turntable profile
+  as the zero point: the density of detections net of the profile's click floor, the level relative to the profile's
+  reference tone in addition to the music reference, and how far a detection rises above the chain noise. Recordings
+  without a measured and accepted profile fall back to values without profile information and are flagged; they
+  never go into a contribution. Version 1 stays the default and is unchanged.
+- The feature version is used everywhere: the model is trained and applied in it (a stored model of another version
+  is retrained), Vinyl-Mind contributions, model requests and reports carry it, and models, package files and priors
+  of another version are refused. A profile without a measured zero point has nothing to contribute in version 2.
+- `tools/eval_features.py` compares the feature versions: on synthetic chains (a budget USB turntable, a mid-range
+  deck, an aligned high-end chain playing the same records) and on a copy of a station database (read-only), by the
+  local estimate error, the transfer of weights between chains, federated averaging, and the similarity of weights.
 
 ### Changed
 

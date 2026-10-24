@@ -104,6 +104,13 @@ Counts and grades can be normalised the same way (for example clicks per minute 
 `grading` already does for the quiet groove). A new cartridge or a new alignment is a **new profile** and therefore a
 new zero point; contributions stay tied to the profile they were made with.
 
+**Feature version 2** (experimental, `feature_version = "2"`) is the first implementation of this table: the density
+net of the chain's click floor, the level relative to the profile's reference tone in addition to the music
+reference, and how far an event rises above the chain's own noise. The detector's strength itself stays: it is the
+peak over the local residual level, which never falls below the chain's noise, so it is already relative to that noise
+wherever it dominates (definitions and reasons in [measurement](measurement.md#learning)). On synthetic chains it did
+not yet show a clear gain over version 1; version 1 stays the default until real stations show otherwise.
+
 ### What a profile contributes
 
 The unit of a contribution is a turntable profile, not a station: a station with two turntables contributes two
@@ -120,11 +127,12 @@ profiles.
 
 **Not sent:** audio, feature vectors of single events, record titles, notes, Discogs data, credentials.
 
-Today's features are **feature version 1**: relative to the music reference of each recording, not yet to the
-profile (stage 0 is still open). Contributions carry the feature version, and the hub never mixes versions, so
-profile-relative features can follow as version 2. The fixed common scaling of version 1 is `learning.FIXED_SCALING`;
-the exact payload is in the [protocol](vinyl-mind-protocol.md#contribution). A contribution is trained on the
-profile's own recordings and **without** any prior, so the hub never gets its own result back.
+The default features are **feature version 1**, relative to the music reference of each recording; version 2 adds
+the profile as the zero point (above). Contributions carry the feature version, and the hub never mixes versions. The
+fixed common scaling is `learning.FIXED_SCALING` (version 1) and `learning.FIXED_SCALING_V2`; the exact payload is in
+the [protocol](vinyl-mind-protocol.md#contribution). A contribution is trained on the profile's own recordings and
+**without** any prior, so the hub never gets its own result back. In version 2 only recordings whose profile has a
+measured zero point count.
 
 ### How Vinyl-Mind combines
 
@@ -253,7 +261,7 @@ and an optional LAN mode for phones and tablets near the turntable.
 
 | Stage | Content | Benefit | State |
 |---|---|---|---|
-| 0 | **Profile-relative features**: the turntable profile becomes the zero point of the features (see above), with a feature version; the local model works unchanged on top | the prerequisite for comparing weights at all, and measurably better local estimates across a change of chain | open; feature version 1 (music-relative) is in place |
+| 0 | **Profile-relative features**: the turntable profile becomes the zero point of the features (see above), with a feature version; the local model works unchanged on top | the prerequisite for comparing weights at all, and measurably better local estimates across a change of chain | feature version 2 defined and selectable (experimental), evaluation tool `tools/eval_features.py`; no clear gain on synthetic chains, real stations open; version 1 stays the default |
 | 1 | **Contribution package as a file**: export a profile's weights and counts, import a foreign package as the prior on another station | evidence of whether foreign knowledge helps, without any server | done on the station (1.1.0): *Settings → Vinyl-Mind → Package files*, `learning.train(prior=...)` |
 | 2 | **Vinyl-Mind minimal**: joining with key pairs and approval, signed requests and signed models, accept contributions, combine robustly, publish versions; *Settings → Vinyl-Mind* on the station (switches, server, key, status, payload preview) | federated averaging at small scale | station side done (1.1.0): key pair, signed requests, verified models, adopting per kind, check reports, settings; tested against a test hub. The hub is open; only a server address is missing. |
 | 3 | stations at other sites and chain classes; validation reports from stations | real generalisation across chains | reports and chain classes are sent; open |
@@ -266,8 +274,13 @@ and an optional LAN mode for phones and tablets near the turntable.
 - Canonical JSON for model signatures: Python's `json` form (protocol draft v0) or RFC 8785 once a hub in another
   language appears.
 - Should a re-measured profile (new alignment of the same cartridge) get a new profile id? Today the id stays with
-  the profile row; with profile-relative features (stage 0) a new alignment is a new zero point.
-- The exact profile-relative normalisation of each feature (needs measurements on several chains of the same records).
+  the profile row; with profile-relative features (stage 0) a new alignment is a new zero point. Feature version 2
+  reads the zero point from the profile as it is now, so a re-measured profile moves the zero point of its older
+  recordings too.
+- Whether feature version 2 becomes the default, and its exact normalisation: needs master comparisons or judgements
+  of the same records on several measured chains (`tools/eval_features.py real` on a copy of a station database).
+- How the hub combines intercepts of profiles on which a feature is constant at different values (stations with and
+  without the second opinion): separate groups, or centring as feature version 2 does (see the protocol).
 - Should grades and record conditions per Discogs release be shared too (a shared condition database), or only
   models?
 - Audio snippets at all, and if so, with what consent per station?

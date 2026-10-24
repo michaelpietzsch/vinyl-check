@@ -330,13 +330,66 @@ pressings with a master are included. A background thread checks every 30 s for 
 retrains, and recounts analyses made with an older model.
 
 **Starting point from other stations (Vinyl-Mind).** Weights are exchanged in a fixed common scaling per feature
-(`FIXED_SCALING` of feature version 1), not in each station's own standardisation, so the same weight means the same
-everywhere. With a starting point (an adopted global model or an imported package), the ridge penalty pulls the
-weights towards it instead of towards zero, with a strength of about a hundred master-classified events
-(`PRIOR_L2`): with a handful of examples the model stays close to the starting point, with thousands it follows the
-own data. The cross-check uses the same starting point, so *usable* still means verified on the station's own
+(`FIXED_SCALING`, `FIXED_SCALING_V2` for feature version 2), not in each station's own standardisation, so the same
+weight means the same everywhere. With a starting point (an adopted global model or an imported package), the ridge
+penalty pulls the weights towards it instead of towards zero, with a strength of about a hundred master-classified
+events (`PRIOR_L2`): with a handful of examples the model stays close to the starting point, with thousands it follows
+the own data. The cross-check uses the same starting point, so *usable* still means verified on the station's own
 recordings. The cross-check also reports the AUC of the held-out detections. Details:
 [architecture](architecture.md#how-a-station-uses-the-global-model), [protocol](vinyl-mind-protocol.md).
+
+**Feature version 2: the turntable profile as the zero point (experimental).** Version 1 (the default) relates the
+levels to the music reference of each recording. Version 2 (`feature_version = "2"` in the configuration) also takes
+the recording's turntable profile as the zero point, so that the weights of different chains mean the same: its chain
+noise (stylus up), its reference level (the test record's 1 kHz tone) and its click floor (detections per minute in
+the test record's silent groove), the last two from an accepted alignment run. What changes:
+
+| Feature | Version 2 | Why |
+|---|---|---|
+| density within ±0.5 s | neighbours **minus** those the click floor puts into the window: ln(1 + max(0, n − λ)), λ = floor per second × 1 s | the chain's own hits no longer look like crackle; subtracted, as the grading does with the floor, so a crackling record shows the same excess on a noisy chain as on a quiet one |
+| level | relative to the music reference as before, **and** relative to the reference tone (`amp_ref`) | the music reference says how much the music masks a detection; the reference tone adds its physical size, independent of the gain and of how loud the record was cut |
+| strength | unchanged, plus how far the detection rises above the chain noise: (level − chain noise) / 10, at most 4 (`chain_margin`) | the detector's strength is the peak over its local noise level, which never falls below the chain noise, so it is already relative to that noise; what it cannot tell is whether a detection sits near the level the chain itself produces. Beyond 40 dB the chain plays no role |
+| second opinion, region, channels, duration | unchanged | independent of the chain |
+
+The profile stores how many hits the chain produces, not how strong they are, so the click floor (a rate) can only
+normalise the density. Features that are constant on most profiles are centred at that value in the common scaling
+(`chain_margin` at 4, the second opinion's "missing" at 1): a weight that did not vary is left out of Vinyl-Mind's
+average, which is only exact if the feature sat at its centre. Where the profile lacks a value (no profile, not
+measured, not accepted), the feature falls back to a value without profile information (reference tone 5 dB above the
+music reference, no floor, `chain_margin` 4) and the recording is flagged: it still counts locally, but never in a
+contribution, and a profile without a measured zero point has nothing to contribute. The zero point is read from the
+profile as it is now, so a newly accepted run applies to the profile's older recordings too.
+
+**Evaluation.** `tools/eval_features.py synthetic` plays the same synthetic records through three simulated chains (a
+budget USB turntable with hiss and many hits of its own, a mid-range deck behind an interface, an aligned high-end
+chain), measures each profile as a station does, analyses every side and judges each detection as a master comparison
+would (the chain's own hits count as real: they are not in the master). It compares both versions by the local
+cross-check, one model over all chains, weights of one chain applied to another, the averaged weights of the other
+chains (as a hub would combine them), and the similarity of the weights. Twelve one-minute records per chain, three
+seeds, means:
+
+| Estimate error, version 1 → 2 | Clicks | Crackle | Pops |
+|---|---|---|---|
+| raw count (for comparison) | 1.42 | 2.16 | 3.05 |
+| local cross-check (mean of the chains) | 0.049 → 0.045 | 0.177 → 0.181 | 0.152 → 0.152 |
+| one model over all three chains | 0.051 → 0.045 | 0.241 → 0.219 | 0.165 → 0.143 |
+| weights of one chain on another (mean of 6) | 0.062 → 0.058 | 0.446 → 0.418 | 0.314 → 0.293 |
+| averaged weights of the other chains | 0.054 → 0.050 | 0.468 → 0.441 | 0.314 → 0.293 |
+| cosine of two chains' weights (higher = more alike) | 0.92 → 0.91 | 0.51 → 0.49 | 0.85 → 0.77 |
+
+Version 2 is slightly better wherever weights cross chains (by 6–13 %) and not worse on each chain's own recordings,
+but below a clear gain (0.02 and 15 %), and for clicks and crackle the sign changes between seeds. It does not make
+the weights of different chains more alike. The reasons: gain and reference differences, which a profile-relative
+level would remove, are already removed by version 1's music reference (a per-profile offset only moves the
+intercept); the largest transfer errors come from what the profile does not describe: the share of real detections
+differs per chain (55–63 % on the budget chain, 29–37 % on the high-end chain, because the chain's own hits count as
+real for a master comparison), and the cartridge's roll-off turns music transients into clicks instead of pops; and
+`chain_margin` only varies on the noisy chain. A first round with the centre of `chain_margin` at 3 instead of its
+saturation made the averaged click model several times worse (0.05 → 0.21), which is why constant features are now
+centred where they sit. Version 1 stays the default; real stations with several measured profiles decide.
+
+`tools/eval_features.py real <copy of vinyl-check.sqlite>` computes the same on a station database, read-only, for
+the profiles with a complete zero point.
 
 ## Technical data, spectrogram, analyzer
 
