@@ -115,11 +115,19 @@ CHAIN_MARGIN_MAX_DB = 40.0
 #   floor     → λ = 0, the density of version 1;
 #   chain_db  → chain_margin saturated, as on a chain whose noise plays no role.
 REF_ABOVE_MUSIC_DB = 5.0
+# Fixed common scaling of version 2. A weight whose feature did not vary in a profile's data is sent as uninformative
+# and left out of the hub's average, and that is only exact if the feature sat at its centre: otherwise the profile's
+# intercept contains the effect of the constant value, and averaging it with intercepts of profiles where the feature
+# varied biases the global model (in the synthetic evaluation, centre 3 for chain_margin made the averaged click model
+# several times worse than version 1). So a feature that is constant on many profiles has its centre at that value:
+# chain_margin at its saturation (the chain plays no role, as on most chains), gc_missing at 1 (most stations run
+# without the optional second-opinion network, and crackle never gets a score). The other centres are version 1's.
 FIXED_SCALING_V2 = {
     **{k: FIXED_SCALING[k] for k in FEATURES_V2 if k in FIXED_SCALING},
+    "gc_missing": (1.0, 0.5),        # 0/1; centre at "no second opinion", the common case
     "log_density_net": (0.5, 0.75),  # like log_density; the chain's own neighbours removed
     "amp_ref": (-20.0, 10.0),        # dB relative to the reference tone; real clicks −50 … −15, music −15 … +5
-    "chain_margin": (3.0, 1.0),      # (amp − chain noise) / 10, 0 … 4; detected events ≳ 1.8, most saturate at 4
+    "chain_margin": (CHAIN_MARGIN_MAX_DB / 10, 1.0),  # 0 … 4; detected events ≳ 1.8, most at the saturation 4
 }
 FEATURE_VERSIONS = ("1", "2")
 FEATURES_BY_VERSION = {"1": FEATURES, "2": FEATURES_V2}

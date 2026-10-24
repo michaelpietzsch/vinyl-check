@@ -242,7 +242,10 @@ def test_feature_version_2_as_defined():
     assert np.allclose(X2[:, names.index("amp_ref")], [-22.0, -57.0, -77.0, -2.0, -42.0])
     assert np.allclose(X2[:, names.index("chain_margin")], [4.0, 1.5, 0.0, 4.0, 3.0])    # (amp + 90) / 10 in 0 … 4
     assert set(learning.FIXED_SCALING_V2) == set(names)
-    assert all(learning.FIXED_SCALING_V2[f] == learning.FIXED_SCALING[f] for f in names if f in learning.FIXED_SCALING)
+    # features constant on many profiles are centred at that value, so their intercepts stay comparable
+    assert learning.FIXED_SCALING_V2["chain_margin"][0] == 4.0 and learning.FIXED_SCALING_V2["gc_missing"][0] == 1.0
+    assert all(learning.FIXED_SCALING_V2[f] == learning.FIXED_SCALING[f] for f in names
+               if f in learning.FIXED_SCALING and f != "gc_missing")
 
 
 def test_zero_point_and_fallback():
