@@ -84,8 +84,11 @@ mode 600, directory 700), never in the database, a log, an export or an API answ
 
 **Disconnected by the hub.** When the hub answers `403 revoked` (the operator revoked the station; leaving is refused
 too, because the hub keeps a revoked key on record and has already deleted what the station sent) or `401
-unknown_key` (the hub no longer knows the station), the station deletes its key and its Vinyl-Mind state for that hub
-as well, and the settings say so until the note is dismissed or the station connects again, with a new key.
+unknown_key` (the hub no longer knows the station), the station deletes its key and its connection to that hub as
+well, and the settings say so until the note is dismissed or the station connects again, with a new key. Profiles,
+their models and an adopted global model stay: they were verified against the hub's key and checked on the own
+recordings, and an unknown key may only mean that the hub started afresh with the same key. Joining a hub with another
+key drops what the old one signed.
 
 **States** shown in the settings: connected, waiting for approval, server key changed (nothing more is sent until the
 user disconnects and connects again), station key missing, client version not accepted, server unreachable, feature

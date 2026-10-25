@@ -1151,6 +1151,44 @@ def test_leaving_a_station_the_hub_dropped(station, hub, code):
     assert st["state"] == "not_joined" and st["notice"]["code"] == "revoked"
 
 
+def test_models_outlive_a_disconnect_by_the_hub(station, hub):
+    """unknown_key or revoked end the connection only: the profiles' models and an adopted global model stay (the hub
+    may have started afresh with the same key); joining a hub with another key drops them."""
+    app = station.app_
+    _join(station, hub)
+    station.put("/api/vinylmind", json={"contribute": True, "use_model": True})
+    station.post("/api/vinylmind/sync")
+    v1 = hub.publish(hub.combine())
+    assert station.post("/api/vinylmind/sync").json()["status"]["model"]["adopted"] == ["click"]
+    profiles = app.state.db.profiles()
+    # the hub lost its database and knows the station no more
+    hub.stations.clear()
+    app.state.vinylmind.note_retrained()
+    assert station.post("/api/vinylmind/sync").status_code == 502
+    st = station.get("/api/vinylmind").json()
+    assert st["state"] == "not_joined" and st["notice"]["code"] == "unknown"
+    assert st["prior"]["source"] == "server" and st["prior"]["ref"] == v1 and st["prior"]["in_use"]
+    assert st["model"]["version"] == v1
+    assert json.loads(app.state.db.setting("learn_model"))["prior"]["ref"] == v1
+    assert app.state.db.profiles() == profiles and not list(_key_dir(app).glob("*.key"))
+    # connecting again to the same hub key keeps them
+    st = _join(station, hub)
+    assert st["state"] == "active" and st["prior"]["ref"] == v1
+    # revoked: the same
+    hub.stations[st["station_fingerprint"]]["status"] = "revoked"
+    app.state.vinylmind.note_retrained()
+    station.post("/api/vinylmind/sync")
+    st = station.get("/api/vinylmind").json()
+    assert st["notice"]["code"] == "revoked" and st["prior"]["ref"] == v1
+    # a hub with another key: what the old one signed goes
+    hub.key = Ed25519PrivateKey.generate()
+    hub.pub = _raw(hub.key.public_key())
+    hub.fp = _fp(hub.pub)
+    hub.stations.clear()
+    st = _join(station, hub)
+    assert st["state"] == "active" and st["prior"] is None and st["model"] is None
+
+
 @pytest.mark.parametrize("tamper", ["unsigned", "kid", "signature", "alg", "scaling", "server"])
 def test_refuses_unsigned_or_wrongly_signed_model(station, hub, tamper):
     _join(station, hub)

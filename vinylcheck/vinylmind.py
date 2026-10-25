@@ -1394,11 +1394,16 @@ class VinylMind:
         self._put(S_SENT, None)                         # a new station sends everything anew
         self._put(S_NOTICE, None)
         m = self._get(S_MODEL)
+        prior = self._get(S_PRIOR)
+        # models kept from an earlier connection (also one the hub ended) are signed by that hub's key
+        earlier = (old or {}).get("fingerprint") or (m.get("hub") if isinstance(m, dict) else None) \
+            or (prior.get("hub") if isinstance(prior, dict) and prior.get("source") == "server" else None)
         if isinstance(m, dict):                         # check reports belong to the station, models to the hub
+            m.pop("hub", None)
             for v in (m.get("checked") or {}).values():
                 v["reported"] = []
             self._put(S_MODEL, m)
-        if old and old.get("fingerprint") != info["fingerprint"]:
+        if earlier and earlier != info["fingerprint"]:
             self._put(S_MODEL, None)
             self._drop_server_prior()
         self.dirty, self.failures, self.next_attempt, self.last_error, self.last_error_code = True, 0, 0.0, None, None
@@ -1653,20 +1658,28 @@ class VinylMind:
             log.info("Vinyl-Mind: left %s", j["url"])
             return self.status()
 
-    def _forget(self, j: dict) -> None:
-        """Drop the station's key and its Vinyl-Mind state for the hub of `j`."""
-        for s in (S_JOIN, S_SENT, S_MODEL):
+    def _forget(self, j: dict, keep_models: bool = False) -> None:
+        """Drop the station's key and its Vinyl-Mind state for the hub of `j`. With `keep_models`, only the connection
+        goes: the checked models and an adopted one stay, marked with the hub's key so that joining another hub drops
+        them."""
+        for s in (S_JOIN, S_SENT) if keep_models else (S_JOIN, S_SENT, S_MODEL):
             self._put(s, None)
         StationKey.delete(key_file(self.state_dir, j["fingerprint"]))
-        self._drop_server_prior()
+        if keep_models:
+            m = self._get(S_MODEL)
+            if isinstance(m, dict):
+                self._put(S_MODEL, m | {"hub": j["fingerprint"], "etag": None})
+        else:
+            self._drop_server_prior()
         self.failures, self.next_attempt, self.last_error, self.last_error_code = 0, 0.0, None, None
 
     def _disconnected(self, j: dict, code: str) -> None:
         """The hub refuses the station's key for good: the operator revoked it (403 revoked, also on leaving: the hub
         keeps a revoked key on record so that it cannot join again, and has already deleted what the station sent), or
-        the hub no longer knows it (401 unknown_key). The key and the state for that hub are dropped here as well, and
-        the settings say why; connecting again makes a new key."""
-        self._forget(j)
+        the hub no longer knows it (401 unknown_key). The key and the connection are dropped here as well, and the
+        settings say why; connecting again makes a new key. Models stay: they were verified against the hub's key and
+        checked on the own recordings, and an unknown key may only mean the hub started afresh with the same key."""
+        self._forget(j, keep_models=True)
         self._put(S_NOTICE, {"code": "revoked" if code == "revoked" else "unknown", "url": j["url"],
                              "at": time.time()})
         log.warning("Vinyl-Mind: %s refused this station's key (%s); disconnected here too", j["url"], code)
