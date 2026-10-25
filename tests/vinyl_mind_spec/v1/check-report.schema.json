@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/michaelpietzsch/vinyl-mind/blob/main/spec/v1/check-report.schema.json",
+  "title": "Check report of one turntable profile on one global model, feature version 1",
+  "description": "Sent with PUT /v1/profiles/{profile_id}/checks/{version}. The station estimates the real clicks of its own recordings with a master once with its local model and once with the global model and reports both errors per kind.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec", "feature_version", "kinds", "adopted"],
+  "properties": {
+    "spec": {"const": "vinyl-mind/check-report"},
+    "feature_version": {"const": 1},
+    "adopted": {"description": "the station uses the model as the prior of its training", "type": "boolean"},
+    "kinds": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "click": {"$ref": "#/$defs/kind"},
+        "tick": {"$ref": "#/$defs/kind"},
+        "pop": {"$ref": "#/$defs/kind"}
+      }
+    }
+  },
+  "$defs": {
+    "kind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["local_err", "global_err", "master_recordings"],
+      "properties": {
+        "local_err": {"type": "number", "minimum": 0, "maximum": 100},
+        "global_err": {"type": "number", "minimum": 0, "maximum": 100},
+        "master_recordings": {"type": "integer", "minimum": 2, "maximum": 100000}
+      }
+    }
+  }
+}

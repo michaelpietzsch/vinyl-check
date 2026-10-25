@@ -158,6 +158,8 @@ class ProfileIn(BaseModel):
     weight: str = ""
     notes: str = ""
     fixed_gain: bool = False               # level not adjustable on the device (USB turntable): no gain advice
+    chain_source: str | None = None        # Vinyl-Mind chain class; null = guessed from device and cartridge
+    chain_cartridge: str | None = None
 
 
 class ProfilePatch(BaseModel):
@@ -171,6 +173,8 @@ class ProfilePatch(BaseModel):
     antiskating: str | None = None
     weight: str | None = None
     notes: str | None = None
+    chain_source: str | None = None
+    chain_cartridge: str | None = None
 
 
 class MapIn(BaseModel):
@@ -274,6 +278,15 @@ def _clean_findings(v) -> str:
 def _check_sensitivity(v) -> None:
     if v is not None and not 0.0 <= float(v) <= 1.0:
         raise HTTPException(422, i18n.msg("api.sensitivity_range"))
+
+
+def _check_chain(f: dict) -> None:
+    """The profile's chain class for Vinyl-Mind: the hub's values, or empty/null for "guess from the profile"."""
+    for k, allowed in (("chain_source", vinylmind.SOURCES), ("chain_cartridge", vinylmind.CARTRIDGES)):
+        if f.get(k) == "":
+            f[k] = None
+        if f.get(k) is not None and f[k] not in allowed:
+            raise HTTPException(422, i18n.msg("vinylmind.chain_invalid"))
 
 
 class CompareIn(BaseModel):
@@ -683,7 +696,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return model
 
     # Vinyl-Mind (vinylmind.py): contributions and the global model; nothing is sent while a recording runs
-    vm = vinylmind.VinylMind(cfg, db, busy=lambda: recorder.active, retrain=learn_train)
+    vm = vinylmind.VinylMind(cfg, db, busy=lambda: recorder.active, retrain=learn_train, desktop=desktop)
 
     def learn_apply(limit: int | None = None) -> int:
         """Recount every analysis whose estimate does not match the current model and switches."""
@@ -2354,6 +2367,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         p["progress"] = _profile_progress(p)
         p["connected"] = (not p["device"]) or bool(cfg.fake_source) or p["device"] in {
             d["device"] for d in capture_devices()}
+        p["chain"], p["chain_guess"] = vinylmind.chain_of(p), vinylmind.guess_chain(p)   # Vinyl-Mind chain class
         return p
 
     @app.get("/api/profiles")
@@ -2364,7 +2378,9 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     def add_profile(p: ProfileIn):
         if not p.name.strip():
             raise HTTPException(422, i18n.msg("api.profile_name_required"))
-        pid = db.add_profile(**p.model_dump())
+        f = p.model_dump()
+        _check_chain(f)
+        pid = db.add_profile(**f)
         if not db.active_profile():
             db.activate_profile(pid)
         return get_profile(pid)
@@ -2385,7 +2401,10 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             raise HTTPException(404, i18n.msg("api.profile_not_found"))
         f = p.model_dump(exclude_unset=True)
         _check_sensitivity(f.get("sensitivity"))
+        _check_chain(f)
         db.update_profile(pid, **f)
+        if {"chain_source", "chain_cartridge", "device", "cartridge"} & set(f):
+            vm.note_retrained()                   # the chain class of its contribution may have changed
         if "sensitivity" in f and prof.get("accepted_at") and prof.get("baseline_setup_id"):
             # The drive's noise floor is only valid for the sensitivity it was measured with: recompute side 2 of
             # the accepted run (the worker then updates the floor)

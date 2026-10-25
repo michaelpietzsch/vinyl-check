@@ -42,8 +42,9 @@ from scipy import ndimage, signal
 MAD_TO_SIGMA = 1.4826          # median absolute deviation → standard deviation for Gaussian data
 # Version of what the detector reports (which events, their strength, duration, level and kind). The learning model's
 # weights depend on it, so Vinyl-Mind never combines weights from different detector versions: raise it whenever a
-# change alters the events or their values on the same audio (not for pure speed-ups or refactoring).
-VERSION = 1
+# change alters the events or their values on the same audio (not for pure speed-ups or refactoring). A string, as the
+# hub's specification sends it ("1", "2", …).
+VERSION = "1"
 
 EVENT_DTYPE = np.dtype([
     ("t", "f8"),          # time of the peak (s)

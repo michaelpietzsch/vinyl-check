@@ -43,10 +43,12 @@ discogs_sync_minutes = 15               # sync the collection this often; a sear
 # discogs_consumer_secret = ""
 # discogs_url = ""                      # deprecated, ignored (was an external service, e.g. "http://<host>:4990")
 
-# Vinyl-Mind (docs/vinyl-mind-protocol.md): the server that Settings → Vinyl-Mind offers and "Reset to default"
-# restores. There is no default server yet; a group of stations can be preset to a self-hosted one. Contributing and
-# using the global model are switched on in the interface (both off by default).
+# Vinyl-Mind (docs/vinyl-mind.md): the server that Settings → Vinyl-Mind offers and "Reset to default" restores
+# (default: the project's own hub); a group of stations can be preset to a self-hosted one. Contributing and using the
+# global model are switched on in the interface (both off by default).
 # vinyl_mind_url = "https://vinyl-mind.example"
+# A self-hosted hub without accounts: where its operator hands out invitation codes ("Where do I get a code?")
+# vinyl_mind_invite_url = "https://vinyl-mind.example/invite"
 
 # Feature version of the learning model (docs/measurement.md, "Learning"): "1" = relative to each recording's music
 # reference (default); "2" = experimental, also relative to the recording's turntable profile (chain noise, reference

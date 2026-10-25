@@ -51,7 +51,8 @@ ml = ["torch>=2.1"]
 portaudio = ["sounddevice>=0.5"]
 # Desktop app (vinyl-check-desktop): native window around the interface, QR code for access from the phone
 desktop = ["pywebview>=5.3", "segno>=1.6"]
-dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "build>=1.2", "segno>=1.6"]
+# jsonschema: the tests check what the station sends to Vinyl-Mind against the hub's JSON schemas
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "build>=1.2", "segno>=1.6", "jsonschema>=4.18"]
 
 [project.scripts]
 vinyl-check = "vinylcheck.__main__:main"

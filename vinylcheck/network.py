@@ -226,6 +226,9 @@ class Access:
         self._token: str | None = None
         self._failures: dict[str, tuple[int, float]] = {}
         self._lock = threading.RLock()
+        # paths reachable without the code because they check something of their own (the Vinyl-Mind sign-in
+        # callback accepts nothing but the state of the flow this station opened)
+        self.open_paths: set[str] = {LOGIN_PATH}
 
     @property
     def required(self) -> bool:
@@ -376,7 +379,7 @@ class AccessMiddleware:
             if origin and changes and not same_origin(origin, headers.get("host")):
                 return await self._deny(scope, receive, send, 403, "network.cross_site")
         client = (scope.get("client") or ("", 0))[0]
-        if not acc.required or is_loopback(client) or scope["path"] == LOGIN_PATH:
+        if not acc.required or is_loopback(client) or scope["path"] in acc.open_paths:
             return await self.app(scope, receive, send)
         if acc.cookie_ok(HTTPConnection(scope).cookies.get(COOKIE)):
             return await self.app(scope, receive, send)

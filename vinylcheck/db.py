@@ -11,6 +11,7 @@ pass through unchanged.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -161,6 +162,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     baseline TEXT,
     accepted_at REAL,
     vm_id TEXT,
+    chain_source TEXT, chain_cartridge TEXT,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -232,7 +234,8 @@ class DB:
                     self.conn.execute(f"ALTER TABLE analyses ADD COLUMN {col} {typ}")
             self._migrate_profiles(path)
             self._migrate_copy_findings()
-            self._migrate_1_0(path)                    # last: rewrites what the steps above carried over
+            self._migrate_1_0(path)                    # rewrites what the steps above carried over
+            self._migrate_vm_ids()
 
     def _backup(self, path: Path, tag: str) -> Path:
         """Copy of the database before the migration to version `tag`, next to it."""
@@ -314,7 +317,7 @@ class DB:
         for col in ("wizard_setup_id INTEGER", "target_map TEXT",                     # 0.4.x: profile columns
                     "floor_clicks_per_min REAL", "floor_ticks_per_min REAL", "sensitivity REAL",    # 0.6.0: floor
                     "fixed_gain INTEGER NOT NULL DEFAULT 0",                                        # 0.7.0: fixed gain
-                    "vm_id TEXT"):                                                                  # 1.1.0: Vinyl-Mind
+                    "vm_id TEXT", "chain_source TEXT", "chain_cartridge TEXT"):                     # 1.1.0: Vinyl-Mind
             if col.split()[0] not in pcols:
                 self.conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
         if "sensitivity" not in rcols:                                                 # 0.6.0: per-recording override
@@ -372,7 +375,8 @@ class DB:
     # ─── Turntable profiles ─────────────────────────────────────────────────
     PROFILE_FIELDS = ("name", "cartridge", "device", "tracking_force_g", "antiskating", "weight", "notes",
                       "target_map", "calibration_id", "baseline_setup_id", "wizard_setup_id", "ref_dbfs", "chain_db", "speed_pct", "baseline",
-                      "floor_clicks_per_min", "floor_ticks_per_min", "sensitivity", "fixed_gain", "accepted_at")
+                      "floor_clicks_per_min", "floor_ticks_per_min", "sensitivity", "fixed_gain", "accepted_at",
+                      "chain_source", "chain_cartridge")
 
     def profiles(self) -> list[dict]:
         return self.q("""SELECT p.*, (SELECT COUNT(*) FROM setups s WHERE s.profile_id = p.id) AS setups,
@@ -406,17 +410,26 @@ class DB:
         self.x("DELETE FROM profiles WHERE id = ?", (pid,))
 
     def profile_vm_id(self, pid: int) -> str | None:
-        """The profile's id for Vinyl-Mind: 128 random bits, created on first use and never derived from names or
-        hardware, so contributions cannot be traced to a turntable. None if the profile does not exist."""
+        """The profile's id for Vinyl-Mind: 16 random bytes in base64url (22 characters, the hub's form), created on
+        first use and never derived from names or hardware, so contributions cannot be traced to a turntable. None if
+        the profile does not exist."""
         with self.lock:
             row = self.conn.execute("SELECT vm_id FROM profiles WHERE id = ?", (pid,)).fetchone()
             if row is None:
                 return None
             if row[0]:
                 return row[0]
-            vid = secrets.token_hex(16)
+            vid = base64.urlsafe_b64encode(secrets.token_bytes(16)).rstrip(b"=").decode("ascii")
             self.conn.execute("UPDATE profiles SET vm_id = ? WHERE id = ?", (vid, pid))
             return vid
+
+    def _migrate_vm_ids(self) -> None:
+        """Profile ids for Vinyl-Mind from before 1.1.0 were 32 hex characters; the hub's form is the same 16 bytes in
+        base64url. Re-encoding keeps the same random bits, so nothing about a profile changes but the spelling."""
+        for pid, vid in self.conn.execute("SELECT id, vm_id FROM profiles WHERE vm_id IS NOT NULL").fetchall():
+            if re.fullmatch(r"[0-9a-f]{32}", vid or ""):
+                new = base64.urlsafe_b64encode(bytes.fromhex(vid)).rstrip(b"=").decode("ascii")
+                self.conn.execute("UPDATE profiles SET vm_id = ? WHERE id = ?", (new, pid))
 
     def _migrate_copy_findings(self) -> None:
         """Visual findings (scratch, warp …) belong to the record, per copy and side (`copy_findings`), not to a

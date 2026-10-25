@@ -1,0 +1,20 @@
+{
+  "spec": "vinyl-mind/contribution",
+  "feature_version": 1,
+  "detector_version": "1",
+  "client": {"name": "vinyl-check", "version": "1.1.0"},
+  "chain": {"source": "turntable_interface", "cartridge": "mc"},
+  "trained_at": 1793000000,
+  "kinds": {
+    "click": {
+      "coef": [0.42, 1.31, 0.88, -0.12, 0.95, -0.21, -0.35, 0.18, -0.44, -0.27, 0.31],
+      "n_real": 812, "n_false": 1490, "n_manual": 140, "n_master": 2162,
+      "master_recordings": 10, "cv_err_est": 0.04, "cv_err_raw": 0.15, "auc": 0.91
+    },
+    "tick": {
+      "coef": [-0.65, 0.97, 0.52, 0.08, 0.61, -0.18, -0.51, 0.09, -0.62, -0.12, 0.22],
+      "n_real": 2210, "n_false": 4120, "n_manual": 35, "n_master": 6295,
+      "master_recordings": 10, "cv_err_est": 0.05, "cv_err_raw": 0.52, "auc": null
+    }
+  }
+}

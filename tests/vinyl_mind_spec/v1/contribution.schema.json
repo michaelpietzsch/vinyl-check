@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/michaelpietzsch/vinyl-mind/blob/main/spec/v1/contribution.schema.json",
+  "title": "Contribution of one turntable profile, feature version 1",
+  "description": "Sent with PUT /v1/profiles/{profile_id}; replaces the profile's previous contribution. A kind is only included when the station has fitted a model for it and cross-checked it on at least two recordings with a master.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec", "feature_version", "detector_version", "client", "chain", "kinds"],
+  "properties": {
+    "spec": {"const": "vinyl-mind/contribution"},
+    "feature_version": {"const": 1},
+    "detector_version": {"$ref": "#/$defs/token"},
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9-]{1,32}$"},
+        "version": {"$ref": "#/$defs/token"}
+      }
+    },
+    "chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "cartridge"],
+      "properties": {
+        "source": {"enum": ["usb_turntable", "turntable_interface"]},
+        "cartridge": {"enum": ["mm", "mc", "unknown"]}
+      }
+    },
+    "trained_at": {"type": "integer", "minimum": 1500000000, "maximum": 4102444800},
+    "kinds": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "click": {"$ref": "#/$defs/kind"},
+        "tick": {"$ref": "#/$defs/kind"},
+        "pop": {"$ref": "#/$defs/kind"}
+      }
+    }
+  },
+  "$defs": {
+    "token": {"type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "kind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coef", "n_real", "n_false", "n_manual", "n_master", "master_recordings", "cv_err_est", "cv_err_raw"],
+      "properties": {
+        "coef": {
+          "description": "Intercept and one weight per feature in the shared scaling of features.json",
+          "type": "array", "minItems": 11, "maxItems": 11,
+          "items": {"type": "number", "minimum": -50, "maximum": 50}
+        },
+        "n_real": {"$ref": "#/$defs/count", "minimum": 10},
+        "n_false": {"$ref": "#/$defs/count", "minimum": 10},
+        "n_manual": {"$ref": "#/$defs/count"},
+        "n_master": {"$ref": "#/$defs/count"},
+        "master_recordings": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "cv_err_est": {"description": "mean absolute relative error of the estimated count per recording in the cross-check", "type": "number", "minimum": 0, "maximum": 10},
+        "cv_err_raw": {"description": "the same error of the raw count", "type": "number", "minimum": 0, "maximum": 100},
+        "auc": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

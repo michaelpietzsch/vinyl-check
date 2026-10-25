@@ -64,9 +64,12 @@ class Config:
     # reference; "2" (experimental) also relative to the recording's turntable profile. Vinyl-Mind contributions and
     # global models always carry the version in use, and versions are never mixed.
     feature_version: str = "1"
-    # Vinyl-Mind server (docs/vinyl-mind-protocol.md): the preset that "Reset to default" in the settings restores, so
-    # a group of stations can be pointed at a self-hosted hub; contributing and using the model are switched there
+    # Vinyl-Mind server (docs/vinyl-mind.md): the preset that "Reset to default" in the settings restores, so a group
+    # of stations can be pointed at a self-hosted hub; contributing and using the model are switched there
     vinyl_mind_url: str = DEFAULT_VINYL_MIND_URL
+    # Where the operator of a hub without accounts hands out invitation codes: when set, "Where do I get a code?" in
+    # the settings links there
+    vinyl_mind_invite_url: str = ""
     discogs_token: str = ""        # personal access token (Discogs → Settings → Developers); empty = Discogs off
     discogs_username: str = ""     # Discogs user name (collection of this account); with OAuth it comes from Discogs
     discogs_consumer_key: str = ""     # OAuth app (Discogs → Settings → Developers → Applications) …

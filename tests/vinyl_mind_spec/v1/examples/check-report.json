@@ -1,0 +1,9 @@
+{
+  "spec": "vinyl-mind/check-report",
+  "feature_version": 1,
+  "adopted": true,
+  "kinds": {
+    "click": {"local_err": 0.06, "global_err": 0.05, "master_recordings": 4},
+    "tick": {"local_err": 0.11, "global_err": 0.09, "master_recordings": 4}
+  }
+}

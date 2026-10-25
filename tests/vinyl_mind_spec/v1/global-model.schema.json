@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/michaelpietzsch/vinyl-mind/blob/main/spec/v1/global-model.schema.json",
+  "title": "Global model, feature version 1",
+  "description": "The payload of the signed model (see ../signing.md). It never changes once created; its status (candidate, published, withdrawn) is served next to it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec", "version", "feature_version", "detector_version", "chain_class", "created_at", "server",
+               "features", "scaling", "aggregation", "kinds"],
+  "properties": {
+    "spec": {"const": "vinyl-mind/global-model"},
+    "version": {"type": "integer", "minimum": 1},
+    "feature_version": {"const": 1},
+    "detector_version": {"type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$"},
+    "chain_class": {"type": "string", "pattern": "^(all|(usb_turntable|turntable_interface)\\.(mm|mc|unknown))$"},
+    "created_at": {"type": "integer"},
+    "server": {"description": "fingerprint of the signing key, binds the model to its server", "type": "string", "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"},
+    "features": {"type": "array", "items": {"type": "string"}, "minItems": 10, "maxItems": 10},
+    "scaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["center", "scale"],
+      "properties": {
+        "center": {"type": "array", "items": {"type": "number"}, "minItems": 10, "maxItems": 10},
+        "scale": {"type": "array", "items": {"type": "number", "exclusiveMinimum": 0}, "minItems": 10, "maxItems": 10}
+      }
+    },
+    "aggregation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "trim", "manual_weight", "max_est_error", "max_station_share"],
+      "properties": {
+        "method": {"enum": ["trimmed_mean", "median"]},
+        "trim": {"type": "number", "minimum": 0, "maximum": 0.45},
+        "manual_weight": {"type": "number", "minimum": 0},
+        "max_est_error": {"type": "number", "minimum": 0},
+        "max_station_share": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "kinds": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "click": {"$ref": "#/$defs/kind"},
+        "tick": {"$ref": "#/$defs/kind"},
+        "pop": {"$ref": "#/$defs/kind"}
+      }
+    }
+  },
+  "$defs": {
+    "coefs": {"type": "array", "items": {"type": "number"}, "minItems": 11, "maxItems": 11},
+    "kind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coef", "spread", "profiles", "stations", "examples"],
+      "properties": {
+        "coef": {"$ref": "#/$defs/coefs"},
+        "spread": {"description": "weighted interquartile range of the contributions per coefficient", "$ref": "#/$defs/coefs"},
+        "profiles": {"type": "integer", "minimum": 1},
+        "stations": {"type": "integer", "minimum": 1},
+        "examples": {"description": "weighted examples behind the kind (manual judgements count manual_weight times)", "type": "number", "minimum": 0}
+      }
+    }
+  }
+}
