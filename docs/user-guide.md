@@ -300,7 +300,7 @@ In short:
 | *Display* | colour scheme (light, dark or system) and interface language; both are stored in this browser |
 | *Discogs connection* | personal access token and user name (save, test, remove), connect or disconnect a Discogs app, sync the collection now |
 | *Targets* | target presets for the turntable check: edit, copy, reset, set active |
-| *Vinyl-Mind* | learning together with other stations: *Contribute* and *Use the global model* (both off), server, *Join*, status, *What is sent*, export and import of package files |
+| *Vinyl-Mind* | learning together with other stations: *Contribute* and *Use the global model* (both off), server, *Connect with Vinyl-Mind* (or an invitation code), status, *Reconnect*, *Disconnect*, *What is sent*, export and import of package files |
 | *Device and service* | version, the capture device and format in use, the audio system (Core Audio, ASIO and WASAPI, ALSA), paths. Read-only: everything except the audio interface and the Discogs access lives in the configuration file; restart the service after changing it. |
 
 **Audio interface.** Choose which input records the turntable and in which format. The device list shows the audio
@@ -340,8 +340,8 @@ Without access, Discogs features are off and everything else works. The collecti
 finds nothing and the cache is older than a minute, vinyl-check syncs immediately and searches again.
 
 **Vinyl-Mind.** Several stations can pool what their learning models learn (see
-[architecture](architecture.md#federated-learning-with-vinyl-mind)). Only weights and counts per turntable profile
-leave the station, never audio, record titles or names; the [protocol](vinyl-mind-protocol.md#what-leaves-a-station)
+[architecture](architecture.md#federated-learning-with-vinyl-mind)). Only coefficients and counts per turntable
+profile leave the station, never audio, record titles or names; [Vinyl-Mind on the station](vinyl-mind.md#what-the-station-sends)
 lists everything that is sent.
 
 - *Contribute to Vinyl-Mind* sends, after each retraining of the learning model, the contribution of every turntable
@@ -349,17 +349,37 @@ lists everything that is sent.
   every few hours, checks it on your own master recordings and uses it as the **starting point** of the training
   only for the kinds where the estimate does not get worse. Both are off until you turn them on; with both off,
   nothing is sent at all, and nothing is sent while a recording runs.
-- *Server* is the address of the Vinyl-Mind server, `https://` only. There is no default server yet; a configuration
-  file can preset one (`vinyl_mind_url`), and *Reset to default* restores it.
-- *Join* (with an invitation code, if the operator gave you one) first shows the fingerprint of the server's key:
-  compare it with the one the operator publishes. After joining, the station waits for approval unless the code
-  admitted it directly, and the fingerprint stays visible under *Server key*. Every model is checked against that key
-  before it is used. *Send now* sends changed contributions and asks for a newer model at once. *Leave* deletes the
-  station's contributions on the server and its key on the station; if the server is gone, the station can forget it
-  locally.
-- *What is sent* shows the exact data of the next contribution per profile, with a random profile ID (never the
-  name) and the coarse chain class: USB turntable or turntable and interface, MM or MC. The class is guessed from the
-  profile's device and cartridge; correct it there if the guess is wrong.
+- *Server* is the address of the Vinyl-Mind server, `https://` only; the project's own server is preset. A
+  configuration file can preset another one (`vinyl_mind_url`), and *Reset to default* restores it. *Check server*
+  shows the server's name and the fingerprint of its key, and warns if this computer's clock is off or if the server
+  does not accept this version of vinyl-check.
+
+**Connecting (signing in).** A station joins a server once, the way a desktop app connects to an online account:
+
+- *Connect with Vinyl-Mind* opens the server's website in your browser. Sign in (or create an account), confirm
+  this station, and the browser brings you back; the settings show *Connected* by themselves. In the desktop app the
+  page opens in your usual browser. This works when the browser runs on the same computer as vinyl-check.
+- *Connect with a code* is for a station you use from another device, such as a Raspberry Pi controlled from a
+  phone, or when the browser does not come back after confirming: the settings show a short code and a QR code. Open
+  the address on your phone or computer, sign in and confirm the code; the station connects by itself within a few
+  seconds.
+- *Other ways to join* is for servers without accounts, for example one a studio runs for its own stations. Enter
+  the invitation code the operator gave you, or none (then the station waits until the operator approves it; the
+  settings check every few seconds). *Where do I get a code?* explains it, and links to the operator's page if the
+  configuration names one (`vinyl_mind_invite_url`). Before *Join*, compare the server key shown with the fingerprint
+  the operator publishes and tick the confirmation.
+
+Every model is checked against the server's key before it is used. *Send now* sends changed contributions and asks
+for a newer model at once. *Reconnect* connects the station again with a new key (you sign in once more; the old key
+is disconnected). *Disconnect* deletes the station and its contributions on the server and its key on the station; if
+the server is gone, the station can forget it locally. The status says when the server waits for approval, revoked
+the station, presents another key than before, no longer accepts this version of vinyl-check (please update; nothing
+is contributed meanwhile), or could not be reached.
+
+- *What is sent* shows the exact data of the next contribution per profile, with its random profile ID (never the
+  name) and the coarse chain class: USB turntable or turntable with audio interface, MM, MC or unknown. The class is
+  guessed from the profile's device and cartridge; set *Connection* and *Cartridge type* in the profile (Turntable
+  check → profile → Edit) if the guess is wrong.
 - *Package files* work without a server: *Export* saves a profile's contribution as a file, *Import* reads a
   contribution or model file from another station, says what it is and, after you confirm, uses it as the starting
   point of the training. *Starting point → Remove* trains from zero again.

@@ -14,7 +14,8 @@ For every feature version (learning.FEATURE_VERSIONS) and event kind it measures
 - **transfer A→B**: the weights trained on all of A's recordings, in the fixed common scaling of the version, applied
   unchanged to B's recordings;
 - **federated →C**: the mean of the other chains' weights applied to C, what a Vinyl-Mind hub would hand back (each
-  weight averaged only over the chains where its feature varied, as the protocol tells the hub);
+  weight averaged only over the chains where its feature varied; the hub's specification has no such marker yet, see
+  docs/architecture.md, open decisions);
 - **similarity**: the cosine of two chains' weight vectors (features informative in both), their distance relative
   to their mean length, and the gap between their intercepts.
 
@@ -84,7 +85,7 @@ def _informative(d: dict) -> np.ndarray:
 
 def federated_mean(fits: list[tuple[dict, np.ndarray]]) -> dict:
     """Plain federated averaging: the mean intercept, and each weight averaged over the fits where its feature varied
-    (a weight without spread carried no information, docs/vinyl-mind-protocol.md); 0 where it varied nowhere."""
+    (a weight without spread carried no information, docs/vinyl-mind.md); 0 where it varied nowhere."""
     a = float(np.mean([f["intercept"] for f, _ in fits]))
     W = np.array([f["weights"] for f, _ in fits], float)
     M = np.array([inf for _, inf in fits], bool)

@@ -11,41 +11,56 @@ Planned as 1.1.0.
 
 ### Added
 
-- [Vinyl-Mind protocol](docs/vinyl-mind-protocol.md), draft v0: the contract between a station and a Vinyl-Mind hub
-  (contribution, global model, check report with JSON schemas; endpoints; Ed25519 request and model signing; errors,
-  limits, versioning) and the list of what leaves a station. Never audio.
-- *Settings → Vinyl-Mind*, the station side of learning together with other stations: the switches *Contribute to
-  Vinyl-Mind* and *Use the global model* (both off by default), the server address with *Reset to default* (no
-  default server yet; configuration key `vinyl_mind_url` presets one), *Join* with an optional invitation code after
-  confirming the server key's fingerprint, status, *Send now*, *Leave*, *What is sent* with the exact payload per
-  turntable profile, and export and import of package files. API: `/api/vinylmind` with `/server`, `/preview`,
-  `/join`, `/leave`, `/sync`, `/export`, `/import` and `/prior`.
-- The station identifies itself with an Ed25519 key pair, created on joining as a file in the state directory
-  (mode 600, never in the database or the logs) and deleted on leaving. Every request is signed; plain HTTP is
-  refused except to the computer itself; redirects are not followed; models are verified against the accepted server
-  key before anything in them is used.
+- Vinyl-Mind, the station side of learning together with other stations, built to the hub's specification, protocol
+  version 1 (`spec/` and `docs/api.md` of the Vinyl-Mind repository); [Vinyl-Mind on the station](docs/vinyl-mind.md)
+  says what the station does and what it sends. Never audio.
+- *Settings → Vinyl-Mind*: the switches *Contribute to Vinyl-Mind* and *Use the global model* (both off by default),
+  the server (the project's hub `https://api.vinylcheck.net` is preset; configuration key `vinyl_mind_url` presets
+  another) with *Check server* (name, key fingerprint, clock and version warnings), status, *Send now*, *Reconnect*,
+  *Disconnect*, *What is sent* with the exact document per turntable profile, and export and import of package files.
+- Connecting as a sign-in, when the hub has an account service (`docs/connect.md` of the hub): *Connect with
+  Vinyl-Mind* opens the account page in the browser on this computer (the desktop app uses the system browser) and
+  comes back to the engine's loopback address by itself (OAuth with PKCE, `/vinyl-mind/callback`); *Connect with a
+  code* shows a short code and a QR code to confirm on a phone (device flow), for a Raspberry Pi used from a phone or
+  when the browser does not come back. The station joins with the invitation and the binding it receives, after
+  checking that they name the configured hub and its key. The secrets of the sign-in stay in memory only, never in
+  the database, the logs or the interface. *Other ways to join*: an invitation code from the operator of a hub
+  without accounts, or the operator's approval, after confirming the server key's fingerprint; *Where do I get a
+  code?* explains it, with a link when the configuration names one (`vinyl_mind_invite_url`).
+- Keys: one Ed25519 key pair per hub, a file in the state directory (mode 600, never in the database, the logs or an
+  API answer), deleted on disconnecting; *Reconnect* makes a new one. Every request is signed as the specification
+  says, names the client (`Vinyl-Mind-Client: vinyl-check/1.1.0`) and sends its body with `Content-Length`; plain
+  HTTP is refused except to the computer itself; redirects are not followed.
 - Contributions per turntable profile: the learning model trained on the recordings made with that profile, without
-  any prior, in a fixed common feature scaling, with example counts, cross-check quality (estimate error, AUC) and a
-  coarse chain class (USB turntable or interface; MM or MC; guessed from the profile, can be corrected). Each
-  profile gets a random id. Nothing is sent while a recording runs or while both switches are off; contributions
-  only when they changed, at most hourly per profile.
-- A fetched global model is checked on the station's own master recordings and becomes the starting point (prior)
-  of the training per kind only where the estimate does not get worse; the check is reported to the hub.
-- Learning: weights in a fixed common scaling per feature version (`FIXED_SCALING`, feature version 1),
-  `train(prior=...)` pulls towards a prior instead of towards zero (without a prior nothing changes), the cross-check
-  also reports the AUC, training data can be limited to one turntable profile, and the detector has a version.
-- Dependency `cryptography` (Debian: `python3-cryptography`, installed by `deploy.sh`).
+  any prior, as coefficients in the hub's shared scaling with example counts and the cross-check (estimate error, raw
+  count error, AUC), and the profile's chain class. Each profile gets a random ID (16 bytes, base64url). Nothing is
+  sent while a recording runs or while both switches are off; contributions only when they changed, at most hourly
+  per profile. A hub that no longer accepts this version gets nothing more until vinyl-check is updated.
+- Global models are verified as a JWS against the accepted server key before anything in them is read, validated,
+  checked on the station's own master recordings and reported per profile; a published one becomes the starting
+  point (prior) of the training per kind only where the estimate does not get worse. Withdrawn models are dropped.
+- Turntable profiles have two fields for Vinyl-Mind, *Connection* (USB turntable, turntable with audio interface)
+  and *Cartridge type* (MM, MC, unknown), preset to a guess from the profile's device and cartridge.
+- Learning: coefficients in a fixed shared scaling per feature version (`FIXED_SCALING`, for feature version 1 the
+  values of the hub's specification), `train(prior=...)` fits in that scaling and pulls every coefficient, the
+  intercept included, towards a prior with strength 100 instead of towards zero (without a prior nothing changes),
+  the cross-check also reports the AUC, training data can be limited to one turntable profile, and the detector has
+  a version.
+- Dependency `cryptography` (Debian: `python3-cryptography`, installed by `deploy.sh`); for the tests `jsonschema`.
 - Learning: feature version 2 (experimental, configuration key `feature_version = "2"`), with the turntable profile
   as the zero point: the density of detections net of the profile's click floor, the level relative to the profile's
   reference tone in addition to the music reference, and how far a detection rises above the chain noise. Recordings
   without a measured and accepted profile fall back to values without profile information and are flagged; they
-  never go into a contribution. Version 1 stays the default and is unchanged.
+  never go into a contribution. Version 1 stays the default and is unchanged. Version 2 is not part of the hub's
+  specification yet and is sent only to a hub that lists it.
 - The feature version is used everywhere: the model is trained and applied in it (a stored model of another version
   is retrained), Vinyl-Mind contributions, model requests and reports carry it, and models, package files and priors
   of another version are refused. A profile without a measured zero point has nothing to contribute in version 2.
 - `tools/eval_features.py` compares the feature versions: on synthetic chains (a budget USB turntable, a mid-range
   deck, an aligned high-end chain playing the same records) and on a copy of a station database (read-only), by the
   local estimate error, the transfer of weights between chains, federated averaging, and the similarity of weights.
+- Tests against a fake hub and a fake account service that implement the specification on their own, and an
+  end-to-end test against a real hub binary (`VINYL_MIND_BIN`, skipped without it).
 
 ### Changed
 

@@ -330,13 +330,15 @@ pressings with a master are included. A background thread checks every 30 s for 
 retrains, and recounts analyses made with an older model.
 
 **Starting point from other stations (Vinyl-Mind).** Weights are exchanged in a fixed common scaling per feature
-(`FIXED_SCALING`, `FIXED_SCALING_V2` for feature version 2), not in each station's own standardisation, so the same
-weight means the same everywhere. With a starting point (an adopted global model or an imported package), the ridge
-penalty pulls the weights towards it instead of towards zero, with a strength of about a hundred master-classified
-events (`PRIOR_L2`): with a handful of examples the model stays close to the starting point, with thousands it follows
-the own data. The cross-check uses the same starting point, so *usable* still means verified on the station's own
-recordings. The cross-check also reports the AUC of the held-out detections. Details:
-[architecture](architecture.md#how-a-station-uses-the-global-model), [protocol](vinyl-mind-protocol.md).
+(`FIXED_SCALING`, for feature version 1 exactly the hub's `spec/v1/features.json`; `FIXED_SCALING_V2` for feature
+version 2), not in each station's own standardisation, so the same weight means the same everywhere. With a starting
+point (an adopted global model or an imported package), the model is fitted in that scaling and the ridge penalty
+pulls every coefficient, the intercept included, towards the starting point instead of towards zero, with a strength
+of 100 (`PRIOR_L2`, about five hundred master-classified events), as the hub's simulation found best: with a handful
+of examples the model stays close to the starting point, with thousands it follows the own data. The cross-check uses
+the same starting point, so *usable* still means verified on the station's own recordings. The cross-check also
+reports the AUC of the held-out detections. Details:
+[architecture](architecture.md#how-a-station-uses-the-global-model), [Vinyl-Mind on the station](vinyl-mind.md).
 
 **Feature version 2: the turntable profile as the zero point (experimental).** Version 1 (the default) relates the
 levels to the music reference of each recording. Version 2 (`feature_version = "2"` in the configuration) also takes
@@ -375,7 +377,11 @@ seeds, means:
 | one model over all three chains | 0.051 → 0.045 | 0.241 → 0.219 | 0.165 → 0.143 |
 | weights of one chain on another (mean of 6) | 0.062 → 0.058 | 0.446 → 0.418 | 0.314 → 0.293 |
 | averaged weights of the other chains | 0.054 → 0.050 | 0.468 → 0.441 | 0.314 → 0.293 |
-| cosine of two chains' weights (higher = more alike) | 0.92 → 0.91 | 0.51 → 0.49 | 0.85 → 0.77 |
+| cosine of two chains' weights (higher = more alike) | 0.93 → 0.92 | 0.58 → 0.53 | 0.91 → 0.81 |
+
+The cosines are taken in the shared scaling (for version 1 the hub's `spec/v1/features.json`) and depend on it; the
+estimate errors came out the same as with the station's earlier draft scaling, since a change of scaling changes
+every chain's weights the same way.
 
 Version 2 is slightly better wherever weights cross chains (by 6–13 %) and not worse on each chain's own recordings,
 but below a clear gain (0.02 and 15 %), and for clicks and crackle the sign changes between seeds. It does not make

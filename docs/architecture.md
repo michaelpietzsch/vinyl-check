@@ -2,8 +2,9 @@
 
 > **Status: design document for the roadmap.** Implemented so far: the single station (vinyl-check on a Raspberry Pi,
 > macOS or Windows) and, since 1.1.0, the station side of Vinyl-Mind (stage 1 and the client of stage 2, see
-> [Stages](#stages)), built to the [Vinyl-Mind protocol](vinyl-mind-protocol.md) (draft v0). The hub is a separate
-> project and does not exist yet. The document settles **what belongs where**; interfaces and names may still change.
+> [Stages](#stages)), built to the hub's specification, protocol version 1 ([Vinyl-Mind on the station](vinyl-mind.md)).
+> The hub is a separate project (Vinyl-Mind, alpha). The document settles **what belongs where**; the contract between
+> the two is the hub's specification.
 
 ## Today: one station
 
@@ -18,7 +19,7 @@ Browser / desktop window ──HTTP/WebSocket──► FastAPI (web.py)
                               │           ├── compare.py, master.py
                               │           └── spectro.py, technical.py
                               ├── learning.py     model from judgements and master comparisons
-                              ├── vinylmind.py    Vinyl-Mind: station key, contributions, signed client (off by default)
+                              ├── vinylmind.py    Vinyl-Mind: sign-in, keys, contributions, models (off by default)
                               ├── discogs.py      collection, release data, condition write-back
                               ├── report_pdf.py   PDF reports
                               └── db.py           SQLite (WAL): records, recordings, analyses, profiles, runs
@@ -44,8 +45,8 @@ learn, so that detection improves with every station.
 
 The central counterpart is **Vinyl-Mind**, a separate project. vinyl-check implements the station side (collecting,
 contributing, adopting); Vinyl-Mind implements the hub (combining, versioning, publishing). The contract between the
-two (payloads, endpoints, signatures, errors, what leaves a station) is the
-[Vinyl-Mind protocol](vinyl-mind-protocol.md), a draft both projects follow.
+two (documents, endpoints, signatures, errors, signing in) is the specification in the Vinyl-Mind repository;
+[Vinyl-Mind on the station](vinyl-mind.md) says what the station does with it and what leaves a station.
 
 ## Principles
 
@@ -118,19 +119,20 @@ profiles.
 
 | Content | Why |
 |---|---|
-| weights and intercept per kind, in the shared profile-relative feature space with a fixed common scaling | the knowledge itself; a fixed scaling (instead of each station's own mean and spread) makes weights comparable |
+| intercept and weights per kind, in the fixed shared scaling of the feature version | the knowledge itself; a fixed scaling (instead of each station's own mean and spread) makes weights comparable |
 | number of examples per kind, split into master classifications and manual judgements | weighting: a profile with 2,000 judged events counts more than one with 20 |
-| cross-check quality per kind (estimate error per recording, AUC) | weighting and filtering out profiles whose model does not work |
-| coarse chain class (USB turntable / turntable + interface; MM / MC) | separate global models per class if one model does not fit all |
-| feature version, detector version, vinyl-check version | weights from different feature definitions or detector versions are never mixed |
-| a random profile ID chosen by the station | updates replace earlier contributions; no names, places or hardware serial numbers |
+| cross-check quality per kind (estimate error per recording, of the raw count, AUC; recordings with a master) | weighting and filtering out profiles whose model does not work |
+| coarse chain class (USB turntable / turntable with audio interface; MM / MC / unknown), two fields of the profile | separate global models per class once a class has enough profiles |
+| feature version, detector version, client name and version | weights from different feature definitions or detector versions are never mixed |
+| a random profile ID chosen by the station, in the address only | updates replace earlier contributions; no names, places or hardware serial numbers |
 
 **Not sent:** audio, feature vectors of single events, record titles, notes, Discogs data, credentials.
 
 The default features are **feature version 1**, relative to the music reference of each recording; version 2 adds
 the profile as the zero point (above). Contributions carry the feature version, and the hub never mixes versions. The
-fixed common scaling is `learning.FIXED_SCALING` (version 1) and `learning.FIXED_SCALING_V2`; the exact payload is in
-the [protocol](vinyl-mind-protocol.md#contribution). A contribution is trained on the profile's own recordings and
+fixed common scaling is `learning.FIXED_SCALING` (version 1, exactly the hub's `spec/v1/features.json`) and
+`learning.FIXED_SCALING_V2` (the station's proposal); the exact document is in
+[Vinyl-Mind on the station](vinyl-mind.md#what-the-station-sends). A contribution is trained on the profile's own recordings and
 **without** any prior, so the hub never gets its own result back. In version 2 only recordings whose profile has a
 measured zero point count.
 
@@ -155,13 +157,16 @@ examples. With Vinyl-Mind it pulls them **towards the global weights** instead:
 - the more examples a profile collects, the more the model becomes its own,
 - if the global model is worse on the station's own master recordings, the station keeps its local model.
 
-In code: `learning.train(data, prior=...)` takes weights in the fixed scaling and penalises the distance to them with
-`learning.PRIOR_L2` (about as strong as a hundred master-classified events) instead of `L2` towards zero. A fetched
-model is checked per kind on the station's master recordings: the leave-one-recording-out cross-check with the model
-as prior against the one without, and the model applied directly. It becomes the prior of a kind if the cross-check is
-not worse, or if the station has no cross-check of its own yet (then the model is only a starting point, and the
-station's estimates are still used only once its own cross-check makes the kind *usable*). An imported package file
-(stage 1) is used as the prior the same way.
+In code: `learning.train(data, prior=...)` takes weights in the fixed scaling, fits in that scaling and penalises the
+distance of every coefficient to them, the intercept included, with `learning.PRIOR_L2` = 100 (about as strong as five
+hundred master-classified events) instead of `L2` towards zero. Both follow the hub's simulation (Vinyl-Mind,
+`docs/aggregation.md`): a free intercept adapts to the few records a new profile has seen and gives most of the
+benefit away, and about 100 worked best for profiles with few judgements. A fetched model is checked per kind on the
+station's master recordings: the leave-one-recording-out cross-check with the model as prior against the one without,
+and the model applied directly, on the same recordings. A published model becomes the prior of a kind if the
+cross-check with it is not worse, or if the station has no cross-check of its own yet (then the model is only a
+starting point, and the station's estimates are still used only once its own cross-check makes the kind *usable*); a
+candidate is checked and reported, not adopted. An imported package file (stage 1) is used as the prior the same way.
 
 ### Settings in vinyl-check
 
@@ -171,27 +176,31 @@ A section *Settings → Vinyl-Mind* on every station:
 |---|---|---|
 | Contribute to Vinyl-Mind | off | send the weights and counts of each turntable profile after retraining |
 | Use the global model | off | fetch the global model, check it on the own master recordings, use it as the prior |
-| Server | the preset (`vinyl_mind_url`); no default server is decided yet | URL of the server; *Reset to default* restores the preset |
-| Server key | shown after joining | fingerprint of the server's signing key, to compare with the one the operator publishes; *Join* shows it for confirmation first |
-| Join | button, with an optional invitation code | registers the station with the server (see below) |
-| Status | | not joined, waiting for approval or joined; last contribution, model version in use, starting point (prior), last error |
-| What is sent | | shows the exact payload of the next contribution per profile before anything leaves the station, with the chain class (guessed, can be set by hand) |
+| Server | the project's hub, `https://api.vinylcheck.net` (`vinyl_mind_url` presets another) | URL of the server; *Reset to default* restores the preset; *Check server* shows its name and key fingerprint |
+| Connect with Vinyl-Mind | when the server has an account service | the station's sign-in: in the browser on this computer, coming back by itself, or with a code and a QR code for a phone (see below) |
+| Other ways to join | | an invitation code from the operator, or none (then the operator approves), after confirming the server key's fingerprint |
+| Status | | connected, waiting for approval, revoked, server key changed, client version not accepted, server unreachable; server and station key, last contribution, model version in use, starting point (prior), last error |
+| Reconnect, Disconnect | | a new key through the sign-in again; leave the server (it deletes the station and its contributions) |
+| What is sent | | shows the exact document of the next contribution per profile before anything leaves the station, with the chain class (guessed, set in the profile dialog) |
 | Package files | | export a profile's contribution as a file; import a contribution or model file as the starting point |
 
-The default server URL lives in one place in the code (`vinylmind.DEFAULT_VINYL_MIND_URL`, empty for now) and can be
-overridden in the configuration file (`vinyl_mind_url`), so a self-hosted Vinyl-Mind can be preset for a group of
-stations.
+The default server URL lives in one place in the code (`vinylmind.DEFAULT_VINYL_MIND_URL`) and can be overridden in
+the configuration file (`vinyl_mind_url`), so a self-hosted Vinyl-Mind can be preset for a group of stations.
 
 ### Securing the connection
 
 The API between stations and Vinyl-Mind must not be usable for anything but contributing to and fetching the shared
 model. The design:
 
-- **Station identity by key pair.** When joining, the station creates an Ed25519 key pair; only the public key goes
-  to the server. Every request is signed (method, path, body hash, timestamp, nonce), so a stolen request cannot be
-  replayed and a leak of the server's database reveals no secret that would let anyone impersonate a station.
-- **Joining needs approval.** A new station either brings an invitation code or waits for the operator to approve
-  it. Joining is rate-limited per address. This is the main defence against many fake stations (Sybil attacks).
+- **Station identity by key pair.** When joining, the station creates an Ed25519 key pair for that server; only the
+  public key goes to the server. Every request is signed (server key, method, path, body hash, timestamp, nonce), so
+  a stolen request cannot be replayed and a leak of the server's database reveals no secret that would let anyone
+  impersonate a station.
+- **Joining needs an invitation or approval.** A new station signs in with an account (the account service hands
+  out an invitation bound to the station's key by a signed binding, `docs/connect.md` of the hub), brings an
+  invitation code from the operator, or waits for the operator to approve it. Joining is rate-limited per address and
+  per day. This is the main defence against many fake stations (Sybil attacks). The secrets of signing in (one-time
+  code, PKCE verifier, device code, invitation, binding) stay in the engine's memory.
 - **Signed models.** The server signs every global model with its own key. The station verifies the signature with
   the key it accepted when joining (the fingerprint in the settings) before it even evaluates the model. Switching
   servers means accepting a new key explicitly.
@@ -204,13 +213,14 @@ model. The design:
   a model on its own data before using it), a poisoned model cannot silently spread.
 - **Least privilege**: a station can only replace its own profiles' contributions, report its own checks and read
   the published models. It never sees another station's contributions. Keys can be revoked by the operator and by
-  the station itself (*Leave*), which also deletes its contributions.
+  the station itself (*Disconnect*), which also deletes its contributions.
 - **Data minimisation**: random profile IDs, no names or places; the server keeps access logs only as long as needed
   against abuse.
 
-The exact rules (canonical request, headers, replay window, model signature over canonical JSON, error codes, size
-limits) are in the [protocol](vinyl-mind-protocol.md#request-signing). On the station the private key is a file in
-the state directory with mode 600, never in the database or the logs, and *Leave* deletes it.
+The exact rules (signed message, headers, replay window, models as JWS, error codes, size limits) are in the hub's
+`spec/signing.md` and `docs/api.md`. On the station the private key is a file per server in the state directory
+with mode 600, never in the database, the logs or an API answer, and *Disconnect* deletes it
+([Vinyl-Mind on the station](vinyl-mind.md#connecting)).
 
 ### Later: sharing examples
 
@@ -228,10 +238,10 @@ This form is optional and comes after federated averaging has proven itself.
 
 ## Flow
 
-1. **Join.** The user chooses *Join* (with an invitation code, if there is one). The station shows the server key's
-   fingerprint for confirmation, creates its key pair, registers with the configured server (invitation code or
-   approval by the operator) and keeps the server's key. *Contribute* and *Use the global model* are switched on
-   separately.
+1. **Connect.** The user chooses *Connect with Vinyl-Mind* and signs in with an account in the browser (or confirms
+   a code on a phone); on a hub without accounts, *Join* with an invitation code or the operator's approval after
+   confirming the server key's fingerprint. The station creates its key pair for that server, registers it and keeps
+   the server's key. *Contribute* and *Use the global model* are switched on separately.
 2. **Train locally.** As today: every judgement and master comparison retrains the station's model; each profile's
    contribution is trained from the recordings made with that profile.
 3. **Contribute.** After a retraining, and only while no recording runs, the station sends each changed profile's
@@ -242,11 +252,11 @@ This form is optional and comes after federated averaging has proven itself.
 
 ## Where Vinyl-Mind runs
 
-A separate project and repository: a small service (Python with FastAPI like the station, PostgreSQL or SQLite at
-the start), run as a container on a small server behind a reverse proxy with TLS. Station and hub must compute the
-features the same way, so the feature definitions, the profile-relative normalisation and the model format are a
-versioned specification shared by both (a small package or a documented format), not code copied between
-repositories.
+A separate project and repository, Vinyl-Mind: a small service in Go (SQLite or PostgreSQL), run as a container
+behind a reverse proxy with TLS, with an optional account service on the project's website for signing in. Station
+and hub must compute and read the features the same way, so the feature definitions, the shared scaling, the
+documents and the signatures are a versioned specification in the hub's repository (`spec/`: JSON schemas and
+`features.json`), not code copied between repositories; the station's tests check against a copy of it.
 
 ## Stations on macOS and Windows
 
@@ -263,16 +273,12 @@ and an optional LAN mode for phones and tablets near the turntable.
 |---|---|---|---|
 | 0 | **Profile-relative features**: the turntable profile becomes the zero point of the features (see above), with a feature version; the local model works unchanged on top | the prerequisite for comparing weights at all, and measurably better local estimates across a change of chain | feature version 2 defined and selectable (experimental), evaluation tool `tools/eval_features.py`; no clear gain on synthetic chains, real stations open; version 1 stays the default |
 | 1 | **Contribution package as a file**: export a profile's weights and counts, import a foreign package as the prior on another station | evidence of whether foreign knowledge helps, without any server | done on the station (1.1.0): *Settings → Vinyl-Mind → Package files*, `learning.train(prior=...)` |
-| 2 | **Vinyl-Mind minimal**: joining with key pairs and approval, signed requests and signed models, accept contributions, combine robustly, publish versions; *Settings → Vinyl-Mind* on the station (switches, server, key, status, payload preview) | federated averaging at small scale | station side done (1.1.0): key pair, signed requests, verified models, adopting per kind, check reports, settings; tested against a test hub. The hub is open; only a server address is missing. |
+| 2 | **Vinyl-Mind minimal**: joining with key pairs and approval, signed requests and signed models, accept contributions, combine robustly, publish versions; *Settings → Vinyl-Mind* on the station (switches, server, key, status, payload preview) | federated averaging at small scale | station side done (1.1.0) to the hub's protocol version 1: signing in (browser and device code) or invitation code, key per server, signed requests, verified models, adopting per kind, check reports, settings; tested against a fake hub and end to end against the real hub. The hub exists (alpha); the account service on the website is open. |
 | 3 | stations at other sites and chain classes; validation reports from stations | real generalisation across chains | reports and chain classes are sent; open |
 | 4 | optional sharing of examples (feature vectors), central training of richer models; snippets only with consent | better detection itself, not only better estimates | open |
 
 ## Open decisions
 
-- Who may join Vinyl-Mind: invited stations only, or open later with approval?
-- Address and operator of the default server.
-- Canonical JSON for model signatures: Python's `json` form (protocol draft v0) or RFC 8785 once a hub in another
-  language appears.
 - Should a re-measured profile (new alignment of the same cartridge) get a new profile id? Today the id stays with
   the profile row; with profile-relative features (stage 0) a new alignment is a new zero point. Feature version 2
   reads the zero point from the profile as it is now, so a re-measured profile moves the zero point of its older
@@ -280,7 +286,11 @@ and an optional LAN mode for phones and tablets near the turntable.
 - Whether feature version 2 becomes the default, and its exact normalisation: needs master comparisons or judgements
   of the same records on several measured chains (`tools/eval_features.py real` on a copy of a station database).
 - How the hub combines intercepts of profiles on which a feature is constant at different values (stations with and
-  without the second opinion): separate groups, or centring as feature version 2 does (see the protocol).
+  without the second opinion): the specification's feature version 1 centres `gc_missing` at 0.5 and has no way to
+  mark a weight as uninformative, so separate groups, centring at the common value (as feature version 2 does) or a
+  marker in the contribution are open.
+- Feature version 2 in the hub's specification (`spec/v2`), with its fixed scaling, once real stations have shown
+  whether it helps.
 - Should grades and record conditions per Discogs release be shared too (a shared condition database), or only
   models?
 - Audio snippets at all, and if so, with what consent per station?
