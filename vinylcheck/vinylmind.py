@@ -125,6 +125,7 @@ class Account:
 # Keys in the settings table of the database
 S_CONTRIBUTE, S_USE, S_URL = "vinyl_mind_contribute", "vinyl_mind_use_model", "vinyl_mind_url"
 S_JOIN, S_SENT, S_MODEL, S_PRIOR = "vinyl_mind_join", "vinyl_mind_sent", "vinyl_mind_model", "vinyl_mind_prior"
+S_NOTICE = "vinyl_mind_notice"                 # why the station was disconnected without the user's doing
 S_CHAIN_LEGACY = "vinyl_mind_chain"            # chain classes of the draft, now two fields of the profile
 # Capture devices that are a turntable's own USB converter (most USB turntables use a PCM290x codec that reports
 # itself as "USB Audio CODEC"); anything else counts as an interface behind a phono stage
@@ -137,6 +138,8 @@ HUB_ERRORS = ("invitation_invalid", "invitation_required", "client_not_accepted"
               "too_large", "length_required", "not_found")
 ACCOUNT_ERRORS = ("invalid_request", "invalid_grant", "access_denied", "authorization_pending", "slow_down",
                   "expired_token", "rate_limited")
+# Hub errors after which the station's key is of no use any more: dropped here too (VinylMind._disconnected)
+DISCONNECTED = ("revoked", "unknown_key")
 
 
 class HubError(i18n.MessageError):
@@ -210,21 +213,34 @@ def is_local_host(host: str) -> bool:
         return False
 
 
-def normalize_url(url, *, path_ok: bool = True) -> str:
-    """A server URL without a trailing slash. HTTPS only; plain HTTP is accepted for this computer itself (tests, a hub
-    on the same machine). Raises HubError with a message saying what is wrong."""
-    url = str(url or "").strip().rstrip("/")
+def canonical_url(url) -> str:
+    """A hub's address in the canonical form of the hub's docs/connect.md: https, scheme and host in lower case, no
+    port 443, no path, no trailing slash, e.g. "https://api.vinylcheck.net". The account service names the hub in
+    exactly this form and the station compares the two as strings, so a path is refused rather than kept: it would
+    never match (and a hub is served at the root of its host name anyway). Plain HTTP is accepted only for this
+    computer itself, for tests and development (the specification itself knows only https), then without port 80.
+    Raises HubError with a message saying what is wrong."""
+    raw = str(url or "").strip()
     try:
-        u = urllib.parse.urlsplit(url)
-        host = u.hostname or ""
-        u.port                                          # noqa: B018 — raises ValueError on a bad port
+        u = urllib.parse.urlsplit(raw)
+        host = (u.hostname or "").lower()
+        port = u.port                                   # raises ValueError on a bad port
     except ValueError:
         raise HubError(i18n.msg("vinylmind.url_invalid")) from None
-    if u.username or u.password or u.query or u.fragment or not host or (u.path and not path_ok):
+    scheme = u.scheme.lower()
+    if u.username or u.password or u.query or u.fragment or not host:
         raise HubError(i18n.msg("vinylmind.url_parts"))
-    if u.scheme == "https" or (u.scheme == "http" and is_local_host(host)):
-        return url
-    raise HubError(i18n.msg("vinylmind.url_invalid"))
+    if u.path not in ("", "/"):
+        raise HubError(i18n.msg("vinylmind.url_path"))
+    if scheme == "https":
+        default = 443
+    elif scheme == "http" and is_local_host(host):
+        default = 80
+    else:
+        raise HubError(i18n.msg("vinylmind.url_invalid"))
+    if ":" in host:                                     # an IPv6 literal keeps its brackets
+        host = f"[{host}]"
+    return f"{scheme}://{host}" + (f":{port}" if port is not None and port != default else "")
 
 
 def _web_url(url, field: str) -> str:
@@ -474,9 +490,13 @@ def validate_contribution(doc, version: str = learning.FEATURE_VERSION) -> list[
     for k, v in c.kinds(doc["kinds"], "kinds"):
         p = f"kinds.{k}"
         if not c.obj(v, p, ("coef", "n_real", "n_false", "n_manual", "n_master", "master_recordings", "cv_err_est",
-                            "cv_err_raw"), ("auc",)):
+                            "cv_err_raw"), ("auc", "informative")):
             continue
         c.numbers(v["coef"], f"{p}.coef", _ncoef(version), -COEF_BOUND, COEF_BOUND)
+        inf = v.get("informative")
+        if "informative" in v and (not isinstance(inf, list) or len(inf) != _ncoef(version) - 1
+                                   or not all(isinstance(x, bool) for x in inf)):
+            c.bad(f"{p}.informative", f"expected {_ncoef(version) - 1} booleans, one per feature")
         c.integer(v["n_real"], f"{p}.n_real", 10, MAX_COUNT)
         c.integer(v["n_false"], f"{p}.n_false", 10, MAX_COUNT)
         c.integer(v["n_manual"], f"{p}.n_manual", 0, MAX_COUNT)
@@ -611,15 +631,42 @@ def _contribution_data(db, profile_id: int, version: str) -> tuple[dict, bool]:
     return data, bool(had)
 
 
+MAX_CV_ERR_EST, MAX_CV_ERR_RAW = 10.0, 100.0     # contribution.schema.json: larger errors are sent as these
+
+
+def contribution_kind(info: dict, X: np.ndarray, version: str = learning.FEATURE_VERSION) -> dict | None:
+    """One kind of a contribution from learning.train's result for it (`info`, cross-checked) and the examples it was
+    fitted on (`X`), or None while a coefficient lies outside the specification's bound.
+
+    Features that took one single value in `X` are reported as the specification says ("Features that never vary"):
+    the prior's weight (0, a contribution is trained without one) with the intercept shifted so that the predictions
+    stay the same, and `informative` false at their place; `informative` is sent only when a feature did not vary.
+    Cross-check errors above the schema's maximum (possible on a quiet master with a few real events) are sent as the
+    maximum: the hub gives such a model no weight anyway, and the kind stays valid."""
+    coef, informative = learning.mask_uninformative(learning.to_coef(info["model"], version), X, None, version)
+    if any(abs(x) > COEF_BOUND for x in coef):
+        return None
+    n_real, n_false, n_manual = int(info["n_real"]), int(info["n_false"]), int(info["manual"])
+    k = {"coef": coef, "n_real": n_real, "n_false": n_false, "n_manual": n_manual,
+         "n_master": n_real + n_false - n_manual, "master_recordings": int(info["master_recordings"]),
+         "cv_err_est": min(float(info["cv_err_est"]), MAX_CV_ERR_EST),
+         "cv_err_raw": min(float(info["cv_err_raw"]), MAX_CV_ERR_RAW)}
+    if not all(informative):
+        k["informative"] = informative
+    if info.get("cv_auc") is not None:
+        k["auc"] = float(info["cv_auc"])
+    return k
+
+
 def build_contribution(db, profile: dict, version: str = learning.FEATURE_VERSION,
                        trained_at: int | None = None) -> tuple[dict | None, dict | None]:
     """(contribution, None), or (None, reason) when no kind of the profile has a cross-checked model yet.
 
     The profile's own recordings only, trained without any prior: weights pulled towards the global model would feed
     the hub's own result back to it. A kind is included once it has a fitted model cross-checked on at least two
-    recordings with a master (whether it is usable or not: the hub filters by the self-check), and only while its
-    numbers are within the specification's bounds. For feature version 2 only recordings with a complete zero point
-    count: a profile that was never measured and accepted has nothing to contribute."""
+    recordings with a master (whether it is usable or not: the hub filters by the self-check), and while its
+    coefficients are within the specification's bound (contribution_kind). For feature version 2 only recordings with
+    a complete zero point count: a profile that was never measured and accepted has nothing to contribute."""
     data, had = _contribution_data(db, profile["id"], version)
     if version != "1" and had and not sum(len(d["y"]) for d in data.values()):
         return None, i18n.msg("vinylmind.profile_not_measured", version=version)
@@ -632,17 +679,11 @@ def build_contribution(db, profile: dict, version: str = learning.FEATURE_VERSIO
         fitted = True
         if info.get("cv_err_est") is None or int(info.get("master_recordings") or 0) < 2:
             continue
-        coef = learning.to_coef(info["model"], version)
-        if any(abs(x) > COEF_BOUND for x in coef) or info["cv_err_est"] > 10 or info["cv_err_raw"] > 100:
-            log.info("Vinyl-Mind: %s of profile %s not contributed, outside the specification's bounds", kind,
-                     profile["id"])
+        k = contribution_kind(info, data[kind]["X"], version)
+        if k is None:
+            log.info("Vinyl-Mind: %s of profile %s not contributed, a coefficient is outside the specification's "
+                     "bound", kind, profile["id"])
             continue
-        n_real, n_false, n_manual = int(info["n_real"]), int(info["n_false"]), int(info["manual"])
-        k = {"coef": coef, "n_real": n_real, "n_false": n_false, "n_manual": n_manual,
-             "n_master": n_real + n_false - n_manual, "master_recordings": int(info["master_recordings"]),
-             "cv_err_est": float(info["cv_err_est"]), "cv_err_raw": float(info["cv_err_raw"])}
-        if info.get("cv_auc") is not None:
-            k["auc"] = float(info["cv_auc"])
         kinds[kind] = k
     if not kinds:
         return None, (i18n.msg("vinylmind.not_checked_yet", min=learning.MIN_MASTER_RECORDINGS) if fitted
@@ -769,7 +810,7 @@ class Client:
     def __init__(self, base_url: str, key: StationKey | None = None, server_fp: str | None = None, *,
                  timeout: float = TIMEOUT_S, retries: int = RETRIES, backoff=BACKOFF_S, sleep=time.sleep,
                  abort=lambda: False):
-        self.base = normalize_url(base_url)
+        self.base = canonical_url(base_url)
         self.key, self.server_fp = key, server_fp
         self.timeout, self.retries, self.backoff, self.sleep, self.abort = (
             timeout, retries, tuple(backoff), sleep, abort)
@@ -1117,11 +1158,22 @@ class VinylMind:
         return self.db.setting(S_USE) == "true"
 
     def preset_url(self) -> str:
-        """What "Reset to default" restores: the configuration file's server, else the built-in default."""
-        return str(getattr(self.cfg, "vinyl_mind_url", DEFAULT_VINYL_MIND_URL) or "").strip().rstrip("/")
+        """What "Reset to default" restores: the configuration file's server, else the built-in default, in canonical
+        form. A configured address that has no canonical form is shown as written; checking it says what is wrong."""
+        raw = str(getattr(self.cfg, "vinyl_mind_url", DEFAULT_VINYL_MIND_URL) or "").strip()
+        try:
+            return canonical_url(raw) if raw else ""
+        except HubError:
+            return raw
 
     def url(self) -> str:
-        return self.db.setting(S_URL) or self.preset_url()
+        stored = self.db.setting(S_URL)
+        if not stored:
+            return self.preset_url()
+        try:
+            return canonical_url(stored)
+        except HubError:
+            return stored
 
     def joined(self) -> dict | None:
         j = self._get(S_JOIN)
@@ -1219,14 +1271,25 @@ class VinylMind:
             "connect": flow.public() if flow else None,
             "invite_url": str(getattr(self.cfg, "vinyl_mind_invite_url", "") or "") or None,
             "desktop": self.desktop,       # the engine opens the sign-in page in the system browser itself
+            "notice": self._notice(),
         }
 
+    def _notice(self) -> dict | None:
+        n = self._get(S_NOTICE)
+        if not isinstance(n, dict) or n.get("code") not in ("revoked", "unknown"):
+            return None
+        return {"code": n["code"], "at": n.get("at"), "url": n.get("url"),
+                "message": i18n.msg(f"vinylmind.notice_{n['code']}", url=str(n.get("url") or "–"))}
+
     def update(self, body: dict) -> dict:
-        """Switches and server URL ("reset_url" restores the preset)."""
+        """Switches and server URL ("reset_url" restores the preset); "dismiss_notice" hides the note why the station
+        was disconnected."""
         with self.lock:
+            if body.get("dismiss_notice"):
+                self._put(S_NOTICE, None)
             if "url" in body or body.get("reset_url"):
                 raw = "" if body.get("reset_url") else str(body.get("url") or "").strip()
-                new = normalize_url(raw) if raw else ""
+                new = canonical_url(raw) if raw else ""
                 j = self.joined()
                 if j and j.get("status") not in ("revoked", "key_lost") and (new or self.preset_url()) != j["url"]:
                     raise HubError(i18n.msg("vinylmind.leave_first", url=j["url"]), code="leave_first")
@@ -1329,6 +1392,7 @@ class VinylMind:
                            "joined_at": time.time(), "checked_at": time.time(), "via": via, "site": site,
                            "server": self._server_facts(info), "client_rejected": None})
         self._put(S_SENT, None)                         # a new station sends everything anew
+        self._put(S_NOTICE, None)
         m = self._get(S_MODEL)
         if isinstance(m, dict):                         # check reports belong to the station, models to the hub
             for v in (m.get("checked") or {}).values():
@@ -1393,7 +1457,8 @@ class VinylMind:
                 StationKey.delete(key_file(self.state_dir, info["fingerprint"], pending=True))
                 raise
             flow.device_code, flow.user_code = d["device_code"], d["user_code"]
-            flow.verification_uri, flow.verification_uri_complete = d["verification_uri"], d["verification_uri_complete"]
+            flow.verification_uri = d["verification_uri"]
+            flow.verification_uri_complete = d["verification_uri_complete"]
             flow.qr = network.qr_svg(flow.verification_uri_complete)
             flow.interval, flow.expires = d["interval"], time.time() + d["expires_in"]
             self.flow = flow
@@ -1483,13 +1548,10 @@ class VinylMind:
 
     def _finish(self, f: _Flow, grant: dict) -> tuple[bool, dict]:
         """After the token response: the hub it names must be the configured one with the accepted key; then join with
-        the invitation and the binding."""
+        the invitation and the binding. `server_url` is compared as a string with the configured hub's canonical form
+        (docs/connect.md): the account service returns exactly that form, so anything else is another server."""
         f.device_code = None
-        try:
-            same_url = normalize_url(grant["server_url"]) == f.hub["url"]
-        except HubError:
-            same_url = False
-        if not same_url or grant["server_fingerprint"] != f.hub["fingerprint"]:
+        if grant["server_url"] != f.hub["url"] or grant["server_fingerprint"] != f.hub["fingerprint"]:
             self._fail_flow(f, i18n.msg("vinylmind.connect_other_server"))
             return False, f.error
         try:
@@ -1582,15 +1644,32 @@ class VinylMind:
                 try:
                     self._client(j["url"], key, j["fingerprint"]).leave()
                 except HubError as e:
-                    if e.code not in ("unknown_key", "revoked") and not forget:
+                    if e.code in DISCONNECTED:           # the operator was first: forget it here all the same
+                        self._disconnected(j, e.code)
+                        return self.status()
+                    if not forget:
                         raise
-            for s in (S_JOIN, S_SENT, S_MODEL):
-                self._put(s, None)
-            StationKey.delete(key_file(self.state_dir, j["fingerprint"]))
-            self._drop_server_prior()
-            self.failures, self.next_attempt, self.last_error, self.last_error_code = 0, 0.0, None, None
+            self._forget(j)
             log.info("Vinyl-Mind: left %s", j["url"])
             return self.status()
+
+    def _forget(self, j: dict) -> None:
+        """Drop the station's key and its Vinyl-Mind state for the hub of `j`."""
+        for s in (S_JOIN, S_SENT, S_MODEL):
+            self._put(s, None)
+        StationKey.delete(key_file(self.state_dir, j["fingerprint"]))
+        self._drop_server_prior()
+        self.failures, self.next_attempt, self.last_error, self.last_error_code = 0, 0.0, None, None
+
+    def _disconnected(self, j: dict, code: str) -> None:
+        """The hub refuses the station's key for good: the operator revoked it (403 revoked, also on leaving: the hub
+        keeps a revoked key on record so that it cannot join again, and has already deleted what the station sent), or
+        the hub no longer knows it (401 unknown_key). The key and the state for that hub are dropped here as well, and
+        the settings say why; connecting again makes a new key."""
+        self._forget(j)
+        self._put(S_NOTICE, {"code": "revoked" if code == "revoked" else "unknown", "url": j["url"],
+                             "at": time.time()})
+        log.warning("Vinyl-Mind: %s refused this station's key (%s); disconnected here too", j["url"], code)
 
     # ─── Contributions, preview, packages ──────────────────────────────────────────────────────────────────────────
     def entries(self) -> list[dict]:
@@ -1731,8 +1810,9 @@ class VinylMind:
         """What a hub error means for the joined state."""
         if e.code == "client_not_accepted":
             self._set_join(client_rejected=__version__)
-        elif e.code in ("revoked", "unknown_key"):
-            self._set_join(status="revoked")
+        elif e.code in DISCONNECTED:
+            self._disconnected(j, e.code)
+            return                                      # the notice says it; no "last error" next to it
         elif e.code == "pending":
             self._set_join(status="pending", checked_at=time.time())
         elif e.code in ("feature_version_not_accepted", "detector_version_not_accepted"):
@@ -1925,7 +2005,8 @@ class VinylMind:
                 self._retrain()
             else:
                 prior = self._get(S_PRIOR)
-                if isinstance(prior, dict) and prior.get("source") == "server" and prior.get("ref") == payload["version"]:
+                if isinstance(prior, dict) and prior.get("source") == "server" \
+                        and prior.get("ref") == payload["version"]:
                     self._drop_server_prior()
         log.info("Vinyl-Mind: model %s (%s) checked; adopted for %s", payload["version"], entry["status"],
                  adopted or "no kind")
@@ -1941,10 +2022,11 @@ class VinylMind:
             vid = self.db.profile_vm_id(p["id"])
             data, _ = _contribution_data(self.db, p["id"], self.feature_version)
             check = check_model(data, kinds, self.feature_version)
-            ks = {k: {"local_err": c["local_err"], "global_err": c["global_err"],
-                      "master_recordings": c["master_recordings"]}
+            # errors above the schema's maximum are reported as the maximum, as in a contribution
+            ks = {k: {"local_err": min(c["local_err"], MAX_CV_ERR_RAW),
+                      "global_err": min(c["global_err"], MAX_CV_ERR_RAW), "master_recordings": c["master_recordings"]}
                   for k, c in check.items() if c["master_recordings"] >= 2 and c["local_err"] is not None
-                  and c["global_err"] is not None and c["local_err"] <= 100 and c["global_err"] <= 100}
+                  and c["global_err"] is not None}
             if not ks:
                 continue
             report = {"spec": "vinyl-mind/check-report", "feature_version": int(self.feature_version),
@@ -2065,10 +2147,10 @@ def install(app, vm: VinylMind) -> VinylMind:
 
     @app.put("/api/vinylmind")
     def vm_update(body: dict, request: Request):
-        unknown = set(body) - {"contribute", "use_model", "url", "reset_url"}
+        unknown = set(body) - {"contribute", "use_model", "url", "reset_url", "dismiss_notice"}
         if unknown:
             raise HTTPException(422, i18n.msg("vinylmind.bad_field", field=", ".join(sorted(unknown))))
-        for k in ("contribute", "use_model", "reset_url"):
+        for k in ("contribute", "use_model", "reset_url", "dismiss_notice"):
             if k in body:
                 flag(body, k)
         if "url" in body and not isinstance(body["url"], (str, type(None))):

@@ -70,6 +70,7 @@
   "unreachable_note": "The server could not be reached at the last attempt. The station keeps its local model and tries again later.",
   "key_changed_note": "The server now presents another key than the one accepted. Nothing more is sent to it. If its operator confirms the new key, disconnect and connect again.",
   "revoked_note": "The server's operator revoked this station. Connect again to join with a new key.",
+  "notice_dismiss": "Dismiss",
   "key_lost_note": "This station's key file is missing (restored from a backup or deleted). Connect again.",
   "last_contribution": "Last contribution",
   "last_contribution_value": {

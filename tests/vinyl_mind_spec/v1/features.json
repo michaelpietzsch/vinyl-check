@@ -1,7 +1,7 @@
 {
   "feature_version": 1,
-  "status": "provisional",
-  "description": "The ten features of the station's learning model as they are computed today, without the turntable profile as zero point. Weights of different signal chains are therefore only partly comparable; feature version 2 will express the features relative to the profile. The fixed scaling below is provisional and is replaced by statistics from real stations before the first contributions are accepted.",
+  "status": "stable",
+  "description": "The ten features of the station's learning model as they are computed today, without the turntable profile as zero point. Weights of different signal chains are therefore only partly comparable; feature version 2 will express the features relative to the profile. The fixed scaling below never changes within this feature version: contributions do not carry it, so a changed scaling is a new feature version. Binary features are centred on their most common value (gc_missing on 1, as most stations have no second opinion), so that a constant feature does not shift the intercept.",
   "kinds": ["click", "tick", "pop"],
   "coefficients": "coef[0] is the intercept; coef[i + 1] belongs to features[i]. The model is p = 1 / (1 + exp(-(coef[0] + sum(coef[i + 1] * (x[i] - center[i]) / scale[i]))))",
   "coef_bound": 50.0,
@@ -10,7 +10,7 @@
     {"name": "amp_rel", "definition": "event level in dBFS (-60 if unknown) minus the music reference level of the recording (-15 dBFS if unknown)", "center": -15.0, "scale": 10.0},
     {"name": "log_dur", "definition": "ln(1 + max(duration in ms, 0))", "center": 0.7, "scale": 0.5},
     {"name": "gc", "definition": "second-opinion score in [0, 1]; 0.5 if missing", "center": 0.5, "scale": 0.3},
-    {"name": "gc_missing", "definition": "1 if the second-opinion score is missing, else 0", "center": 0.5, "scale": 0.5},
+    {"name": "gc_missing", "definition": "1 if the second-opinion score is missing, else 0", "center": 1.0, "scale": 0.5},
     {"name": "music", "definition": "1 if the event lies in the music region of the side, else 0", "center": 0.5, "scale": 0.5},
     {"name": "both_ch", "definition": "1 if the event was detected on both channels, else 0", "center": 0.5, "scale": 0.5},
     {"name": "log_density", "definition": "ln(1 + number of other events of the recording within +-0.5 s)", "center": 0.5, "scale": 0.6},

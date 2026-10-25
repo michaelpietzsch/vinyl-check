@@ -9,6 +9,7 @@ only this test trusts (SSL_CERT_FILE). Invitations come from the hub's command l
 would get them."""
 
 import datetime
+import ipaddress
 import json
 import os
 import socket
@@ -25,7 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from fastapi.testclient import TestClient
 
-from test_vinylmind import LOCAL, FakeAccount, _app, _seed, _set_server
+from test_vinylmind import FEATURES, LOCAL, FakeAccount, _app, _seed, _set_server
 from vinylcheck import vinylmind
 
 BIN = os.environ.get("VINYL_MIND_BIN", "")
@@ -58,7 +59,7 @@ def _certificates(d: Path) -> tuple[Path, Path, Path]:
             .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])).issuer_name(ca_name)
             .public_key(key.public_key()).serial_number(x509.random_serial_number())
             .not_valid_before(now - datetime.timedelta(minutes=5)).not_valid_after(now + datetime.timedelta(days=1))
-            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(__import__("ipaddress").ip_address("127.0.0.1"))]),
+            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
                            critical=False)
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
@@ -206,7 +207,14 @@ def test_station_against_the_real_hub(tmp_path, real):
         by_fp = {s["fingerprint"]: s for s in hub.stations()}
         assert by_fp[station_a]["account"] == account.account and by_fp[station_a]["status"] == "active"
 
-        # contribute; the hub combines, signs a candidate; the station verifies, checks and reports it
+        # contribute; the hub combines, signs a candidate; the station verifies, checks and reports it. Without a
+        # second opinion gc and gc_missing never vary (gc_missing is always 1, the specification's centre): the
+        # contributions say so in `informative`, and the hub accepts and combines them
+        docs = [row["payload"] for row in c.get("/api/vinylmind/preview").json()["profiles"]]
+        names = [f["name"] for f in FEATURES["features"]]
+        for doc in docs:
+            inf = doc["kinds"]["click"]["informative"]
+            assert not inf[names.index("gc")] and not inf[names.index("gc_missing")] and inf[names.index("amp_rel")]
         c.put("/api/vinylmind", json={"contribute": True, "use_model": True})
         r = c.post("/api/vinylmind/sync")
         assert r.status_code == 200, r.text
@@ -228,6 +236,12 @@ def test_station_against_the_real_hub(tmp_path, real):
         hub.cli("withdraw", str(version), "-reason", "end-to-end test")
         r = c.post("/api/vinylmind/sync").json()
         assert r["status"]["prior"] is None
+        # the operator revokes the station: refused from then on (leaving too), so it is disconnected here as well
+        hub.cli("revoke", station_a)
+        assert c.post("/api/vinylmind/sync").status_code == 502
+        st = c.get("/api/vinylmind").json()
+        assert st["state"] == "not_joined" and st["notice"]["code"] == "revoked" and st["station_fingerprint"] is None
+        assert {s["fingerprint"]: s for s in hub.stations()}[station_a]["status"] == "revoked"
 
     # flow B: a device code, confirmed on another device
     app_b = _station(tmp_path, "b", 5)

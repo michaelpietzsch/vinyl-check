@@ -58,8 +58,13 @@
         "n_manual": {"$ref": "#/$defs/count"},
         "n_master": {"$ref": "#/$defs/count"},
         "master_recordings": {"type": "integer", "minimum": 2, "maximum": 100000},
-        "cv_err_est": {"description": "mean absolute relative error of the estimated count per recording in the cross-check", "type": "number", "minimum": 0, "maximum": 10},
-        "cv_err_raw": {"description": "the same error of the raw count", "type": "number", "minimum": 0, "maximum": 100},
+        "informative": {
+          "description": "One entry per feature, in the order of features.json: false if the feature took one single value in all examples the kind was fitted on. Its weight is then not learned but the prior's (the global model's weight the profile trained towards, 0 without one), with the intercept shifted so that the predictions stay the same. The hub combines each weight only from profiles for which it was informative. Missing means all informative.",
+          "type": "array", "minItems": 10, "maxItems": 10,
+          "items": {"type": "boolean"}
+        },
+        "cv_err_est": {"description": "mean absolute relative error of the estimated count per recording in the cross-check; a larger value is sent as 10 (the hub gives such a model no weight anyway)", "type": "number", "minimum": 0, "maximum": 10},
+        "cv_err_raw": {"description": "the same error of the raw count; a larger value is sent as 100", "type": "number", "minimum": 0, "maximum": 100},
         "auc": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
       }
     }

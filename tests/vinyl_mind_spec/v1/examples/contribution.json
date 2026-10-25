@@ -13,6 +13,7 @@
     },
     "tick": {
       "coef": [-0.65, 0.97, 0.52, 0.08, 0.61, -0.18, -0.51, 0.09, -0.62, -0.12, 0.22],
+      "informative": [true, true, true, false, false, true, true, true, true, true],
       "n_real": 2210, "n_false": 4120, "n_manual": 35, "n_master": 6295,
       "master_recordings": 10, "cv_err_est": 0.05, "cv_err_raw": 0.52, "auc": null
     }

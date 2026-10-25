@@ -70,6 +70,7 @@
   "unreachable_note": "Der Server war beim letzten Versuch nicht erreichbar. Die Station behält ihr lokales Modell und versucht es später erneut.",
   "key_changed_note": "Der Server legt jetzt einen anderen Schlüssel vor als den akzeptierten. Es wird nichts mehr an ihn gesendet. Bestätigt sein Betreiber den neuen Schlüssel, die Verbindung trennen und neu verbinden.",
   "revoked_note": "Der Betreiber des Servers hat diese Station gesperrt. Neu verbinden, um mit einem neuen Schlüssel beizutreten.",
+  "notice_dismiss": "Ausblenden",
   "key_lost_note": "Die Schlüsseldatei dieser Station fehlt (aus einer Sicherung zurückgespielt oder gelöscht). Bitte neu verbinden.",
   "last_contribution": "Letzter Beitrag",
   "last_contribution_value": {

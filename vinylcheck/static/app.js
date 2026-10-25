@@ -2208,6 +2208,7 @@ function renderVinylMind(s) {
       <details class="vm-other"><summary>${T("vinylmind.other_ways")}</summary>${codeJoin}</details>` : codeJoin);
   box.innerHTML = `
     <p class="hint">${T("vinylmind.intro")}</p>
+    ${s.notice ? `<p class="warnbox" role="status">${esc(s.notice.message)} <button type="button" class="link" id="vm-notice-ok">${T("vinylmind.notice_dismiss")}</button></p>` : ""}
     ${notes.map((n) => `<p class="warnbox">${n}</p>`).join("")}
     <div class="sfield"><label class="check"><input type="checkbox" id="vm-contribute" ${s.contribute ? "checked" : ""}> ${T("vinylmind.contribute")}</label>
       <div class="help">${T("vinylmind.contribute_help")}</div></div>
@@ -2262,6 +2263,7 @@ function renderVinylMind(s) {
   $("#vm-url-save").onclick = saveUrl;
   $("#vm-url").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); saveUrl(); } };
   const rs = $("#vm-url-reset"); if (rs) rs.onclick = guard(() => { vm.server = null; return put({ reset_url: true }, T("vinylmind.url_reset_done")); });
+  const no = $("#vm-notice-ok"); if (no) no.onclick = guard(() => put({ dismiss_notice: true }));
   const pr = $("#vm-prior-rm"); if (pr) pr.onclick = guard(async () => {
     if (!confirm(T("vinylmind.prior_remove_confirm"))) return;
     renderVinylMind(await api("/api/vinylmind/prior", { method: "DELETE" })); toast(T("vinylmind.prior_removed"));

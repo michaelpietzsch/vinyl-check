@@ -83,6 +83,7 @@ def _schema(name: str, feature_version: int = 1) -> dict:
         s["properties"]["feature_version"]["const"] = feature_version
         if name == "contribution":
             s["$defs"]["kind"]["properties"]["coef"].update(minItems=13, maxItems=13)
+            s["$defs"]["kind"]["properties"]["informative"].update(minItems=12, maxItems=12)
     return s
 
 
@@ -685,7 +686,8 @@ def _join(c, hub, invitation: str | None = "new", fingerprint: str | None = None
     info = _set_server(c, hub)
     if invitation == "new":
         invitation = hub.invite()[1]
-    r = c.post("/api/vinylmind/join", json={"invitation": invitation, "fingerprint": fingerprint or info["fingerprint"]})
+    r = c.post("/api/vinylmind/join",
+               json={"invitation": invitation, "fingerprint": fingerprint or info["fingerprint"]})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -714,8 +716,9 @@ def test_signed_request_verifies_independently(tmp_path):
     h = vinylmind.sign_headers(key, server, "put", "/v1/profiles/abc?x=1", body, now=1793000000)
     assert h["Vinyl-Mind-Key"] == _fp(key.public_raw) and h["Vinyl-Mind-Timestamp"] == "1793000000"
     assert re.fullmatch(r"[A-Za-z0-9_-]{22,64}", h["Vinyl-Mind-Nonce"]) and len(_unb64u(h["Vinyl-Mind-Nonce"])) >= 16
-    message = "\n".join(("vinyl-mind-request-v1", server, "PUT", "/v1/profiles/abc?x=1", hashlib.sha256(body).hexdigest(),
-                         "1793000000", h["Vinyl-Mind-Nonce"], h["Vinyl-Mind-Key"])).encode()
+    message = "\n".join(("vinyl-mind-request-v1", server, "PUT", "/v1/profiles/abc?x=1",
+                         hashlib.sha256(body).hexdigest(), "1793000000", h["Vinyl-Mind-Nonce"],
+                         h["Vinyl-Mind-Key"])).encode()
     Ed25519PublicKey.from_public_bytes(key.public_raw).verify(_unb64u(h["Vinyl-Mind-Signature"]), message)
     assert not message.endswith(b"\n")
     assert vinylmind.sign_headers(key, server, "PUT", "/p", body)["Vinyl-Mind-Nonce"] != h["Vinyl-Mind-Nonce"]
@@ -759,7 +762,8 @@ def test_fixed_scaling_is_the_specifications():
     m = {"mu": rng.normal(size=10).tolist(), "sd": rng.uniform(0.2, 2, 10).tolist(), "b": rng.normal(size=11).tolist()}
     c, s = np.array([f["center"] for f in FEATURES["features"]]), np.array([f["scale"] for f in FEATURES["features"]])
     mu, sd, b = np.array(m["mu"]), np.array(m["sd"]), np.array(m["b"])
-    want = [b[0] + sum(b[i + 1] / sd[i] * (c[i] - mu[i]) for i in range(10))] + [b[i + 1] * s[i] / sd[i] for i in range(10)]
+    want = [b[0] + sum(b[i + 1] / sd[i] * (c[i] - mu[i]) for i in range(10))]
+    want += [b[i + 1] * s[i] / sd[i] for i in range(10)]
     assert np.allclose(learning.to_coef(m), want, atol=1e-5)
     X = rng.normal(size=(20, 10))
     assert np.allclose(learning._predict({"mu": c.tolist(), "sd": s.tolist(), "b": learning.to_coef(m)}, X),
@@ -781,15 +785,27 @@ def test_station_validators_agree_with_the_schemas():
     assert vinylmind.validate_model(model | {"extra": 1}) and vinylmind.validate_model(model | {"version": 0})
 
 
-def test_url_rules():
-    for ok in ("https://vinyl-mind.example", "https://example.org/vinyl-mind/", "http://127.0.0.1:8123",
-               "http://localhost:8080", "http://[::1]:9000"):
-        assert vinylmind.normalize_url(ok) == ok.rstrip("/")
-    for bad in ("http://vinyl-mind.example", "ftp://example.org", "https://user:pw@example.org",
-                "https://example.org/?x=1", "https://example.org/#top", "", "https://", "http://192.168.1.10"):
-        with pytest.raises(vinylmind.HubError):
-            vinylmind.normalize_url(bad)
-    assert vinylmind.DEFAULT_VINYL_MIND_URL == "https://api.vinylcheck.net"
+def test_canonical_server_url():
+    """docs/connect.md: https, scheme and host in lower case, no :443, no path, no trailing slash (plain HTTP only for
+    this computer, in tests and development)."""
+    for given, canonical in (("https://api.vinylcheck.net", "https://api.vinylcheck.net"),
+                             ("https://api.vinylcheck.net/", "https://api.vinylcheck.net"),
+                             ("HTTPS://API.VinylCheck.NET:443/", "https://api.vinylcheck.net"),
+                             ("  https://Hub.Example.org:8443 ", "https://hub.example.org:8443"),
+                             ("http://127.0.0.1:8123/", "http://127.0.0.1:8123"),
+                             ("HTTP://LocalHost:80", "http://localhost"),
+                             ("http://[::1]:9000", "http://[::1]:9000")):
+        assert vinylmind.canonical_url(given) == canonical, given
+    for bad, why in (("https://example.org/vinyl-mind/", "without a path"),
+                     ("https://example.org/v1", "without a path"),
+                     ("http://vinyl-mind.example", "https://"), ("http://192.168.1.10", "https://"),
+                     ("ftp://example.org", "https://"), ("https://user:pw@example.org", "user name"),
+                     ("https://example.org/?x=1", "query"), ("https://example.org/#top", "fragment"),
+                     ("", "host"), ("https://", "host"), ("https://example.org:99999", "https://")):
+        with pytest.raises(vinylmind.HubError) as e:
+            vinylmind.canonical_url(bad)
+        assert why in str(e.value), (bad, str(e.value))
+    assert vinylmind.DEFAULT_VINYL_MIND_URL == vinylmind.canonical_url(vinylmind.DEFAULT_VINYL_MIND_URL)
     assert vinylmind.accepts_client([]) and vinylmind.accepts_client(["vinyl-check/*"])
     assert vinylmind.accepts_client([f"vinyl-check/{vinylmind.__version__.rsplit('.', 1)[0]}.*"])
     assert not vinylmind.accepts_client(["vinyl-check/0.9.*", "other/*"])
@@ -830,6 +846,12 @@ def test_contribution_documents(station):
         click = doc["kinds"]["click"]
         assert len(click["coef"]) == 11 and click["master_recordings"] == 3 and click["auc"] > 0.9
         assert click["n_manual"] == 0 and click["n_master"] == click["n_real"] + click["n_false"]
+        # without a second opinion gc is always 0.5 and gc_missing always 1, and these events all lie in the music:
+        # not informative, reported with the prior's weight (0, no prior) as the specification says
+        names = [f["name"] for f in FEATURES["features"]]
+        constant = {"gc", "gc_missing", "music"}
+        assert click["informative"] == [n not in constant for n in names]
+        assert all(click["coef"][names.index(n) + 1] == 0.0 for n in constant)
         text = json.dumps(doc)
         for private in (row["name"], "USB Audio CODEC", "Interface", "elliptical", "Artist of", "Title of",
                         row["vm_id"]):
@@ -839,13 +861,78 @@ def test_contribution_documents(station):
     assert chains["Studio deck"] == {"source": "turntable_interface", "cartridge": "mc"}
     # the chain class is two fields of the profile, set in the profile dialog; empty means "guess"
     pid = prev["profiles"][0]["id"]
-    r = station.patch(f"/api/profiles/{pid}", json={"chain_source": "turntable_interface", "chain_cartridge": "unknown"})
+    r = station.patch(f"/api/profiles/{pid}",
+                      json={"chain_source": "turntable_interface", "chain_cartridge": "unknown"})
     assert r.status_code == 200 and r.json()["chain"] == {"source": "turntable_interface", "cartridge": "unknown"}
     row = next(x for x in station.get("/api/vinylmind/preview").json()["profiles"] if x["id"] == pid)
     assert row["chain_set"] and row["payload"]["chain"] == {"source": "turntable_interface", "cartridge": "unknown"}
     assert station.patch(f"/api/profiles/{pid}", json={"chain_source": "interface"}).status_code == 422
     r = station.patch(f"/api/profiles/{pid}", json={"chain_source": "", "chain_cartridge": None}).json()
     assert r["chain"] == r["chain_guess"]
+
+
+def _click_data(rng, recordings=3, gc=None):
+    X, y, rec = [], [], []
+    for g in range(1, recordings + 1):
+        ev = _events(rng, 40, 25)
+        for e in ev:
+            e["gc"] = gc
+        F = learning.features(ev, -15.0)
+        for i, e in enumerate(ev):
+            X.append(F[i]); y.append(e["_y"]); rec.append(g)
+    return {"click": {"X": np.array(X), "y": np.array(y, float), "w": np.ones(len(y)), "rec": np.array(rec),
+                      "record": np.ones(len(y)), "manual": np.zeros(len(y), bool), "master": np.ones(len(y), bool),
+                      "raw_n": {g: rec.count(g) for g in set(rec)}}}
+
+
+@pytest.mark.parametrize("with_prior", [False, True])
+def test_features_that_never_vary(with_prior):
+    """spec/README.md, "Features that never vary": the prior's weight in place of the learned one, the intercept
+    shifted at the constant value, and every prediction on the examples stays the same."""
+    rng = np.random.default_rng(11)
+    data = _click_data(rng, gc=0.8)                    # a second opinion that always says 0.8: gc_missing stays 0
+    X = data["click"]["X"]
+    names = list(learning.FEATURES)
+    prior = {"intercept": 0.3, "weights": [0.5 + 0.1 * i for i in range(10)]} if with_prior else None
+    model = learning.train(data, now=0.0, prior={"click": prior} if prior else None)["kinds"]["click"]["model"]
+    coef = learning.to_coef(model)
+    masked, informative = learning.mask_uninformative(coef, X, prior)
+    assert informative == [n not in ("gc", "gc_missing", "music") for n in names]
+    for n in ("gc", "gc_missing", "music"):
+        assert masked[names.index(n) + 1] == (prior["weights"][names.index(n)] if prior else 0.0)
+    for n in names:
+        if n not in ("gc", "gc_missing", "music"):
+            assert masked[names.index(n) + 1] == round(coef[names.index(n) + 1], 6)
+    if with_prior:                                    # away from its centre, the constant moves the intercept
+        assert masked[0] != round(coef[0], 6)
+    before = learning.predict_fixed(learning.from_coef(coef), X)
+    after = learning.predict_fixed(learning.from_coef(masked), X)
+    assert np.allclose(before, after, atol=1e-5)
+    # where every feature varies, nothing changes
+    varied = X + rng.normal(0, 0.01, X.shape)
+    assert learning.mask_uninformative(coef, varied, prior) == ([round(x, 6) for x in coef], [True] * 10)
+
+
+def test_cross_check_errors_are_clipped_not_dropped():
+    rng = np.random.default_rng(12)
+    data = _click_data(rng)
+    info = dict(learning.train(data, now=0.0)["kinds"]["click"], cv_err_est=12.5, cv_err_raw=150.0)
+    k = vinylmind.contribution_kind(info, data["click"]["X"])
+    assert k["cv_err_est"] == 10.0 and k["cv_err_raw"] == 100.0
+    doc = {"spec": "vinyl-mind/contribution", "feature_version": 1, "detector_version": "1",
+           "client": {"name": "vinyl-check", "version": "1.1.0"},
+           "chain": {"source": "usb_turntable", "cartridge": "mm"}, "kinds": {"click": k}}
+    assert vinylmind.validate_contribution(doc) == [] and not _schema_errors("contribution", doc)
+
+
+def test_server_address_in_the_settings(station):
+    r = station.put("/api/vinylmind", json={"url": "HTTPS://Hub.Example.org:443/"})
+    assert r.status_code == 200 and r.json()["url"] == "https://hub.example.org"
+    r = station.put("/api/vinylmind", json={"url": "https://hub.example.org/vinyl-mind"})
+    assert r.status_code == 422 and "without a path" in r.json()["detail"]
+    r = station.put("/api/vinylmind", json={"url": "http://hub.example.org"})
+    assert r.status_code == 422 and "https://" in r.json()["detail"]
+    assert station.get("/api/vinylmind").json()["url"] == "https://hub.example.org"
 
 
 def test_old_profile_ids_and_draft_state_migrate(tmp_path):
@@ -984,7 +1071,8 @@ def test_join_needs_the_confirmed_fingerprint_and_reports_hub_errors(station, hu
     r = station.post("/api/vinylmind/join", json={"invitation": bound, "fingerprint": hub.fp})
     assert "confirmation from the account" in r.json()["detail"]
     assert not list(_key_dir(station.app_).glob("*.key"))          # a refused join leaves no key behind
-    assert station.post("/api/vinylmind/join", json={"invitation": code, "fingerprint": hub.fp}).json()["state"] == "active"
+    r = station.post("/api/vinylmind/join", json={"invitation": code, "fingerprint": hub.fp})
+    assert r.json()["state"] == "active"
     assert station.post("/api/vinylmind/join", json={"invitation": code, "fingerprint": hub.fp}).status_code == 409
 
 
@@ -1021,14 +1109,46 @@ def test_revoked_and_client_not_accepted(station, hub):
     vm.next_attempt = 0
     assert station.post("/api/vinylmind/sync").json()["result"]["contributions"]["sent"] == 2
     assert not station.get("/api/vinylmind").json()["client_rejected"]
-    # the operator revokes the station
+    # the operator revokes the station: the key and the state for that hub go here too, and the settings say why
     next(iter(hub.stations.values()))["status"] = "revoked"
     vm.note_retrained()
     station.app_.state.db.set_setting(vinylmind.S_SENT, "{}")
     assert station.post("/api/vinylmind/sync").status_code == 502
     st = station.get("/api/vinylmind").json()
-    assert st["state"] == "revoked" and "revoked" in str(st["last_error"])
-    assert station.post("/api/vinylmind/leave").json()["state"] == "not_joined"   # forgotten locally
+    assert st["state"] == "not_joined" and st["notice"]["code"] == "revoked" and st["last_error"] is None
+    assert "disconnected this station" in st["notice"]["message"] and hub.url in st["notice"]["message"]
+    station.cookies.set("vc_lang", "de")                             # the interface's language switch
+    de = station.get("/api/vinylmind").json()["notice"]["message"]
+    station.cookies.delete("vc_lang")
+    assert "hat diese Station getrennt" in de
+    assert not list(_key_dir(station.app_).glob("*.key")) and st["station_fingerprint"] is None
+    assert station.put("/api/vinylmind", json={"dismiss_notice": True}).json()["notice"] is None
+    # connecting again makes a new key and clears the note
+    _join(station, hub)
+    assert station.get("/api/vinylmind").json()["state"] == "active"
+
+
+@pytest.mark.parametrize("code", ["revoked", "unknown"])
+def test_leaving_a_station_the_hub_dropped(station, hub, code):
+    """403 revoked on DELETE /v1/me (the hub keeps the key on record) or 401 unknown_key: disconnected here anyway."""
+    st = _join(station, hub)
+    if code == "revoked":
+        hub.stations[st["station_fingerprint"]]["status"] = "revoked"
+    else:
+        del hub.stations[st["station_fingerprint"]]
+    r = station.post("/api/vinylmind/leave")
+    assert r.status_code == 200, r.text
+    st = r.json()
+    assert st["state"] == "not_joined" and st["notice"]["code"] == code
+    assert not list(_key_dir(station.app_).glob("*.key"))
+    # the same when a waiting station asks for its approval
+    hub.join_mode = "approval"
+    st = _join(station, hub, invitation=None)
+    assert st["state"] == "pending"
+    hub.stations[st["station_fingerprint"]]["status"] = "revoked"
+    station.app_.state.vinylmind.last_refresh = 0
+    st = station.post("/api/vinylmind/refresh").json()
+    assert st["state"] == "not_joined" and st["notice"]["code"] == "revoked"
 
 
 @pytest.mark.parametrize("tamper", ["unsigned", "kid", "signature", "alg", "scaling", "server"])
@@ -1138,7 +1258,8 @@ def test_export_import_round_trip(station, tmp_path, hub):
         d = c.post("/api/vinylmind/import", content=token.encode()).json()["package"]
         assert d["type"] == "model" and d["signature"] == "verified" and d["ref"] == str(v)
         # another feature version, broken files
-        assert "Feature version 2" in c.post("/api/vinylmind/import", json=package | {"feature_version": 2}).json()["detail"]
+        r2 = c.post("/api/vinylmind/import", json=package | {"feature_version": 2})
+        assert "Feature version 2" in r2.json()["detail"]
         bad = json.loads(r.content)
         bad["kinds"]["click"]["coef"] = bad["kinds"]["click"]["coef"][:3]
         assert "expected 11 entries" in c.post("/api/vinylmind/import", json=bad).json()["detail"]
@@ -1180,7 +1301,8 @@ def _connect(c, account, **body) -> dict:
 
 def _secrets_absent(c, app, account, caplog, extra=()):
     """None of the flow's secrets appears in the status, the database, the logs or next to the key."""
-    values = [v for call in account.token_calls for k, v in call.items() if k in ("code", "code_verifier", "device_code")]
+    values = [v for call in account.token_calls for k, v in call.items()
+              if k in ("code", "code_verifier", "device_code")]
     values += [v for g in account.issued for k, v in g.items() if k in ("invitation", "binding") and v]
     values += list(extra)
     assert values
@@ -1268,13 +1390,17 @@ def test_connect_declined_or_refused(station, account):
     assert station.get("/api/vinylmind").json()["connect"]["status"] == "failed"
 
 
-@pytest.mark.parametrize("case", ["fingerprint", "server_url", "binding_key", "no_binding"])
+@pytest.mark.parametrize("case", ["fingerprint", "server_url", "url_case", "url_slash", "url_path", "binding_key",
+                                  "no_binding"])
 def test_connect_stops_on_a_wrong_answer(station, account, case):
     hub = account.hub
     if case == "fingerprint":
         account.server_fp = _fp(b"o" * 32)
     elif case == "server_url":
         account.server_url = "https://elsewhere.example"
+    elif case.startswith("url_"):                  # server_url is compared as a string with the canonical form
+        account.server_url = {"url_case": hub.url.replace("http://", "HTTP://"), "url_slash": hub.url + "/",
+                              "url_path": hub.url + "/v1"}[case]
     elif case == "binding_key":
         account.sign_with = Ed25519PrivateKey.generate()
     else:
@@ -1282,11 +1408,10 @@ def test_connect_stops_on_a_wrong_answer(station, account, case):
     r = _connect(station, account)
     page = station.get(account.browse(r["url"]))
     assert page.status_code == 400
-    expect = {"fingerprint": "another server", "server_url": "another server", "binding_key": "does not match",
-              "no_binding": "needs the confirmation"}[case]
+    expect = {"binding_key": "does not match", "no_binding": "needs the confirmation"}.get(case, "another server")
     assert expect in page.text, page.text
     assert not hub.stations and station.get("/api/vinylmind").json()["state"] == "not_joined"
-    if case in ("fingerprint", "server_url"):
+    if case not in ("binding_key", "no_binding"):
         assert not [t for m, t, h, b in hub.requests if t == "/v1/join"]   # nothing was sent to the hub
 
 
