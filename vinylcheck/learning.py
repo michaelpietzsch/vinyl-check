@@ -22,9 +22,10 @@ Status texts in the model (`label`, `reason`, `check`) are i18n messages; the mo
 
 **Shared scaling and prior (Vinyl-Mind).** A fitted model standardizes the features with its own mean and spread, so
 its weights only mean something together with that normalisation. To compare or combine weights across turntable
-profiles and stations, they are re-expressed in a fixed common scaling (`FIXED_SCALING`, tied to `FEATURE_VERSION`):
-`to_fixed` and `predict_fixed`. `train(..., prior=...)` takes weights in that scaling and lets the ridge penalty pull
-towards them instead of towards zero (docs/vinyl-mind-protocol.md, docs/architecture.md).
+profiles and stations, they are re-expressed in a fixed common scaling (`FIXED_SCALING`, tied to `FEATURE_VERSION`;
+for version 1 the values of the hub's specification, `spec/v1/features.json`): `to_fixed` and `predict_fixed`.
+`train(..., prior=...)` takes weights in that scaling, fits in it and lets the ridge penalty pull every coefficient,
+the intercept included, towards them instead of towards zero (docs/vinyl-mind.md, docs/architecture.md).
 
 **Feature versions.** Version "1" (`FEATURES`) is relative to the music reference of each recording. Version "2"
 (`FEATURES_V2`, experimental, opt-in with the configuration key `feature_version`) additionally takes the turntable
@@ -60,20 +61,22 @@ DENSITY_S = 0.5            # window (±s) for the event density feature
 # relative to the music reference of each recording, not yet to the turntable profile. It is the default and stays
 # active until version "2" (below) has been evaluated on real stations.
 FEATURE_VERSION = "1"
-# Fixed common scaling of feature version "1": (centre, scale) per feature, chosen from the typical range of each
-# feature so that a weight of 1 means a similar effect for every feature. The values are a convention shared with
-# Vinyl-Mind (docs/vinyl-mind-protocol.md), not statistics of any data set; changing them needs a new FEATURE_VERSION.
+# Fixed common scaling of feature version "1": (centre, scale) per feature. These are the values of the hub's
+# specification (Vinyl-Mind, spec/v1/features.json, provisional there): a contribution is only comparable with other
+# stations' if every station uses exactly the same numbers, so they are copied here verbatim and a test compares them
+# with the specification. They are a convention, not statistics of any data set; changing them is a change of the
+# specification (and of FEATURE_VERSION), coordinated with the hub.
 FIXED_SCALING = {
-    "log_strength": (4.0, 1.0),     # log1p of the detector peak; ~2.4 (strength 10) … 6.2 (strength 500)
+    "log_strength": (2.7, 0.7),     # log1p of the detector peak; ~2.4 (strength 10) … 6.2 (strength 500)
     "amp_rel": (-15.0, 10.0),       # dB relative to the music reference; real clicks −40 … −15, music −5 … +5
-    "log_dur": (0.5, 0.5),          # log1p of the duration in ms; ~0.1 … 1.5
-    "gc": (0.5, 0.25),              # second-opinion score 0 … 1 (0.5 when missing)
+    "log_dur": (0.7, 0.5),          # log1p of the duration in ms; ~0.1 … 1.5
+    "gc": (0.5, 0.3),               # second-opinion score 0 … 1 (0.5 when missing)
     "gc_missing": (0.5, 0.5),       # 0/1
     "music": (0.5, 0.5),            # 0/1
     "both_ch": (0.5, 0.5),          # 0/1
-    "log_density": (0.5, 0.75),     # log1p of the neighbours within ±DENSITY_S; 0 … ~3
-    "amp_rel2": (3.0, 3.0),         # amp_rel² / 100; 0 … ~16
-    "strength_x_amp": (-6.0, 5.0),  # log_strength × amp_rel / 10; ~−25 … +3
+    "log_density": (0.5, 0.6),      # log1p of the neighbours within ±DENSITY_S; 0 … ~3
+    "amp_rel2": (2.5, 2.0),         # amp_rel² / 100; 0 … ~16
+    "strength_x_amp": (-4.0, 3.0),  # log_strength × amp_rel / 10; ~−25 … +3
 }
 
 # ─── Feature version "2": the turntable profile as the zero point (stage 0, experimental) ───────────────────────
@@ -134,11 +137,15 @@ FEATURES_BY_VERSION = {"1": FEATURES, "2": FEATURES_V2}
 FIXED_SCALING_BY_VERSION = {"1": FIXED_SCALING, "2": FIXED_SCALING_V2}
 ZERO_POINT_KEYS = ("chain_db", "ref_dbfs", "floor_per_min")
 
-# Ridge penalty towards a prior (weights from other profiles or a global model) instead of L2 towards zero. One
-# example with p(1 − p) ≈ 0.2 adds about 0.2 to the curvature of a standardized weight, so 20 lets a prior hold like
-# roughly a hundred master-classified events: a profile with a handful of judgements stays close to it, one with
-# thousands of events follows its own data.
-PRIOR_L2 = 20.0
+# Ridge penalty towards a prior (a global model or an imported package) instead of L2 towards zero. With a prior the
+# model is fitted in the fixed common scaling and every coefficient is pulled towards the prior's, the intercept
+# included: in the hub's simulation (Vinyl-Mind, docs/aggregation.md) a free intercept adapted to the few records a
+# new profile had seen and gave most of the benefit away, and a strength of about 100 worked best for profiles with
+# few judgements. One example with p(1 − p) ≈ 0.2 adds about 0.2 to the curvature of a weight on a feature of unit
+# spread, so 100 lets the prior hold like roughly five hundred master-classified events (a hundred judgements by
+# hand): a new profile stays close to it, one with thousands of events follows its own data. Whether the prior is
+# used at all is decided by the station's own check on its master recordings (vinylmind.check_model), not here.
+PRIOR_L2 = 100.0
 
 
 def feature_names(version: str = FEATURE_VERSION) -> tuple[str, ...]:
@@ -238,30 +245,32 @@ def _check_weights(fixed: dict, version: str) -> np.ndarray:
     return v
 
 
-def _prior_local(prior: dict, mu: np.ndarray, sd: np.ndarray, version: str = FEATURE_VERSION) -> np.ndarray:
-    """A prior in the fixed scaling ({"intercept", "weights"}) as coefficients on the locally standardized features.
-    The logit a + Σ v·(x − c)/s equals b0 + Σ b·(x − mu)/sd with b = v·sd/s and b0 = a + Σ v·(mu − c)/s."""
-    c, s = _scaling(version)
-    v = _check_weights(prior, version)
-    return np.concatenate([[float(prior["intercept"]) + float(np.sum(v * (mu - c) / s))], v * sd / s])
-
-
 def _fit(X: np.ndarray, y: np.ndarray, w: np.ndarray, l2: float = L2, iters: int = 60, prior: dict | None = None,
          prior_l2: float = PRIOR_L2, version: str = FEATURE_VERSION) -> dict:
-    """Weighted logistic regression with ridge penalty (Newton's method) on standardized features. With `prior`
-    (weights in the fixed scaling), the penalty pulls towards the prior with strength `prior_l2` instead of towards
-    zero.
+    """Weighted logistic regression with ridge penalty (Newton's method).
+
+    Without a prior: on the data's own standardisation; the penalty `l2` pulls the weights towards zero and leaves the
+    intercept free. With `prior` (weights in the fixed scaling of `version`): on the fixed scaling itself, and the
+    penalty `prior_l2` pulls every coefficient, the intercept included, towards the prior's (see PRIOR_L2). Either way
+    the result is {"mu", "sd", "b"} for _predict; with a prior, mu and sd are the fixed centres and scales.
 
     The fit always starts at zero: started at a prior that disagrees with the data, every probability is saturated at
-    the wrong end, the curvature of the unpenalized intercept vanishes and Newton's first step overshoots wildly."""
-    mu = X.mean(axis=0)
-    sd = X.std(axis=0)
-    sd[sd < 1e-9] = 1.0
+    the wrong end and Newton's first step overshoots."""
+    if prior is None:
+        mu = X.mean(axis=0)
+        sd = X.std(axis=0)
+        sd[sd < 1e-9] = 1.0
+    else:
+        mu, sd = _scaling(version)
     Z = np.column_stack([np.ones(len(X)), (X - mu) / sd])
-    b0 = np.zeros(Z.shape[1]) if prior is None else _prior_local(prior, mu, sd, version)
+    if prior is None:
+        b0 = np.zeros(Z.shape[1])
+        R = np.eye(Z.shape[1]) * l2
+        R[0, 0] = 0.0                               # no penalty on the intercept
+    else:
+        b0 = np.concatenate([[float(prior["intercept"])], _check_weights(prior, version)])
+        R = np.eye(Z.shape[1]) * prior_l2
     b = np.zeros(Z.shape[1])
-    R = np.eye(Z.shape[1]) * (l2 if prior is None else prior_l2)
-    R[0, 0] = 0.0                                   # no penalty on the intercept
     for _ in range(iters):
         p = 1.0 / (1.0 + np.exp(-np.clip(Z @ b, -30, 30)))
         g = Z.T @ (w * (y - p)) - R @ (b - b0)
@@ -270,7 +279,8 @@ def _fit(X: np.ndarray, y: np.ndarray, w: np.ndarray, l2: float = L2, iters: int
         b += step
         if np.max(np.abs(step)) < 1e-7:
             break
-    return {"mu": mu.round(6).tolist(), "sd": sd.round(6).tolist(), "b": b.round(6).tolist()}
+    return {"mu": np.asarray(mu, float).round(6).tolist(), "sd": np.asarray(sd, float).round(6).tolist(),
+            "b": b.round(6).tolist()}
 
 
 def to_fixed(m: dict, version: str = FEATURE_VERSION) -> dict:
@@ -284,6 +294,22 @@ def to_fixed(m: dict, version: str = FEATURE_VERSION) -> dict:
     v = b[1:] * s / sd
     a = b[0] - float(np.sum(b[1:] * (mu - c) / sd))
     return {"intercept": round(float(a), 6), "weights": [round(float(x), 6) for x in v]}
+
+
+def to_coef(m: dict, version: str = FEATURE_VERSION) -> list[float]:
+    """A fitted model as the coefficient list of the hub's specification: [intercept, weight per feature] in the fixed
+    scaling of `version` (spec/README.md: coef[i + 1] = b[i + 1] · scale[i] / sd[i], coef[0] = b[0] + Σ b[i + 1] /
+    sd[i] · (centre[i] − mu[i]))."""
+    f = to_fixed(m, version)
+    return [f["intercept"], *f["weights"]]
+
+
+def from_coef(coef: list, version: str = FEATURE_VERSION) -> dict:
+    """The coefficient list of the specification as {"intercept", "weights"} (a prior for train()); ValueError if its
+    length does not fit `version`."""
+    fixed = {"intercept": float(coef[0]), "weights": [float(x) for x in coef[1:]]}
+    _check_weights(fixed, version)
+    return fixed
 
 
 def predict_fixed(fixed: dict, X: np.ndarray, version: str = FEATURE_VERSION) -> np.ndarray:

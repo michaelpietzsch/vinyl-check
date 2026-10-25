@@ -134,12 +134,19 @@ def test_prior_pulls_with_few_examples_and_fades_with_many():
     assert pulled["prior_kinds"] == ["click"]
     got = learning.to_fixed(pulled["kinds"]["click"]["model"])
     assert _dist(got, prior["click"]) < _dist(got, own)                # few examples: close to the prior
+    # the intercept is pulled as well (the hub's simulation: left free, it gives most of the benefit away)
+    assert abs(got["intercept"] - prior["click"]["intercept"]) < abs(own["intercept"] - prior["click"]["intercept"])
+    # with a prior the model lives in the shared scaling itself
+    centre, scale = learning._scaling()
+    assert pulled["kinds"]["click"]["model"]["mu"] == centre.tolist()
+    assert pulled["kinds"]["click"]["model"]["sd"] == scale.tolist()
 
     many = _data([(i, 1, _events(rng, 400, 300)) for i in range(1, 6)])
     own = learning.to_fixed(learning.train(many)["kinds"]["click"]["model"])
     got = learning.to_fixed(learning.train(many, prior=prior)["kinds"]["click"]["model"])
-    assert _dist(got, own) < _dist(got, prior["click"])
-    X = learning.features(_events(rng, 50, 50), -15.0)                 # many examples: the own data win
+    # many examples: the own data win. Compared by what the models say, not by their weights: these synthetic events
+    # are separable, so many different weights give the same probabilities, and the prior picks among them
+    X = learning.features(_events(rng, 50, 50), -15.0)
     p_got, p_own, p_prior = (learning.predict_fixed(f, X) for f in (got, own, prior["click"]))
     assert np.mean(np.abs(p_got - p_own)) < 0.1 and np.mean(np.abs(p_got - p_prior)) > 0.8
     # the cross-check uses the prior as well, and a wrong prior does not stop a well-fed model from being usable
