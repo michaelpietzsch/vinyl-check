@@ -2078,10 +2078,13 @@ async function loadNetwork() {
 }
 
 // ─── Vinyl-Mind (settings): contribute to and use the model that several stations learn together ─────────────
-// Both switches are off until the user turns them on. Joining shows the server key's fingerprint first and stops if
-// the server presents another key; "What is sent" shows the exact payloads before anything leaves the station.
+// Connecting is the station's sign-in: with an account (the browser on this computer comes back to the engine by
+// itself, or a code to confirm on a phone), or with an invitation code after comparing the server key's fingerprint.
+// Both switches are off until the user turns them on; "What is sent" shows the exact documents before anything
+// leaves the station. The secrets of a sign-in never reach this page: it only sees the progress.
 const vmKinds = (ks) => (ks || []).map((k) => EVKIND[k] || k).join(", ");
-// Pretty-printed JSON with arrays of plain values on one line, so ten weights read as one row
+const vm = { server: null, serverUrl: null, connectUrl: null, timer: null };
+// Pretty-printed JSON with arrays of plain values on one line, so eleven coefficients read as one row
 function vmJson(v, ind = "") {
   if (Array.isArray(v)) return v.every((x) => x === null || typeof x !== "object") ? JSON.stringify(v).replace(/,/g, ", ")
     : `[\n${v.map((x) => ind + "  " + vmJson(x, ind + "  ")).join(",\n")}\n${ind}]`;
@@ -2093,55 +2096,155 @@ async function loadVinylMind() {
   try { renderVinylMind(await api("/api/vinylmind")); }
   catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
 }
+// While a sign-in runs or the operator's approval is awaited, the section asks again by itself (only while it is shown)
+function vmSchedule(s) {
+  clearTimeout(vm.timer);
+  const flow = s.connect && ["waiting", "joining", "retry"].includes(s.connect.status);
+  if (!flow && s.state !== "pending") return;
+  vm.timer = setTimeout(async () => {
+    if (!$("#vm-box") || document.hidden) { if ($("#vm-box")) vmSchedule(s); return; }
+    try { renderVinylMind(await api(flow ? "/api/vinylmind" : "/api/vinylmind/refresh", flow ? {} : { method: "POST" })); }
+    catch (_) { vmSchedule(s); }
+  }, flow ? 2500 : 10000);
+}
+async function vmCheckServer() {
+  vm.server = null; vm.serverUrl = null;
+  vm.server = await api("/api/vinylmind/server");
+  vm.serverUrl = vm.server.url;
+  return vm.server;
+}
+function vmServerCard(info) {
+  if (!info) return "";
+  const warn = [
+    info.skew_warning ? T("vinylmind.clock_warning", { s: Math.abs(info.skew_s) }) : "",
+    info.client_accepted ? "" : T("vinylmind.client_not_accepted", { client: esc(info.client) }),
+    info.feature_supported ? "" : T("vinylmind.feature_unsupported_server"),
+  ].filter(Boolean);
+  return `<div class="vm-card">
+      <div><b>${esc(info.name || info.url)}</b> <span class="hint mono">${esc(info.url)}</span></div>
+      <div class="sfield"><label>${T("vinylmind.server_key")}</label><div class="vm-fp mono">${esc(info.fingerprint)}</div></div>
+      ${warn.map((w) => `<p class="warnbox">${w}</p>`).join("")}
+    </div>`;
+}
+function vmFlowPanel(s) {
+  const f = s.connect; if (!f) return "";
+  if (f.status === "failed") return `<div class="vm-card"><p class="bad" role="alert">${esc(f.error || T("vinylmind.connect_failed"))}</p>
+      <div class="row"><button type="button" class="secondary" id="vm-flow-close">${T("vinylmind.connect_again")}</button></div></div>`;
+  if (f.status === "retry") return `<div class="vm-card"><p>${T("vinylmind.connect_retry", { time: f.retry_at ? dateStr(f.retry_at) : "–" })}</p>
+      ${f.error ? `<p class="hint">${esc(f.error)}</p>` : ""}
+      <div class="row"><button type="button" class="link" id="vm-flow-cancel">${T("vinylmind.connect_cancel")}</button></div></div>`;
+  if (f.kind === "device") return `<div class="vm-card vm-device">
+      <p>${T("vinylmind.device_intro", { site: esc(f.site) })}</p>
+      <div class="vm-device-row">
+        ${f.qr ? `<div class="net-qr">${f.qr}</div>` : ""}
+        <div><div class="hint">${T("vinylmind.device_open")}</div>
+          <a class="mono" href="${esc(f.verification_uri)}" target="_blank" rel="noopener">${esc(f.verification_uri)}</a>
+          <div class="hint">${T("vinylmind.device_code")}</div><div class="net-code mono">${esc(f.user_code)}</div>
+          <div class="hint">${T("vinylmind.device_expires", { time: dateStr(f.expires_at) })}</div></div>
+      </div>
+      <p class="hint" role="status">${T("vinylmind.device_waiting")}</p>
+      <div class="row"><button type="button" class="link" id="vm-flow-cancel">${T("vinylmind.connect_cancel")}</button></div></div>`;
+  return `<div class="vm-card">
+      <p role="status">${T("vinylmind.browser_waiting", { site: esc(f.site) })}</p>
+      <div class="row">
+        ${vm.connectUrl ? `<a class="button secondary" href="${esc(vm.connectUrl)}" target="_blank" rel="noopener">${T("vinylmind.browser_again")}</a>` : ""}
+        <button type="button" class="secondary" id="vm-flow-device">${T("vinylmind.browser_use_code")}</button>
+        <button type="button" class="link" id="vm-flow-cancel">${T("vinylmind.connect_cancel")}</button></div>
+      <p class="hint">${T("vinylmind.browser_no_callback")}</p></div>`;
+}
 function renderVinylMind(s) {
   const box = $("#vm-box"); if (!box) return;
-  const joined = s.state === "pending" || s.state === "approved";
-  const stCls = { approved: "ok", pending: "warn", revoked: "bad" }[s.state] || "info";
+  const joined = s.state === "pending" || s.state === "active";
+  const connected = joined || s.state === "key_changed";
+  if (vm.serverUrl && vm.serverUrl !== s.url) { vm.server = null; vm.serverUrl = null; }
+  const stCls = { active: "ok", pending: "warn", revoked: "bad", key_changed: "bad", key_lost: "bad" }[s.state] || "info";
+  const p = s.prior;
   const model = !s.model ? T("vinylmind.model_none")
     : s.model.in_use ? T("vinylmind.model_value", { version: esc(s.model.version), kinds: vmKinds(s.model.adopted) })
+    : s.model.status === "candidate" ? T("vinylmind.model_candidate", { version: esc(s.model.version) })
     : T(s.model.adopted.length ? "vinylmind.model_idle" : "vinylmind.model_unused", { version: esc(s.model.version) });
-  const p = s.prior;
   const prior = !p ? T("vinylmind.prior_none")
     : (p.source === "server" ? T("vinylmind.prior_server", { ref: esc(p.ref), kinds: vmKinds(p.kinds) })
       : T("vinylmind.prior_import", { type: T(`vinylmind.type_${p.type}`), ref: esc(p.ref), kinds: vmKinds(p.kinds) }))
       + (p.in_use ? "" : ` · <span class="hint">${T("vinylmind.prior_inactive")}</span>`)
       + ` <button type="button" class="link" id="vm-prior-rm">${T("vinylmind.prior_remove")}</button>`;
   const row = (label, value) => `<tr><th scope="row">${label}</th><td>${value}</td></tr>`;
+  const notes = [
+    s.recording ? T("vinylmind.waiting_recording") : "",
+    joined && s.client_rejected ? T("vinylmind.client_rejected", { client: esc(s.client) }) : "",
+    joined && s.feature_supported === false ? T("vinylmind.feature_unsupported", { version: esc(s.feature_version) }) : "",
+    joined && s.detector_supported === false ? T("vinylmind.detector_unsupported", { version: esc(s.detector_version) }) : "",
+    joined && s.unreachable ? T("vinylmind.unreachable_note") : "",
+    s.skew_warning ? T("vinylmind.clock_warning", { s: Math.abs(s.skew_s) }) : "",
+    s.state === "key_changed" ? T("vinylmind.key_changed_note") : "",
+    s.state === "revoked" ? T("vinylmind.revoked_note") : "",
+    s.state === "key_lost" ? T("vinylmind.key_lost_note") : "",
+  ].filter(Boolean);
+  const info = vm.server;
+  const accounts = !!info?.connect;
+  const flowOpen = s.connect && s.connect.status !== "failed";
+  // Joining: with an account first when the server has one; the invitation code under "Other ways to join"
+  const codeJoin = `
+      <div class="vm-join">
+        <label for="vm-invite">${T("vinylmind.invitation")}</label>
+        <div class="row"><input id="vm-invite" placeholder="${T("vinylmind.invitation_placeholder")}" autocomplete="off" spellcheck="false"></div>
+        <details class="vm-where"><summary>${T("vinylmind.where_code")}</summary>
+          <p class="hint">${T(info?.join === "approval" ? "vinylmind.where_code_approval" : "vinylmind.where_code_text")}</p>
+          ${s.invite_url ? `<p><a href="${esc(s.invite_url)}" target="_blank" rel="noopener">${T("vinylmind.where_code_link")}</a></p>` : ""}</details>
+        <label class="check"><input type="checkbox" id="vm-fp-ok"> ${T("vinylmind.fingerprint_confirm")}</label>
+        <div class="row"><button type="button" id="vm-join" ${info ? "" : "disabled"}>${ico("hub", 18)} ${T("vinylmind.join")}</button></div>
+      </div>`;
+  const connectBox = connected ? "" : !s.url ? `<p class="hint">${T("vinylmind.join_no_url")}</p>`
+    : !info ? `<div class="row"><button type="button" id="vm-check">${ico("hub", 18)} ${T("vinylmind.check_server")}</button></div>
+        <p class="hint">${T("vinylmind.check_server_hint")}</p>`
+    : flowOpen ? vmServerCard(info) + vmFlowPanel(s)
+    : vmServerCard(info) + vmFlowPanel(s) + (accounts ? `
+      <div class="vm-connect">
+        <div class="row">
+          ${s.browser_here ? `<button type="button" id="vm-connect-browser">${ico("hub", 18)} ${T("vinylmind.connect")}</button>` : ""}
+          <button type="button" ${s.browser_here ? 'class="secondary"' : ""} id="vm-connect-device">${T(s.browser_here ? "vinylmind.connect_code" : "vinylmind.connect")}</button></div>
+        <p class="hint">${T(s.browser_here ? "vinylmind.connect_hint" : "vinylmind.connect_hint_device", { site: esc(info.connect.site) })}</p>
+      </div>
+      <details class="vm-other"><summary>${T("vinylmind.other_ways")}</summary>${codeJoin}</details>` : codeJoin);
   box.innerHTML = `
     <p class="hint">${T("vinylmind.intro")}</p>
-    ${s.recording ? `<p class="warnbox">${T("vinylmind.waiting_recording")}</p>` : ""}
+    ${notes.map((n) => `<p class="warnbox">${n}</p>`).join("")}
     <div class="sfield"><label class="check"><input type="checkbox" id="vm-contribute" ${s.contribute ? "checked" : ""}> ${T("vinylmind.contribute")}</label>
       <div class="help">${T("vinylmind.contribute_help")}</div></div>
     <div class="sfield"><label class="check"><input type="checkbox" id="vm-use" ${s.use_model ? "checked" : ""}> ${T("vinylmind.use")}</label>
       <div class="help">${T("vinylmind.use_help")}</div></div>
     <div class="sfield"><label for="vm-url">${T("vinylmind.server")}</label>
-      <div class="vm-url"><input type="url" id="vm-url" value="${esc(s.url)}" placeholder="https://" spellcheck="false" autocomplete="off" ${joined ? "disabled" : ""}>
-        <button type="button" class="secondary" id="vm-url-save" ${joined ? "disabled" : ""}>${T("vinylmind.save_url")}</button></div>
+      <div class="vm-url"><input type="url" id="vm-url" value="${esc(s.url)}" placeholder="https://" spellcheck="false" autocomplete="off" ${connected ? "disabled" : ""}>
+        <button type="button" class="secondary" id="vm-url-save" ${connected ? "disabled" : ""}>${T("vinylmind.save_url")}</button></div>
       <div class="help">${s.preset_url ? T("vinylmind.preset", { url: `<span class="mono">${esc(s.preset_url)}</span>` }) : T("vinylmind.no_default")}
-        ${!s.url_is_preset && !joined ? `<button type="button" class="link" id="vm-url-reset">${T("vinylmind.reset_url")}</button>` : ""}</div>
-      ${joined ? `<div class="help">${T("vinylmind.url_locked")}</div>` : ""}
+        ${!s.url_is_preset && !connected ? `<button type="button" class="link" id="vm-url-reset">${T("vinylmind.reset_url")}</button>` : ""}</div>
+      ${connected ? `<div class="help">${T("vinylmind.url_locked")}</div>` : ""}
       <div class="err" id="vm-url-err" role="alert"></div></div>
-    ${s.joined ? `<div class="sfield"><label>${T("vinylmind.server_key")}</label><div class="vm-fp mono">${esc(s.joined.fingerprint)}</div>
-      <div class="help">${T("vinylmind.server_key_help")}</div></div>` : ""}
     <table class="kv"><tbody>
-      ${row(T("vinylmind.status"), `<span class="st ${stCls}">${T(`vinylmind.state_${s.state}`)}</span>${s.joined?.name ? ` <span class="hint">${esc(s.joined.name)}</span>` : ""}`)}
+      ${row(T("vinylmind.status"), `<span class="st ${stCls}">${T(`vinylmind.state_${s.state}`)}</span>${s.joined?.name ? ` <span class="hint">${esc(s.joined.name)}</span>` : ""}${s.joined?.via === "account" && s.joined.site ? ` <span class="hint">${T("vinylmind.via_account", { site: esc(s.joined.site) })}</span>` : ""}`)}
+      ${s.joined ? row(T("vinylmind.server_key"), `<span class="vm-fp mono">${esc(s.joined.fingerprint)}</span>`) : ""}
+      ${s.station_fingerprint ? row(T("vinylmind.station_key"), `<span class="vm-fp mono">${esc(s.station_fingerprint)}</span>`) : ""}
       ${joined ? row(T("vinylmind.last_contribution"), s.last_contribution ? T("vinylmind.last_contribution_value", { date: dateStr(s.last_contribution.at), n: s.last_contribution.profiles }) : T("vinylmind.never")) : ""}
       ${joined ? row(T("vinylmind.model"), model) : ""}
+      ${s.withdrawn ? row(T("vinylmind.withdrawn"), T("vinylmind.withdrawn_value", { version: esc(s.withdrawn.version), reason: esc(s.withdrawn.reason || "–") })) : ""}
       ${row(T("vinylmind.prior"), prior)}
       ${s.last_error ? row(T("vinylmind.last_error"), `<span class="bad">${esc(s.last_error)}</span>`) : ""}
     </tbody></table>
-    ${joined ? `<div class="row">
-        <button type="button" class="secondary" id="vm-sync" title="${T("vinylmind.send_now_hint")}" ${s.contribute || s.use_model ? "" : "disabled"}>${ico("hub", 18)} ${T("vinylmind.send_now")}</button>
-        <button type="button" class="link" id="vm-leave">${T("vinylmind.leave")}</button></div>`
-      : `<div class="row vm-join"><input id="vm-invite" placeholder="${T("vinylmind.invitation_placeholder")}" aria-label="${T("vinylmind.invitation_placeholder")}" autocomplete="off" spellcheck="false">
-        <button type="button" id="vm-join" ${s.url ? "" : "disabled"} title="${s.url ? "" : T("vinylmind.join_no_url")}">${ico("hub", 18)} ${T("vinylmind.join")}</button></div>`}
+    ${s.state === "pending" ? `<p class="hint" role="status">${T("vinylmind.pending_hint")}</p>` : ""}
+    ${connected ? `<div class="row">
+        ${joined ? `<button type="button" class="secondary" id="vm-sync" title="${T("vinylmind.send_now_hint")}" ${s.contribute || s.use_model ? "" : "disabled"}>${ico("hub", 18)} ${T("vinylmind.send_now")}</button>` : ""}
+        ${s.joined?.via === "account" ? `<button type="button" class="secondary" id="vm-reconnect" title="${T("vinylmind.reconnect_hint")}">${T("vinylmind.reconnect")}</button>` : ""}
+        <button type="button" class="link" id="vm-leave">${T("vinylmind.leave")}</button></div>
+        ${s.connect ? vmFlowPanel(s) : ""}` : ""}
+    <div id="vm-connect-box">${connectBox}</div>
     <details id="vm-preview"><summary>${T("vinylmind.preview")}</summary><div id="vm-preview-box"><p class="empty">${T("settings.loading")}</p></div></details>
     <h4>${T("vinylmind.files")}</h4>
     <p class="hint">${T("vinylmind.files_hint")}</p>
-    <div class="row vm-join"><select id="vm-exp" aria-label="${T("vinylmind.export_profile")}"></select>
+    <div class="row vm-files"><select id="vm-exp" aria-label="${T("vinylmind.export_profile")}"></select>
       <button type="button" class="secondary" id="vm-export">${ico("export", 18)} ${T("vinylmind.export")}</button>
       <button type="button" class="secondary" id="vm-import">${T("vinylmind.import")}</button>
-      <input type="file" id="vm-file" accept=".json,application/json" class="hidden"></div>`;
+      <input type="file" id="vm-file" accept=".json,.jws,application/json,text/plain" class="hidden"></div>`;
+  vmSchedule(s);
   const put = async (body, msg) => { renderVinylMind(await api("/api/vinylmind", { method: "PUT", body })); if (msg) toast(msg); };
   for (const [id, key] of [["vm-contribute", "contribute"], ["vm-use", "use_model"]]) {
     const el = $("#" + id);
@@ -2153,24 +2256,47 @@ function renderVinylMind(s) {
   }
   const saveUrl = guard(async () => {
     $("#vm-url-err").textContent = "";
-    try { await put({ url: $("#vm-url").value.trim() }, T("vinylmind.url_saved")); }
+    try { vm.server = null; vm.serverUrl = null; await put({ url: $("#vm-url").value.trim() }, T("vinylmind.url_saved")); }
     catch (e) { $("#vm-url-err").textContent = e.message; }
   });
   $("#vm-url-save").onclick = saveUrl;
   $("#vm-url").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); saveUrl(); } };
-  const rs = $("#vm-url-reset"); if (rs) rs.onclick = guard(() => put({ reset_url: true }, T("vinylmind.url_reset_done")));
+  const rs = $("#vm-url-reset"); if (rs) rs.onclick = guard(() => { vm.server = null; return put({ reset_url: true }, T("vinylmind.url_reset_done")); });
   const pr = $("#vm-prior-rm"); if (pr) pr.onclick = guard(async () => {
     if (!confirm(T("vinylmind.prior_remove_confirm"))) return;
     renderVinylMind(await api("/api/vinylmind/prior", { method: "DELETE" })); toast(T("vinylmind.prior_removed"));
   });
+  const ck = $("#vm-check"); if (ck) ck.onclick = guard(async () => {
+    ck.disabled = true;
+    try { await vmCheckServer(); } finally { renderVinylMind(s); }
+  });
+  // Flow A: the system browser opens the account service's page and comes back to this station by itself. In the
+  // desktop app the engine opens it; in a browser a new tab is opened right away, so that no pop-up blocker objects.
+  const connect = async (flow, reconnect = false) => {
+    const tab = flow === "browser" && !s.desktop ? window.open("about:blank", "_blank") : null;
+    try {
+      const r = await api("/api/vinylmind/connect", { method: "POST", body: { flow, reconnect } });
+      if (r.url) { vm.connectUrl = r.url; if (tab) tab.location = r.url; else if (!r.opened) toast(T("vinylmind.browser_open_link"), 6000); }
+      renderVinylMind(r.status);
+    } catch (e) { if (tab) tab.close(); throw e; }
+  };
+  const cb = $("#vm-connect-browser"); if (cb) cb.onclick = guard(() => connect("browser"));
+  const cd = $("#vm-connect-device"); if (cd) cd.onclick = guard(() => connect("device"));
+  const fd = $("#vm-flow-device"); if (fd) fd.onclick = guard(() => connect("device", s.state === "active" || s.state === "pending"));
+  const rc = $("#vm-reconnect"); if (rc) rc.onclick = guard(async () => {
+    if (!confirm(T("vinylmind.reconnect_confirm"))) return;
+    if (!vm.server) await vmCheckServer();
+    await connect(s.browser_here ? "browser" : "device", true);
+  });
+  for (const id of ["#vm-flow-cancel", "#vm-flow-close"]) {
+    const b = $(id); if (b) b.onclick = guard(async () => { vm.connectUrl = null; renderVinylMind(await api("/api/vinylmind/connect/cancel", { method: "POST" })); });
+  }
   const jn = $("#vm-join"); if (jn) jn.onclick = guard(async () => {
+    if (!$("#vm-fp-ok").checked) { toast(T("vinylmind.fingerprint_confirm_first"), 5000); $("#vm-fp-ok").focus(); return; }
     jn.disabled = true;
     try {
-      const info = await api("/api/vinylmind/server");
-      if (!info.supported) toast(T("vinylmind.join_unsupported", { version: s.feature_version }), 6000);
-      if (!confirm(T("vinylmind.join_confirm", { name: info.name || info.url, fp: info.fingerprint_display }))) return;
       const r = await api("/api/vinylmind/join", { method: "POST", body: { invitation: $("#vm-invite").value.trim() || null, fingerprint: info.fingerprint } });
-      renderVinylMind(r); toast(T(r.state === "approved" ? "vinylmind.joined_approved" : "vinylmind.joined_pending"), 5000);
+      renderVinylMind(r); toast(T(r.state === "active" ? "vinylmind.joined_active" : "vinylmind.joined_pending"), 5000);
     } finally { if (document.body.contains(jn)) jn.disabled = false; }
   });
   const sy = $("#vm-sync"); if (sy) sy.onclick = guard(async () => {
@@ -2179,7 +2305,11 @@ function renderVinylMind(s) {
       const r = await api("/api/vinylmind/sync", { method: "POST" });
       const res = r.result || {}, n = res.contributions?.sent || 0;
       renderVinylMind(r.status);
-      toast(res.status === "pending" ? T("vinylmind.sync_pending") : [n ? T("vinylmind.sync_sent", { n }) : "", res.model === "new" ? T("vinylmind.sync_model") : ""].filter(Boolean).join(" ") || T("vinylmind.sync_done"));
+      toast(res.status === "pending" ? T("vinylmind.sync_pending")
+        : res.skipped === "feature_version" ? T("vinylmind.feature_unsupported", { version: esc(s.feature_version) })
+        : res.skipped === "client_not_accepted" ? T("vinylmind.client_rejected", { client: esc(s.client) })
+        : [n ? T("vinylmind.sync_sent", { n }) : "", res.model === "new" ? T("vinylmind.sync_model") : "",
+          res.model === "withdrawn" ? T("vinylmind.sync_withdrawn") : ""].filter(Boolean).join(" ") || T("vinylmind.sync_done"), 6000);
     } catch (e) { loadVinylMind(); throw e; }
   });
   const lv = $("#vm-leave"); if (lv) lv.onclick = guard(async () => {
@@ -2190,7 +2320,7 @@ function renderVinylMind(s) {
       if (!confirm(T("vinylmind.forget_confirm", { error: e.message }))) return;
       r = await api("/api/vinylmind/leave", { method: "POST", body: { forget: true } });
     }
-    renderVinylMind(r); toast(T("vinylmind.left"));
+    vm.server = null; renderVinylMind(r); toast(T("vinylmind.left"));
   });
   $("#vm-preview").ontoggle = () => { if ($("#vm-preview").open) loadVmPreview(); };
   api("/api/profiles").then((ps) => {
@@ -2199,10 +2329,11 @@ function renderVinylMind(s) {
     $("#vm-export").disabled = !ps.length;
   }).catch(() => {});
   $("#vm-export").onclick = guard(async () => {
-    const pkg = await api(`/api/vinylmind/export?profile=${encodeURIComponent($("#vm-exp").value)}`);
-    const file = `vinyl-mind-contribution-${pkg.profile_id.slice(0, 8)}.json`;
+    const r = await fetch(`/api/vinylmind/export?profile=${encodeURIComponent($("#vm-exp").value)}`);
+    if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail; } catch (_) {} throw new Error(m); }
+    const file = (r.headers.get("content-disposition") || "").match(/filename="([^"]+)"/)?.[1] || "vinyl-mind-contribution.json";
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(pkg, null, 2) + "\n"], { type: "application/json" }));
+    a.href = URL.createObjectURL(await r.blob());
     a.download = file; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast(T("vinylmind.export_done", { file }));
@@ -2222,34 +2353,28 @@ function renderVinylMind(s) {
     renderVinylMind(r.status); toast(T("vinylmind.imported"), 5000);
   });
 }
-// The payloads of the next contribution, per turntable profile, with the chain class that goes with them
+// The documents of the next contribution, per turntable profile, with the chain class that goes with them (set in
+// the profile dialog)
 async function loadVmPreview() {
   const box = $("#vm-preview-box"); if (!box) return;
   let d;
   try { d = await api("/api/vinylmind/preview"); } catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; return; }
   if (!d.profiles.length) { box.innerHTML = `<p class="hint">${T("vinylmind.preview_none")}</p>`; return; }
-  const opts = (kind, values, cur, guess, set) => values.map((v) => {
-    const label = T(`vinylmind.${kind}_${v}`);
-    return `<option value="${v}" ${v === cur ? "selected" : ""}>${!set && v === guess ? T("vinylmind.guessed", { value: label }) : label}</option>`;
-  }).join("");
-  box.innerHTML = `<p class="hint">${T("vinylmind.preview_hint")}</p>` + d.profiles.map((x) => `
+  const chain = (x) => `${T(`vinylmind.source_${x.chain.source}`)} · ${T(`vinylmind.cartridge_${x.chain.cartridge}`)}${x.chain_set ? "" : ` <span class="hint">${T("vinylmind.guessed_short")}</span>`}`;
+  box.innerHTML = `<p class="hint">${T("vinylmind.preview_hint")}</p>`
+    + (d.feature_supported === false ? `<p class="warnbox">${T("vinylmind.feature_unsupported", { version: esc(d.feature_version) })}</p>` : "")
+    + d.profiles.map((x) => `
     <div class="vm-prof">
       <div class="vm-prof-head"><b>${esc(x.name)}</b>${x.active ? ` <span class="st ok">${T("vinylmind.active")}</span>` : ""}
         <span class="hint mono">${T("vinylmind.profile_id", { id: esc(x.vm_id) })}</span>
         ${x.payload ? `<span class="hint">${x.unchanged ? T("vinylmind.preview_sent", { date: dateStr(x.sent_at) }) : x.sent_at ? T("vinylmind.preview_changed") : T("vinylmind.preview_not_sent")}</span>` : ""}</div>
-      <div class="vm-chain">
-        <label>${T("vinylmind.connection")}<select data-vm-chain="${x.id}" data-part="connection">${opts("connection", ["usb_turntable", "interface", "unknown"], x.chain.connection, x.chain_guess.connection, x.chain_set)}</select></label>
-        <label>${T("vinylmind.cartridge")}<select data-vm-chain="${x.id}" data-part="cartridge">${opts("cartridge", ["mm", "mc", "unknown"], x.chain.cartridge, x.chain_guess.cartridge, x.chain_set)}</select></label>
-      </div>
+      <div class="hint">${T("vinylmind.chain")}: ${chain(x)} · <button type="button" class="link" data-vm-profile="${x.id}">${T("vinylmind.chain_change")}</button></div>
       ${x.payload ? `<pre class="vm-json">${esc(vmJson(x.payload))}</pre>` : `<p class="hint">${esc(x.reason || "")}</p>`}
     </div>`).join("");
-  box.querySelectorAll("[data-vm-chain]").forEach((el) => el.addEventListener("change", guard(async () => {
-    const id = el.dataset.vmChain;
-    const part = (n) => box.querySelector(`[data-vm-chain="${id}"][data-part="${n}"]`).value;
-    await api("/api/vinylmind", { method: "PUT", body: { chain: { [id]: { connection: part("connection"), cartridge: part("cartridge") } } } });
-    toast(T("vinylmind.chain_saved"));
-    loadVmPreview();
-  })));
+  // the chain class is part of the turntable profile: open it in Alignment, where "Edit" has the two fields
+  box.querySelectorAll("[data-vm-profile]").forEach((el) => el.addEventListener("click", () => {
+    state.profileId = Number(el.dataset.vmProfile); state.setup = null; setMode("alignment");
+  }));
 }
 
 // ─── Audio interface (settings): device, sample rate, bit depth, inputs, WASAPI/ASIO ───────────────────────────
@@ -2762,6 +2887,10 @@ const deviceLabel = (d) => d.hostapi
 
 function renderProfileForm(p) {
   const v = (k) => esc(p?.[k] ?? "");
+  // Vinyl-Mind chain class: empty = guessed from device and cartridge (the guess is shown), else what the user chose
+  const chainOpts = (part, values) => [["", p?.chain_guess ? T("profiles.chain_auto_value", { value: T(`vinylmind.${part}_${p.chain_guess[part]}`) }) : T("profiles.chain_auto")],
+    ...values.map((x) => [x, T(`vinylmind.${part}_${x}`)])]
+    .map(([x, label]) => `<option value="${x}" ${(p?.[`chain_${part}`] || "") === x ? "selected" : ""}>${label}</option>`).join("");
   $("#setup-detail").innerHTML = `
     <h2>${ico("tonearm")} ${p ? T("profiles.edit_title") : T("profiles.add_title")}</h2>
     <p class="hint">${T("profiles.form_hint")}</p>
@@ -2772,6 +2901,9 @@ function renderProfileForm(p) {
       <div><label for="pf-force">${T("profiles.force")}</label><input id="pf-force" name="tracking_force_g" type="number" step="0.01" min="0" value="${v("tracking_force_g")}"></div>
       <div><label for="pf-anti">${T("profiles.antiskating")}</label><input id="pf-anti" name="antiskating" value="${v("antiskating")}" placeholder="${T("profiles.antiskating_placeholder")}"></div>
       <div><label for="pf-weight">${T("profiles.weight")}</label><input id="pf-weight" name="weight" value="${v("weight")}" placeholder="${T("profiles.weight_placeholder")}"></div>
+      <div><label for="pf-src">${T("profiles.chain_source")}</label><select id="pf-src" name="chain_source">${chainOpts("source", ["usb_turntable", "turntable_interface"])}</select></div>
+      <div><label for="pf-ccart">${T("profiles.chain_cartridge")}</label><select id="pf-ccart" name="chain_cartridge">${chainOpts("cartridge", ["mm", "mc", "unknown"])}</select></div>
+      <div class="wide hint">${T("profiles.chain_hint")}</div>
       <div class="wide"><label><input type="checkbox" id="pf-fixed" ${p?.fixed_gain ? "checked" : ""}> ${T("profiles.fixed_gain")}</label>
         <div class="hint">${T("profiles.fixed_gain_hint")}</div></div>
       <div class="wide"><label for="pf-map">${T("profiles.targets")}</label><select id="pf-map" name="target_map"><option value="">${T("profiles.targets_default")}</option></select>

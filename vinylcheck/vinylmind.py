@@ -1218,6 +1218,7 @@ class VinylMind:
             "next_attempt": self.next_attempt or None, "recording": bool(self.busy()),
             "connect": flow.public() if flow else None,
             "invite_url": str(getattr(self.cfg, "vinyl_mind_invite_url", "") or "") or None,
+            "desktop": self.desktop,       # the engine opens the sign-in page in the system browser itself
         }
 
     def update(self, body: dict) -> dict:
