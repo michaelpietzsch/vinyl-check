@@ -2163,10 +2163,12 @@ def install(app, vm: VinylMind) -> VinylMind:
             d = await run_in_threadpool(call, vm.describe, pkg)
             d.pop("_doc", None)
             return {"package": d}
-        return await run_in_threadpool(call, vm.import_package, pkg)
+        r = await run_in_threadpool(call, vm.import_package, pkg)
+        r["status"] |= {"browser_here": local(request)}
+        return r
 
     @app.delete("/api/vinylmind/prior")
-    def vm_prior_delete():
-        return vm.remove_prior()
+    def vm_prior_delete(request: Request):
+        return vm.remove_prior() | {"browser_here": local(request)}
 
     return vm

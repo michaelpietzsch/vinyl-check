@@ -128,7 +128,7 @@ REF_ABOVE_MUSIC_DB = 5.0
 FIXED_SCALING_V2 = {
     **{k: FIXED_SCALING[k] for k in FEATURES_V2 if k in FIXED_SCALING},
     "gc_missing": (1.0, 0.5),        # 0/1; centre at "no second opinion", the common case
-    "log_density_net": (0.5, 0.75),  # like log_density; the chain's own neighbours removed
+    "log_density_net": FIXED_SCALING["log_density"],  # like log_density; the chain's own neighbours removed
     "amp_ref": (-20.0, 10.0),        # dB relative to the reference tone; real clicks −50 … −15, music −15 … +5
     "chain_margin": (CHAIN_MARGIN_MAX_DB / 10, 1.0),  # 0 … 4; detected events ≳ 1.8, most at the saturation 4
 }
