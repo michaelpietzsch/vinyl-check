@@ -1,0 +1,16 @@
+{
+  "kind_click": "Clicks",
+  "kind_tick": "Knistern",
+  "kind_pop": "Pops",
+  "noun_click": "Clicks",
+  "noun_tick": "Knistern",
+  "noun_pop": "Pops",
+  "no_examples": "noch keine Beispiele",
+  "too_few_examples": "zu wenige Beispiele: {real} echte, {false_alarms} Fehlalarme (je mindestens {min})",
+  "not_verifiable_master": "lernt, aber noch nicht prüfbar: braucht mindestens {min} Aufnahmen mit Master (vorhanden {n})",
+  "not_verifiable_clicks": "noch nicht prüfbar (zu wenige echte Knackser je Aufnahme)",
+  "check_one_record": "je Aufnahme (alle von einer Platte)",
+  "check_per_recording": "je Aufnahme",
+  "usable": "schätzt die echten {kind} je Aufnahme auf ±{est} % genau (rohe Zählung ±{raw} %)",
+  "too_inaccurate": "Schätzung zu ungenau: ±{est} % je Aufnahme (rohe Zählung ±{raw} %, verlangt höchstens ±{max} %)"
+}

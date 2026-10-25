@@ -1,0 +1,17 @@
+{
+  "unknown": "Unknown setting",
+  "device_invalid": "Not a device name",
+  "rate_invalid": "Choose one of these sample rates: {rates} Hz",
+  "format_invalid": "Choose 16, 24 or 32 bit (S16_LE, S24_3LE or S32_LE)",
+  "inputs_invalid": "Choose {n} different inputs between 1 and {max}, for example [3, 4]",
+  "bool_invalid": "Expected on or off",
+  "locked": "The audio settings cannot be changed while a recording or level check is running.",
+  "test_busy": "A recording or level check is running. Test again when it has ended.",
+  "test_no_audio": "The device opened but delivered no audio.",
+  "hint_rate_asio": "The ASIO driver keeps the rate set in its control panel (or by an external clock). Set the rate there, or choose the driver's rate under Settings → Audio interface.",
+  "alsa_format": "“{device}” cannot deliver {bits} bit ({format}) directly (arecord: {detail}). Choose another bit depth.",
+  "alsa_channels": "“{device}” cannot record with {channels} channels (arecord: {detail}). Some interfaces only record with all their inputs open: set capture_channels to their number in the configuration file.",
+  "alsa_rate": "“{device}” cannot record at {rate} Hz without resampling (arecord: {detail}). Choose a rate the device offers.",
+  "alsa_error": "arecord: {detail}",
+  "asio_notice": "ASIO is a trademark and software of Steinberg Media Technologies GmbH."
+}

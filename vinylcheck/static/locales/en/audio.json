@@ -1,0 +1,6 @@
+{
+  "backend": "Audio system",
+  "backend_alsa": "ALSA (arecord)",
+  "backend_portaudio": "PortAudio (Core Audio, WASAPI, ASIO)",
+  "device_detail": {"one": "{hostapi} · {n} input · {rate} kHz", "other": "{hostapi} · {n} inputs · {rate} kHz"}
+}

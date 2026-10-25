@@ -1,0 +1,20 @@
+{
+  "skip_back": {
+    "one": "Stylus skipped back once (groove repeated): {places}. Check tracking force and anti-skating (alignment mode).",
+    "other": "Stylus skipped back {n} times (groove repeated): {places}. Check tracking force and anti-skating (alignment mode)."
+  },
+  "skip_place": "{time} ({pct:.0f}% into the side)",
+  "long_repeat": "A repeat runs over many revolutions: either the stylus is stuck in the groove, or the music contains a loop exactly one revolution long. Please listen to it.",
+  "level_too_low": "Recording is {diff:.0f} dB quieter than at turntable calibration (music {music:.1f} dBFS, reference tone {ref:.1f} dBFS): was the interface gain changed? Click counts and grade are not comparable with other recordings like this.",
+  "level_too_high": "Recording is {diff:.0f} dB louder than at turntable calibration: risk of clipping, check the interface gain.",
+  "clip_in_music": {
+    "one": "{n} clipped sample in the music (at {time}):",
+    "other": "{n} clipped samples in the music (first at {time}):"
+  },
+  "clip_unusable": "Level too high, the recording is not suitable for comparison.",
+  "clip_tight": "Level close to the limit, the count is still valid.",
+  "clip_reduce_gain": "Reduce the interface gain.",
+  "clip_at_needle_drop": "{n} clipped samples while lowering or lifting the stylus, no effect on the results.",
+  "not_separable": "Music and groove noise cannot be separated (less than 15 dB apart). No quiet passages.",
+  "too_little_quiet": "Less than 6 s of quiet groove found. Include the lead-in and run-out groove in the recording."
+}

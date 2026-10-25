@@ -1,0 +1,18 @@
+{
+  "sounddevice_missing": "Recording on this system needs the Python package sounddevice (PortAudio). Install it with pip install sounddevice, or install vinyl-check with the extra [portaudio].",
+  "portaudio_missing": "The PortAudio library could not be loaded ({error}). On Linux install the package libportaudio2, or record with arecord (audio_backend = \"alsa\").",
+  "device_not_found": "Recording device “{device}” not found. Is it connected and switched on? Choose the device under Settings → Audio interface or in the turntable profile.",
+  "hostapi_resamples": "“{device}” goes through the Windows mixer, which resamples. Choose the WASAPI or ASIO entry of the same device.",
+  "channels_unsupported": "“{device}”: {channels} input channels are needed, the device offers {max}. Choose other inputs or another device under Settings → Audio interface.",
+  "rate_unsupported": "“{device}” cannot record at {rate} Hz without resampling (device default: {default_rate} Hz). {hint}",
+  "hint_rate": "Switch the interface to this rate, or choose a rate it supports under Settings → Audio interface (usually 44100 or 48000).",
+  "hint_rate_wasapi": "In shared mode Windows records in the format set under Sound settings → the device → Properties → Advanced. Set it to this rate, or allow exclusive mode there and turn on WASAPI exclusive mode under Settings → Audio interface.",
+  "format_unsupported": "“{device}” cannot deliver {format} directly. Choose another bit depth under Settings → Audio interface (16, 24 or 32 bit).",
+  "format_unknown": "Unknown sample_format {format}: use S16_LE, S24_3LE or S32_LE.",
+  "device_busy": "“{device}” is in use by another program with exclusive access. Close that program and try again.",
+  "open_failed": "“{device}” could not be opened: {error}",
+  "exclusive_unavailable": "WASAPI exclusive mode is not available ({error}). Recording in shared mode through the Windows mixer: check its format and turn off audio enhancements for this device.",
+  "device_stalled": "“{device}” has delivered no audio for {s} seconds, the recording was ended. Is the device still connected?",
+  "digital_silence": "The device delivers only digital silence. Check the selected input, the input level in the system settings and the cables.",
+  "digital_silence_mac": "The device delivers only digital silence. On macOS allow microphone access for vinyl-check (or the terminal it runs in) under System Settings → Privacy & Security → Microphone, then restart it."
+}

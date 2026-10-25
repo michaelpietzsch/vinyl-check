@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 204 32" role="img" aria-label="vinyl-check">
+<g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="#e9eaeb" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="#e05a48"/><circle cx="27" cy="5" r="2.5" fill="#e9eaeb"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="#e9eaeb" stroke-width="3" stroke-linecap="square"/></g>
+<g transform="translate(42 0)"><g fill="none" stroke="#e9eaeb" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></g>
+</svg>

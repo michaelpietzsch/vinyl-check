@@ -1,0 +1,5 @@
+{
+  "grayscale": "Grayscale",
+  "color": "Color",
+  "range": "{from} – {to} ({s} s) · drag = zoom, double-click = all, click = play from here ·"
+}

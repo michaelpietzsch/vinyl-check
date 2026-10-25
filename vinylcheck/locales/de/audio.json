@@ -1,0 +1,18 @@
+{
+  "sounddevice_missing": "Für Aufnahmen auf diesem System fehlt das Python-Paket sounddevice (PortAudio). Mit pip install sounddevice installieren oder vinyl-check mit dem Extra [portaudio] installieren.",
+  "portaudio_missing": "Die PortAudio-Bibliothek ließ sich nicht laden ({error}). Unter Linux das Paket libportaudio2 installieren oder mit arecord aufnehmen (audio_backend = \"alsa\").",
+  "device_not_found": "Aufnahmegerät „{device}“ nicht gefunden. Ist es angeschlossen und eingeschaltet? Das Gerät unter Einstellungen → Audio-Interface oder im Plattenspieler-Profil wählen.",
+  "hostapi_resamples": "„{device}“ läuft über den Windows-Mixer, der die Abtastrate umrechnet. Den WASAPI- oder ASIO-Eintrag desselben Geräts wählen.",
+  "channels_unsupported": "„{device}“: {channels} Eingangskanäle werden gebraucht, das Gerät bietet {max}. Unter Einstellungen → Audio-Interface andere Eingänge oder ein anderes Gerät wählen.",
+  "rate_unsupported": "„{device}“ kann nicht ohne Umrechnung mit {rate} Hz aufnehmen (Standard des Geräts: {default_rate} Hz). {hint}",
+  "hint_rate": "Das Interface auf diese Rate umstellen oder unter Einstellungen → Audio-Interface eine Rate wählen, die es unterstützt (meist 44100 oder 48000).",
+  "hint_rate_wasapi": "Im geteilten Modus nimmt Windows im Format auf, das unter Soundeinstellungen → Gerät → Eigenschaften → Erweitert eingestellt ist. Dort diese Rate einstellen oder den exklusiven Modus erlauben und unter Einstellungen → Audio-Interface den exklusiven WASAPI-Modus einschalten.",
+  "format_unsupported": "„{device}“ kann {format} nicht direkt liefern. Unter Einstellungen → Audio-Interface eine andere Bittiefe wählen (16, 24 oder 32 Bit).",
+  "format_unknown": "Unbekanntes sample_format {format}: S16_LE, S24_3LE oder S32_LE verwenden.",
+  "device_busy": "„{device}“ wird von einem anderen Programm exklusiv benutzt. Das Programm schließen und erneut versuchen.",
+  "open_failed": "„{device}“ ließ sich nicht öffnen: {error}",
+  "exclusive_unavailable": "Der exklusive WASAPI-Modus ist nicht verfügbar ({error}). Aufnahme im geteilten Modus über den Windows-Mixer: dessen Format prüfen und die Audioverbesserungen für dieses Gerät ausschalten.",
+  "device_stalled": "„{device}“ liefert seit {s} Sekunden keinen Ton, die Aufnahme wurde beendet. Ist das Gerät noch angeschlossen?",
+  "digital_silence": "Das Gerät liefert nur digitale Stille. Gewählten Eingang, Eingangspegel in den Systemeinstellungen und Kabel prüfen.",
+  "digital_silence_mac": "Das Gerät liefert nur digitale Stille. Unter macOS vinyl-check (oder dem Terminal, in dem es läuft) den Mikrofonzugriff erlauben: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon, danach neu starten."
+}

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for a Developer ID signature with the hardened runtime (required for notarization). Unused while the
+  app is unsigned; vinyl-check.spec passes them when VC_CODESIGN_IDENTITY is set (docs/code-signing.md).
+-->
+<plist version="1.0">
+<dict>
+  <!-- Recording from the audio interface. Without it, the hardened runtime delivers silence. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+  <!-- PortAudio's audio callback goes through cffi, which creates executable callback stubs at run time -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>

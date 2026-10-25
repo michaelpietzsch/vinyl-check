@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vinyl-check design system</title>
+<style>
+/* Layout: sections in one column of at most 1120 px, previewing the tokens from docs/design-system.md.
+   Dark (black/anthracite) is the main mood and light the variant; red only for the primary action and recording. */
+:root {
+  --bg:#141516; --card:#202224; --ink:#e9eaeb; --muted:#9da1a5; --line:#34373a;
+  --accent:#e05a48; --accent-ink:#141516; --focus:#7fb3ff;
+  --ok:#58c08a; --warn:#e3b45c; --bad:#e05a48; --info:#7fb3ff;
+  --left:#6fa9e8; --right:#bf8de8; --quiet:rgba(88,192,138,.12); --meter-bg:#2b2e31;
+  --pop:#e05a48; --click:#e3b45c; --tick:#7d8185;
+  --removed:#58c08a; --persistent:#e05a48; --new:#7fb3ff; --wave:#86a8d4;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg:#eef0f1; --card:#ffffff; --ink:#1a1b1c; --muted:#5f6468; --line:#d5d8db;
+  --accent:#b7382c; --accent-ink:#ffffff; --focus:#1a5fb4;
+  --ok:#2a7a4c; --warn:#8f6210; --bad:#b7382c; --info:#1a5fb4;
+  --left:#2255a4; --right:#7640b0; --quiet:rgba(42,122,76,.10); --meter-bg:#e2e4e6;
+  --pop:#b7382c; --click:#8f6210; --tick:#8a8e92;
+  --removed:#2a7a4c; --persistent:#b7382c; --new:#1a5fb4; --wave:#3d5a80; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg:#eef0f1; --card:#ffffff; --ink:#1a1b1c; --muted:#5f6468; --line:#d5d8db;
+  --accent:#b7382c; --accent-ink:#ffffff; --focus:#1a5fb4;
+  --ok:#2a7a4c; --warn:#8f6210; --bad:#b7382c; --info:#1a5fb4;
+  --left:#2255a4; --right:#7640b0; --quiet:rgba(42,122,76,.10); --meter-bg:#e2e4e6;
+  --pop:#b7382c; --click:#8f6210; --tick:#8a8e92;
+  --removed:#2a7a4c; --persistent:#b7382c; --new:#1a5fb4; --wave:#3d5a80; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.47 var(--sans); font-variant-numeric: tabular-nums;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+.wrap { max-width:1120px; margin:0 auto; }
+h1 { font-size:24px; line-height:32px; margin:24px 0 4px; font-weight:600; text-wrap:balance; }
+h2 { font-size:18px; line-height:24px; margin:48px 0 12px; font-weight:600; padding-top:16px; border-top:1px solid var(--line); }
+h3 { font-size:15px; line-height:22px; margin:24px 0 8px; font-weight:600; }
+p, li { max-width:72ch; } .lead { color:var(--muted); margin:0 0 8px; }
+.meta { font-size:13px; line-height:18px; color:var(--muted); }
+code, .mono { font-family:var(--mono); font-size:13px; }
+a { color:var(--info); }
+:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.i { display:inline-block; vertical-align:-0.2em; flex:none; }
+/* Brand */
+.brand { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
+.bcard { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; display:grid; gap:12px; align-content:start; min-width:0; }
+.bcard.forced-light { background:#ffffff; color:#1a1b1c; --accent:#b7382c; border-color:#d5d8db; }
+.bcard.forced-light .meta { color:#5f6468; }
+.bcard.forced-dark { background:#202224; color:#e9eaeb; --accent:#e05a48; border-color:#34373a; }
+.bcard.forced-dark .meta { color:#9da1a5; }
+.bcard.forced-accent { background:#b7382c; color:#ffffff; --accent:#ffffff; border-color:#b7382c; }
+.bcard.forced-accent .meta { color:#ffffff; }
+/* Icons */
+.icons { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
+.ic { display:grid; grid-template-columns:40px 1fr; grid-template-rows:auto auto; column-gap:8px; align-items:center; padding:8px; background:var(--card); border:1px solid var(--line); border-radius:4px; min-width:0; }
+.ic-box { grid-row:1 / span 2; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:4px; background:var(--bg); }
+.ic code { font-size:12px; } .ic span { font-size:12px; line-height:16px; color:var(--muted); }
+.row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.grid24 { width:96px; height:96px; background-color:var(--card); border:1px solid var(--line);
+  background-image:linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size:4px 4px; display:flex; align-items:center; justify-content:center; }
+.grid24 svg { width:96px; height:96px; }
+.fam { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-end; }
+.fam > div { display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+/* Colours */
+.sw { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
+.sw > div { border:1px solid var(--line); border-radius:4px; overflow:hidden; background:var(--card); min-width:0; }
+.sw i { display:block; height:40px; }
+.sw b { display:block; padding:6px 8px 0; font-size:13px; font-weight:600; }
+.sw span { display:block; padding:0 8px 8px; font-size:12px; color:var(--muted); font-family:var(--mono); }
+/* Typography */
+.type { display:grid; gap:12px; }
+.type > div { display:grid; grid-template-columns:minmax(120px, 180px) 1fr; gap:12px; align-items:baseline; min-width:0; }
+.type small { font-size:12px; color:var(--muted); font-family:var(--mono); }
+.t-title { font-size:24px; line-height:32px; font-weight:600; } .t-h2 { font-size:18px; line-height:24px; font-weight:600; }
+.t-body { font-size:15px; line-height:22px; } .t-meta { font-size:13px; line-height:18px; color:var(--muted); }
+.t-micro { font-size:12px; line-height:16px; color:var(--muted); } .t-kpi { font-size:40px; line-height:44px; font-weight:600; }
+/* Components */
+button { font:inherit; font-weight:600; min-height:36px; padding:0 14px; border-radius:4px; border:1px solid var(--line); background:var(--card); color:var(--ink); display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+button.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+button.danger { color:var(--bad); } button.danger:hover { background:var(--bad); color:var(--accent-ink); border-color:var(--bad); }
+button:disabled { opacity:.45; cursor:default; } button.big { min-height:44px; padding:0 18px; }
+button.icon { width:36px; padding:0; justify-content:center; }
+.chip { display:inline-flex; align-items:center; gap:6px; font-size:13px; line-height:18px; padding:2px 8px; border-radius:4px; border:1px solid currentColor; background:var(--card); }
+.chip.ok { color:var(--ok); } .chip.warn { color:var(--warn); } .chip.bad { color:var(--bad); } .chip.info { color:var(--info); }
+.chip.grade { color:var(--ink); font-weight:600; } .chip.filter { color:var(--ink); }
+.L { color:var(--left); font-weight:600; } .R { color:var(--right); font-weight:600; }
+.field { display:grid; gap:4px; max-width:260px; } .field label { font-weight:600; font-size:13px; }
+.field .in { display:flex; align-items:center; border:1px solid var(--line); border-radius:4px; background:var(--card); min-height:36px; padding:0 10px; gap:8px; }
+.field .in input { border:0; background:transparent; color:inherit; font:inherit; width:100%; min-width:0; outline:none; }
+.field .in span { color:var(--muted); font-size:13px; } .field .help { font-size:13px; color:var(--muted); }
+.field.err .in { border-color:var(--bad); } .field.err .help { color:var(--bad); }
+table { border-collapse:collapse; width:100%; font-size:15px; } th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-size:13px; color:var(--muted); font-weight:600; } td.num, th.num { text-align:right; white-space:nowrap; }
+.tbl { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; }
+.banner { display:flex; gap:12px; align-items:center; padding:10px 14px; border:1px solid var(--line); border-left:4px solid var(--warn); border-radius:4px; background:var(--card); flex-wrap:wrap; }
+.banner.bad { border-left-color:var(--bad); } .banner.info { border-left-color:var(--info); }
+.toast { display:inline-flex; gap:10px; align-items:center; padding:10px 14px; background:var(--ink); color:var(--bg); border-radius:4px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+.empty { padding:24px; text-align:center; color:var(--muted); border:1px dashed var(--line); border-radius:8px; }
+.empty b { color:var(--ink); display:block; margin-bottom:4px; }
+/* Deck */
+.deck { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; display:grid; gap:12px; }
+.deck .top { display:flex; gap:16px 24px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.state { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+.state .kpi { font-size:40px; line-height:44px; font-weight:600; }
+.deck.rec .state .kpi, .deck.rec .state .w { color:var(--accent); }
+.meter { display:grid; gap:6px; flex:1 1 280px; min-width:0; }
+.ch { display:grid; grid-template-columns:20px 1fr 64px; gap:8px; align-items:center; }
+.bar { height:14px; background:var(--meter-bg); border-radius:2px; position:relative; overflow:hidden; }
+.bar i { position:absolute; left:0; top:0; bottom:0; } .bar .rms { opacity:.9; } .bar .pk { width:2px; background:var(--ink); }
+.ch:nth-child(1) .rms { background:var(--left); } .ch:nth-child(2) .rms { background:var(--right); }
+.ch .v { text-align:right; font-size:13px; }
+.warnline { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
+.buttons { display:flex; gap:8px; flex-wrap:wrap; }
+/* Screen sketches */
+.sk { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
+.frame { border:1px solid var(--line); border-radius:8px; background:var(--card); padding:8px; display:grid; gap:6px; font-size:12px; line-height:16px; color:var(--muted); min-width:0; }
+.frame .b { border:1px solid var(--line); border-radius:4px; padding:6px 8px; background:var(--bg); min-width:0; }
+.frame .b.acc { border-color:var(--accent); color:var(--accent); font-weight:600; }
+.frame .b.ink { color:var(--ink); font-weight:600; }
+.frame .two { display:grid; grid-template-columns:1fr 2fr; gap:6px; } .frame .three { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.frame .cap { font-weight:600; color:var(--ink); }
+.phone { max-width:220px; }
+@media (prefers-reduced-motion: no-preference) { button { transition: background .12s, color .12s; } }
+</style>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<!-- vinyl-check icon set (copy of vinylcheck/static/icons.svg): 24 px box, 2 px stroke, square ends and corners,
+     2 px inner margin, only circle/line/rectangle/45°. Outline = objects and states, filled = transport
+     (rec, stop, play). Usage: &lt;svg class="i" width="20" height="20" aria-hidden="true"&gt;&lt;use href="icons.svg#i-rec"/&gt;&lt;/svg&gt;
+     Every icon has exactly one meaning (list in docs/design-system.md). -->
+<symbol id="i-disc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/></g></symbol>
+<symbol id="i-tonearm" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="17.5" cy="6.5" r="2.5"/><path d="M15.7 8.3 7 17v4"/></g></symbol>
+<symbol id="i-rec" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="12" cy="12" r="6"/></g></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12"/></g></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><path d="M7 5v14l11-7z"/></g></symbol>
+<symbol id="i-listen" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="4" y="13" width="4" height="6"/><rect x="16" y="13" width="4" height="6"/></g></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M5 12a7 7 0 1 0 2.1-5"/><path d="M4 3v5h5"/></g></symbol>
+<symbol id="i-live" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M4.9 4.9a10 10 0 0 0 0 14.2"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/></g></symbol>
+<symbol id="i-level" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M5 20v-6"/><path d="M12 20V8"/><path d="M19 20V4"/></g></symbol>
+<symbol id="i-analyzer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M4 20v-5"/><path d="M8 20V10"/><path d="M12 20V5"/><path d="M16 20v-8"/><path d="M20 20v-4"/></g></symbol>
+<symbol id="i-spectro" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><rect x="3" y="3" width="18" height="18"/><rect x="7" y="12" width="4" height="4" fill="currentColor" stroke="none"/><rect x="13" y="7" width="4" height="4" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-click" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 14h5l2-9 3 14 2-5h6"/></g></symbol>
+<symbol id="i-skip" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 17h4"/><path d="M7 17c0-8 10-8 10 0"/><path d="M17 17h4"/><path d="M14 14l3 3 3-3"/></g></symbol>
+<symbol id="i-compare" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><rect x="3" y="4" width="7" height="16"/><rect x="14" y="4" width="7" height="16"/><path d="M5 12h3M16 9h3M16 15h3"/></g></symbol>
+<symbol id="i-clean" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3c0 0 6 7 6 11.5a6 6 0 0 1-12 0C6 10 12 3 12 3z"/></g></symbol>
+<symbol id="i-calibrate" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></g></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 7h18M3 12h18M3 17h18"/><rect x="7" y="5" width="3" height="4" fill="currentColor" stroke="none"/><rect x="14" y="10" width="3" height="4" fill="currentColor" stroke="none"/><rect x="9" y="15" width="3" height="4" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-testrecord" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 3v3M21 12h-3M12 21v-3M3 12h3"/></g></symbol>
+<symbol id="i-nut" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></g></symbol>
+<symbol id="i-cover" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><rect x="3" y="3" width="18" height="18"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></g></symbol>
+<symbol id="i-ok" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></g></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3l10 18H2z"/><path d="M12 10v5"/><path d="M12 18v1"/></g></symbol>
+<symbol id="i-bad" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></g></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7v1"/></g></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><path d="M12 7v5h4"/></g></symbol>
+<symbol id="i-storage" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><rect x="3" y="4" width="18" height="7"/><rect x="3" y="13" width="18" height="7"/><path d="M17 7.5h1M17 16.5h1"/></g></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 9a13 13 0 0 1 18 0"/><path d="M6.5 12.5a8 8 0 0 1 11 0"/><path d="M10 16a3 3 0 0 1 4 0"/><path d="M12 19v1"/></g></symbol>
+<symbol id="i-offline" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 9a13 13 0 0 1 18 0"/><path d="M6.5 12.5a8 8 0 0 1 11 0"/><path d="M10 16a3 3 0 0 1 4 0"/><path d="M12 19v1"/><path d="M4 4l16 16"/></g></symbol>
+<symbol id="i-sweep" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M2 12 5 5l3 14 2.5-14 2 14 1.5-14 1.5 14 1.2-14 1.1 14 1-14 .9 14 .8-7"/></g></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M2 12c2.5-7 5-7 7.5 0s5 7 7.5 0 2.5-7 5 0"/></g></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></g></symbol>
+<symbol id="i-export" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 20h16"/></g></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M6 6l12 12M18 6 6 18"/></g></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M9 5l7 7-7 7"/></g></symbol>
+<symbol id="i-rew" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M11 5l-7 7 7 7"/><path d="M20 5l-7 7 7 7"/></g></symbol>
+<symbol id="i-fwd" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M4 5l7 7-7 7"/><path d="M13 5l7 7-7 7"/></g></symbol>
+<symbol id="i-prev" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M15 5l-7 7 7 7"/></g></symbol>
+<symbol id="i-next" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M9 5l7 7-7 7"/></g></symbol>
+</svg>
+
+<div class="wrap">
+<div class="row" style="margin-top:24px;gap:16px"><svg viewBox="0 0 32 32" height="40" role="img" aria-label="vinyl-check signet"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g></svg><h1 style="margin:0">vinyl-check design system</h1></div>
+<p class="lead">Preview of the design system: icons, colours, typography, components and screen sketches. Black and anthracite are the main colours (dark is the main mood, light the variant), and red is reserved for the primary action and the recording state. Source: <code>docs/design-system.md</code>, icons in <code>vinylcheck/static/icons.svg</code>.</p>
+
+<h2>0 · Brand</h2>
+<p>Wordmark and signet are drawn with the same tool as the pictograms: monoline, stroke 3 on 24 units, square ends, only lines, circles and arcs. The signet is a record with a tonearm; the red dot is the label and the only colour. Files: <code>vinylcheck/static/brand/</code>.</p>
+<div class="brand">
+  <div class="bcard"><span class="meta">Logo</span><svg viewBox="0 0 204 32" height="40" style="max-width:100%" role="img" aria-label="vinyl-check"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g><g transform="translate(42 0)"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></g></svg></div>
+  <div class="bcard"><span class="meta">Wordmark</span><svg viewBox="0 0 162 32" height="32" style="max-width:100%" role="img" aria-label="vinyl-check"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></svg></div>
+  <div class="bcard"><span class="meta">Signet 64 · 32 · 16</span><div class="row"><svg viewBox="0 0 32 32" height="64" role="img" aria-label="vinyl-check signet"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g></svg><svg viewBox="0 0 32 32" height="32" role="img" aria-label="vinyl-check signet"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g></svg><svg viewBox="0 0 32 32" height="16" role="img" aria-label="vinyl-check signet"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g></svg></div></div>
+  <div class="bcard forced-light"><span class="meta">on light</span><svg viewBox="0 0 204 32" height="40" style="max-width:100%" role="img" aria-label="vinyl-check"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g><g transform="translate(42 0)"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></g></svg></div>
+  <div class="bcard forced-dark"><span class="meta">on anthracite</span><svg viewBox="0 0 204 32" height="40" style="max-width:100%" role="img" aria-label="vinyl-check"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g><g transform="translate(42 0)"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></g></svg></div>
+  <div class="bcard forced-accent"><span class="meta">on red (recording state only)</span><svg viewBox="0 0 204 32" height="40" style="max-width:100%" role="img" aria-label="vinyl-check"><g transform="translate(0 0)"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="3.5" fill="var(--accent)"/><circle cx="27" cy="5" r="2.5" fill="currentColor"/><path d="M25.2 6.8 18.5 13.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></g><g transform="translate(42 0)"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(2 1)">
+<path transform="translate(0 0)" d="M0 8 L6 22 L12 8"/>
+<path transform="translate(16 0)" d="M2 8 V22 M2 2 V3"/>
+<path transform="translate(24 0)" d="M1.5 8 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(41 0)" d="M0 8 L6 22 M12 8 L3.5 28"/>
+<path transform="translate(57 0)" d="M1.5 2 V22"/>
+<path transform="translate(64 0)" d="M0 15 H7"/>
+<path transform="translate(75 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(93 0)" d="M1.5 2 V22 M1.5 13 a5 5 0 0 1 10 0 V22"/>
+<path transform="translate(110 0)" d="M0.5 15 H14 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(128 0)" d="M11.95 10.05 A7 7 0 1 0 11.95 19.95"/>
+<path transform="translate(146 0)" d="M1.5 2 V22 M10.5 8 L1.5 17 M4.5 14 L11 22"/>
+</g></g></svg></div>
+</div>
+<h2>1 · Icons</h2>
+<p>24 px box, 2 px stroke, square ends and corners, 2 px inner margin, only circle, line, rectangle and 45° diagonal. Two families with the same geometry: <b>transport filled</b> (record, stop, play), <b>everything else as outline</b>. Every icon has exactly one meaning.</p>
+<div class="fam">
+  <div><span class="meta">Construction on the 24 grid</span><div class="grid24"><svg class="i" width="96" height="96" aria-hidden="true"><use href="#i-tonearm"/></svg></div></div>
+  <div><span class="meta">Sizes 16 · 20 · 24</span><div class="row"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-disc"/></svg> <svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-disc"/></svg> <svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-disc"/></svg></div></div>
+  <div><span class="meta">Transport filled</span><div class="row"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-rec"/></svg> <svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-stop"/></svg> <svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-play"/></svg></div></div>
+  <div><span class="meta">States, always with a word</span><div class="row"><span class="chip ok"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-ok"/></svg> ok</span><span class="chip warn"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-warn"/></svg> note</span><span class="chip bad"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-bad"/></svg> problem</span><span class="chip info"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-info"/></svg> info</span></div></div>
+</div>
+<h3>All icons</h3>
+<div class="icons">
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-disc"/></svg></div><code>disc</code><span>record · record check</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-tonearm"/></svg></div><code>tonearm</code><span>overview · lower the stylus</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-rec"/></svg></div><code>rec</code><span>recording</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-stop"/></svg></div><code>stop</code><span>stop</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-play"/></svg></div><code>play</code><span>listen to a position</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-listen"/></svg></div><code>listen</code><span>listen live</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><code>back</code><span>rewind (with a label such as “−30 s”)</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-rew"/></svg></div><code>rew</code><span>30 s back</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-prev"/></svg></div><code>prev</code><span>5 s back</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-next"/></svg></div><code>next</code><span>5 s forward</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-fwd"/></svg></div><code>fwd</code><span>30 s forward</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-live"/></svg></div><code>live</code><span>back to live</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-level"/></svg></div><code>level</code><span>level · level check</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-analyzer"/></svg></div><code>analyzer</code><span>31-band analyzer</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-spectro"/></svg></div><code>spectro</code><span>spectrogram</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-click"/></svg></div><code>click</code><span>clicks · events</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-skip"/></svg></div><code>skip</code><span>groove skip</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-compare"/></svg></div><code>compare</code><span>comparison</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-clean"/></svg></div><code>clean</code><span>cleaning</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-calibrate"/></svg></div><code>calibrate</code><span>calibration (stylus up)</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-sliders"/></svg></div><code>sliders</code><span>alignment · turntable check</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-testrecord"/></svg></div><code>testrecord</code><span>test record · band</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-nut"/></svg></div><code>nut</code><span>settings</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-search"/></svg></div><code>search</code><span>search</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-cover"/></svg></div><code>cover</code><span>cover · Discogs</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-ok"/></svg></div><code>ok</code><span>ok</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-warn"/></svg></div><code>warn</code><span>note</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-bad"/></svg></div><code>bad</code><span>problem</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-info"/></svg></div><code>info</code><span>information</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-clock"/></svg></div><code>clock</code><span>retention · time · jobs</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-storage"/></svg></div><code>storage</code><span>storage</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-wifi"/></svg></div><code>wifi</code><span>connection</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-offline"/></svg></div><code>offline</code><span>connection lost</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-sweep"/></svg></div><code>sweep</code><span>sweep</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-wave"/></svg></div><code>wave</code><span>hum · rumble · master</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-trash"/></svg></div><code>trash</code><span>delete</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-export"/></svg></div><code>export</code><span>export</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-close"/></svg></div><code>close</code><span>close</span></div>
+<div class="ic"><div class="ic-box"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-chevron"/></svg></div><code>chevron</code><span>next · expand</span></div>
+</div>
+
+<h2>2 · Colours</h2>
+<p>Roles, not decoration. Neutrals without a colour cast: black, anthracite, grey. Red belongs only to the primary action and the recording state; the right channel is violet so that red is never ambiguous. Text ≥ 4.5 : 1, icons and bars ≥ 3 : 1 in both themes.</p>
+<div class="sw">
+  <div><i style="background:var(--bg)"></i><b>--bg</b><span>#141516 · light #eef0f1</span></div>
+  <div><i style="background:var(--card)"></i><b>--card</b><span>#202224 · light #ffffff</span></div>
+  <div><i style="background:var(--ink)"></i><b>--ink</b><span>#e9eaeb · light #1a1b1c</span></div>
+  <div><i style="background:var(--muted)"></i><b>--muted</b><span>#9da1a5 · light #5f6468</span></div>
+  <div><i style="background:var(--line)"></i><b>--line</b><span>#34373a · light #d5d8db</span></div>
+  <div><i style="background:var(--accent)"></i><b>--accent</b><span>#e05a48 · light #b7382c</span></div>
+  <div><i style="background:var(--focus)"></i><b>--focus</b><span>#7fb3ff · light #1a5fb4</span></div>
+  <div><i style="background:var(--ok)"></i><b>--ok</b><span>#58c08a · light #2a7a4c</span></div>
+  <div><i style="background:var(--warn)"></i><b>--warn</b><span>#e3b45c · light #8f6210</span></div>
+  <div><i style="background:var(--bad)"></i><b>--bad</b><span>#e05a48 · light #b7382c</span></div>
+  <div><i style="background:var(--info)"></i><b>--info</b><span>#7fb3ff · light #1a5fb4</span></div>
+  <div><i style="background:var(--left)"></i><b>--left</b><span>#6fa9e8 · light #2255a4</span></div>
+  <div><i style="background:var(--right)"></i><b>--right</b><span>#bf8de8 · light #7640b0</span></div>
+  <div><i style="background:var(--quiet)"></i><b>--quiet</b><span>quiet passages</span></div>
+  <div><i style="background:var(--pop)"></i><b>--pop</b><span>#e05a48 · light #b7382c</span></div>
+  <div><i style="background:var(--click)"></i><b>--click</b><span>#e3b45c · light #8f6210</span></div>
+  <div><i style="background:var(--tick)"></i><b>--tick</b><span>#7d8185 · light #8a8e92</span></div>
+  <div><i style="background:var(--removed)"></i><b>--removed</b><span>#58c08a · light #2a7a4c</span></div>
+  <div><i style="background:var(--persistent)"></i><b>--persistent</b><span>#e05a48 · light #b7382c</span></div>
+  <div><i style="background:var(--new)"></i><b>--new</b><span>#7fb3ff · light #1a5fb4</span></div>
+  <div><i style="background:var(--wave)"></i><b>--wave</b><span>#86a8d4 · light #3d5a80</span></div>
+</div>
+
+<h2>3 · Typography</h2>
+<p>System fonts (no network needed), five sizes plus the key figure, two weights. All numbers in tabular figures, technical values in monospace.</p>
+<div class="type">
+  <div><small>24/32 · 600</small><div class="t-title">Test Artist – Test Album</div></div>
+  <div><small>18/24 · 600</small><div class="t-h2">Recordings, side A</div></div>
+  <div><small>15/22 · 400</small><div class="t-body">Crosstalk right → left is 5.0 dB higher: the cartridge is slightly tilted. Check that it sits straight in the headshell.</div></div>
+  <div><small>13/18 · meta</small><div class="t-meta">recorded 2026-01-15 14:52 · Turntable A · 24 bit / 48 kHz · 23:41</div></div>
+  <div><small>12/16 · micro</small><div class="t-micro">Third-octave bands 20 Hz – 20 kHz, ticks = peak hold</div></div>
+  <div><small>40/44 · key figure</small><div class="t-kpi">23:41 &nbsp; <span class="chip grade" style="font-size:18px">VG+ · 78</span></div></div>
+  <div><small>13 · mono</small><div class="mono">hw:CARD=CODEC,DEV=0 · sha256 ae680830a2bf…7261 · 1.0.0</div></div>
+</div>
+
+<h2>4 · Components</h2>
+<h3>Buttons</h3>
+<div class="row">
+  <button class="primary"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-rec"/></svg> Record side</button>
+  <button><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-level"/></svg> Check level</button>
+  <button><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-listen"/></svg> Listen</button>
+  <button><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-back"/></svg> −30 s</button>
+  <button class="danger"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-trash"/></svg> Delete recording</button>
+  <button disabled title="Choose a record first"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-rec"/></svg> Record side</button>
+  <button class="icon" aria-label="close"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-close"/></svg></button>
+</div>
+<p class="meta">One primary button per area. Dangerous actions are red text, filled only on hover. Disabled buttons always show the reason (tooltip or next to them).</p>
+<h3>Chips</h3>
+<div class="row">
+  <span class="chip ok"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-ok"/></svg> ok</span><span class="chip warn"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-warn"/></svg> note</span><span class="chip bad"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-bad"/></svg> problem</span>
+  <span class="chip grade">VG+ · 78</span><span class="chip filter">Side A <svg class="i" width="14" height="14" aria-hidden="true"><use href="#i-close"/></svg></span><span class="chip filter">notes only <svg class="i" width="14" height="14" aria-hidden="true"><use href="#i-close"/></svg></span>
+  <span class="L">L −18.3 dBFS</span><span class="R">R −19.4 dBFS</span>
+</div>
+<h3>Fields</h3>
+<div class="row" style="align-items:flex-start">
+  <div class="field"><label for="f1">Tracking force</label><div class="in"><input id="f1" value="3.01"><span>g</span></div><div class="help">measured with a stylus force gauge</div></div>
+  <div class="field err"><label for="f2">Side</label><div class="in"><input id="f2" value=""><span></span></div><div class="help"><svg class="i" width="14" height="14" aria-hidden="true"><use href="#i-bad"/></svg> Side missing: enter A, B or, for example, C1.</div></div>
+</div>
+<h3>Finding rows</h3>
+<div class="tbl"><table>
+<tr><th>Status</th><th>Figure</th><th class="num">Value</th><th class="num">Target</th><th>Explanation</th><th></th></tr>
+<tr><td><span class="chip warn"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-warn"/></svg> note</span></td><td>Azimuth</td><td class="num">−5.0 dB</td><td class="num">≤ 3 dB</td><td>Crosstalk right → left is 5.0 dB higher: the cartridge is slightly tilted.</td><td><button class="icon" aria-label="Play band"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-play"/></svg></button></td></tr>
+<tr><td><span class="chip ok"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-ok"/></svg> ok</span></td><td>Speed</td><td class="num">−0.02 %</td><td class="num">±0.5 %</td><td>3149.4 Hz instead of 3150 Hz (−0 cent).</td><td><button class="icon" aria-label="Play band"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-play"/></svg></button></td></tr>
+<tr><td><span class="chip bad"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-bad"/></svg> problem</span></td><td>Rumble (silent groove)</td><td class="num">−40.6 dB</td><td class="num">≤ −55 dB</td><td>Fixed line at 59 Hz (not mains hum), probably the motor. Cross-check at 45 rpm.</td><td><button class="icon" aria-label="Play band"><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-play"/></svg></button></td></tr>
+</table></div>
+<h3>Banner, toast, empty state</h3>
+<div class="row" style="align-items:stretch; flex-direction:column; gap:8px; max-width:640px">
+  <div class="banner"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-calibrate"/></svg> <b>Not calibrated.</b> <span>Noise is rated without a reference.</span> <button>Calibrate now</button></div>
+  <div class="banner bad"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-offline"/></svg> <b>Connection to the station lost</b> <span>for 12 s · the recording continues</span></div>
+  <div><span class="toast"><svg class="i" width="18" height="18" aria-hidden="true"><use href="#i-ok"/></svg> Recording 24 analysed · VG+ · 78</span></div>
+  <div class="empty"><svg class="i" width="24" height="24" aria-hidden="true"><use href="#i-disc"/></svg><b>No recording for this record yet</b>Record side A uncleaned, then clean the record and record it again.<br><br><button class="primary"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-rec"/></svg> Record side</button></div>
+</div>
+
+<h2>5 · Deck (transport)</h2>
+<p>Always on top, and it stays in place when you switch areas. One primary button per state. While recording, state and time grow to 40 px, readable from 1.5 metres.</p>
+<div class="deck">
+  <div class="top">
+    <div class="state"><span class="kpi">ready</span><span class="meta">Turntable A · calibrated −91 dBFS · 2.1 GB free</span></div>
+    <div class="meter">
+      <div class="ch"><span class="L">L</span><div class="bar"><i class="rms" style="width:0%"></i></div><span class="v">–</span></div>
+      <div class="ch"><span class="R">R</span><div class="bar"><i class="rms" style="width:0%"></i></div><span class="v">–</span></div>
+    </div>
+  </div>
+  <div class="buttons"><button class="primary big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-rec"/></svg> Record side</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-level"/></svg> Check level</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-sliders"/></svg> Live measurement</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-calibrate"/></svg> Calibration</button></div>
+</div>
+<br>
+<div class="deck rec">
+  <div class="top">
+    <div class="state"><span class="w" style="font-weight:600"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-rec"/></svg> Recording · uncleaned · Side A</span><span class="kpi">12:34</span><span class="meta">Test Artist – Test Album</span></div>
+    <div class="meter">
+      <div class="ch"><span class="L">L</span><div class="bar"><i class="rms" style="width:62%"></i><i class="pk" style="left:78%"></i></div><span class="v">−18.3</span></div>
+      <div class="ch"><span class="R">R</span><div class="bar"><i class="rms" style="width:58%"></i><i class="pk" style="left:74%"></i></div><span class="v">−19.4</span></div>
+    </div>
+  </div>
+  <div class="warnline"><span><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-ok"/></svg> 0 clipped</span><span><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-ok"/></svg> 0 dropouts</span><span><svg class="i" width="16" height="16" aria-hidden="true"><use href="#i-listen"/></svg> Listening 12:04 · 30 s behind live</span></div>
+  <div class="buttons"><button class="primary big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-stop"/></svg> Stop</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-listen"/></svg> Listen off</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-back"/></svg> −30 s</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-live"/></svg> Live</button><button class="big"><svg class="i" width="20" height="20" aria-hidden="true"><use href="#i-analyzer"/></svg> Analyzer</button></div>
+</div>
+
+<h2>6 · Screen sketches</h2>
+<p>Structure, not finish: where things are and which action dominates.</p>
+<div class="sk">
+  <div class="frame"><span class="cap">Overview</span><div class="b ink">Header: vinyl-check · Overview · Record check · Turntable check · System · Settings</div><div class="b acc">Deck: ready · Record side</div><div class="three"><div class="b">Chain<br>device, calibration, storage, retention – a verdict per line</div><div class="b">Recent<br>5 recordings: record, side, condition, grade, date</div><div class="b">Next up …<br>Record side B · Comparison 15 ↔ 16</div></div></div>
+  <div class="frame"><span class="cap">Record</span><div class="b ink">Records › Test Artist – Test Album</div><div class="b acc">Deck</div><div class="two"><div class="b">Cover 96 px<br>Discogs condition<br>Grade VG+ · 78</div><div class="b">Header: title 24 px · primary “Record side” on the right</div></div><div class="b">Filter chips: Side A · condition</div><div class="b">Recordings table: side · copy · condition · date · duration · grade · clicks/min · status · actions<br>2 selected → “Compare (2)”</div></div>
+  <div class="frame"><span class="cap">Recording</span><div class="b ink">Records › … › Recording 16 (after cleaning)</div><div class="b acc">Deck</div><div class="three"><div class="b">VG+ · 78<br>12.4 clicks/min in the music</div><div class="b">Noise −52 dB<br>Skips 0</div><div class="b">Warnings<br>0 clipped · 0 dropouts</div></div><div class="b">Tabs: time axis · spectrogram · events · details</div><div class="b" style="min-height:48px">Time axis 160 px: events ◆ | ·, quiet areas, click = listen</div><div class="b">Primary “Compare with #15” · menu: export, delete</div></div>
+  <div class="frame"><span class="cap">Alignment run</span><div class="b ink">Turntable check › Run 5 “Initial alignment”</div><div class="b acc">Deck · live measurement</div><div class="b">Chips: 3.01 g · anti-skating 3 · no weight · Turntable A · side 1 ✓ · side 2 ✓</div><div class="b">Findings: problem → note → ok<br>status · figure · value · target · explanation · ▶</div><div class="b">Bands: time · type · channel image · role · level</div><div class="b">Δ to run 4 on demand</div></div>
+  <div class="frame phone"><span class="cap">Phone (S)</span><div class="b ink">vinyl-check ☰</div><div class="b acc">● Recording · Side A<br><span style="font-size:20px">12:34</span></div><div class="b">L ▮▮▮▮▮▮▯▯ −18<br>R ▮▮▮▮▮▯▯▯ −19</div><div class="b">0 clipped · 0 dropouts</div><div class="b">Record: Test Artist …</div><div class="b acc" style="text-align:center">■ Stop &nbsp; Listen</div></div>
+</div>
+<p class="meta" style="margin-top:32px">vinyl-check design system · icons and tokens work without any library (CSS custom properties, SVG sprite).</p>
+</div>

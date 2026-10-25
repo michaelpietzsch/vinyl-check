@@ -1,0 +1,16 @@
+{
+  "login_title": "Sign in to vinyl-check",
+  "login_intro": "This device is not yet allowed to use vinyl-check. Enter the access code shown on the computer that runs vinyl-check.",
+  "login_label": "Access code",
+  "login_submit": "Sign in",
+  "login_hint": "You find the code in vinyl-check on that computer under Settings → Network access. Scanning the QR code there signs you in directly.",
+  "login_wrong": "This code is not correct.",
+  "login_locked": "Too many wrong codes. Please wait a minute and try again.",
+  "access_required": "Access code required: open the start page of vinyl-check on this device and enter the code.",
+  "bad_host": "Unknown host name. Open vinyl-check by the IP address or name of the computer it runs on.",
+  "cross_site": "Request from another website refused.",
+  "local_only": "Network access can only be changed on the computer that runs vinyl-check.",
+  "desktop_only": "Network access is set up in the configuration file of this installation.",
+  "lan_failed": "Network access could not be started: {error}",
+  "lan_no_port": "Network access could not be started: no free network port."
+}

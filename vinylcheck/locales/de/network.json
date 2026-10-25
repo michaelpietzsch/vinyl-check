@@ -1,0 +1,16 @@
+{
+  "login_title": "Bei vinyl-check anmelden",
+  "login_intro": "Dieses Gerät darf vinyl-check noch nicht verwenden. Gib den Zugangscode ein, den der Rechner anzeigt, auf dem vinyl-check läuft.",
+  "login_label": "Zugangscode",
+  "login_submit": "Anmelden",
+  "login_hint": "Den Code findest du in vinyl-check auf diesem Rechner unter Einstellungen → Zugriff im Netzwerk. Wer den QR-Code dort scannt, ist direkt angemeldet.",
+  "login_wrong": "Dieser Code stimmt nicht.",
+  "login_locked": "Zu viele falsche Codes. Bitte warte eine Minute und versuche es dann erneut.",
+  "access_required": "Zugangscode nötig: Öffne auf diesem Gerät die Startseite von vinyl-check und gib den Code ein.",
+  "bad_host": "Unbekannter Hostname. Öffne vinyl-check über die IP-Adresse oder den Namen des Rechners, auf dem es läuft.",
+  "cross_site": "Anfrage von einer anderen Website abgelehnt.",
+  "local_only": "Der Zugriff im Netzwerk lässt sich nur auf dem Rechner ändern, auf dem vinyl-check läuft.",
+  "desktop_only": "Der Zugriff im Netzwerk wird bei dieser Installation in der Konfigurationsdatei eingerichtet.",
+  "lan_failed": "Der Zugriff im Netzwerk ließ sich nicht starten: {error}",
+  "lan_no_port": "Der Zugriff im Netzwerk ließ sich nicht starten: kein freier Netzwerk-Port."
+}

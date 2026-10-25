@@ -1,0 +1,7 @@
+{
+  "summary": "vinyl-check ist für die nicht-kommerzielle Nutzung kostenlos; eine kommerzielle Lizenz gibt es auf Anfrage.",
+  "own_license": "Lizenz von vinyl-check",
+  "own_license_missing": "Die Lizenzdatei fehlt in dieser Installation: https://github.com/michaelpietzsch/vinyl-check/blob/main/LICENSE",
+  "third_party": "Software von Dritten",
+  "third_party_source": "Diese Installation läuft mit den Python-Paketen, die auf diesem Rechner installiert sind; jedes bringt seine eigenen Lizenzdateien mit. Die Dateien, die vinyl-check selbst mitliefert, stehen unten."
+}

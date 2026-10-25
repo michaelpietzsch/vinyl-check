@@ -1,0 +1,8 @@
+{
+  "channel_mismatch": "input_channels {pick} does not match channels = {channels} and capture_channels = {cap}",
+  "arecord_missing": "arecord not found (install the alsa-utils package)",
+  "test_file_mismatch": "The test file has {file_rate} Hz/{file_channels} channels, expected {rate} Hz/{channels}",
+  "busy": "A recording or level check is already running",
+  "stopped_end_groove": "Run-out groove detected, stopped automatically",
+  "stopped_max_duration": "Maximum duration reached"
+}

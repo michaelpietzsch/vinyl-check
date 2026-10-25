@@ -1,0 +1,49 @@
+name: Website
+
+# Builds the project website (landing page, download page with sizes and SHA256 checksums, download.json) from the
+# GitHub releases and publishes it on GitHub Pages. Pages needs a public repository (or a paid plan); while the
+# repository is private the site is only built, so the workflow stays green.
+on:
+  release:
+    types: [published, edited, deleted]
+  push:
+    branches: [main]
+    paths: ["site/**", "docs/images/**", "vinylcheck/static/brand/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Build the site from the releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python site/build.py --repo "${{ github.repository }}" --out _site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

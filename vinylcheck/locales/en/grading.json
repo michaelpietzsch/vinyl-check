@@ -1,0 +1,24 @@
+{
+  "metric_clicks_music_per_min": "Clicks/min in the music",
+  "metric_clicks_quiet_per_min": "Clicks/min in quiet passages",
+  "metric_ticks_quiet_per_min": "Crackle/min in quiet passages",
+  "metric_pops_per_min": "Pops/min in the music",
+  "metric_noise_rel_db": "Noise relative to the music (dB)",
+  "label_confirmed": "(confirmed)",
+  "label_above_floor": "above turntable baseline",
+  "label_secondary": "(pause: at most one step lower)",
+  "label_info_only": "(info only, not part of the grade)",
+  "no_metrics": "No usable measurements (no music found?)",
+  "clipped": "No grade: {n} clipped samples in the groove. This is a fault of the recording (gain), not of the record. Record again at a lower level.",
+  "weight_item": "{label} {pct}%",
+  "weighted": "Weighted: {weights} (the worst single grade would be {worst}).",
+  "f_without_skip": "{label} is above the G limit, but the side plays through without skipping: G. F is only given when the stylus skips back.",
+  "secondary_penalty": "{label}: {grade}, which costs one step. The grade comes from the music; pauses cost at most one step.",
+  "skipped_back": {
+    "one": "F: the stylus skipped back once (groove repeated).",
+    "other": "F: the stylus skipped back {n} times (groove repeated)."
+  },
+  "uncalibrated": "Limits not calibrated yet: the grade is a rough estimate.",
+  "floor_applied": "Clicks and crackle in quiet passages are reduced by the turntable baseline ({clicks} clicks, {ticks} crackle per minute in the silent groove of the test record).",
+  "not_in_grade": "Not part of the grade: {metrics}."
+}

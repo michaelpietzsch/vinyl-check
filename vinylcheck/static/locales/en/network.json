@@ -1,0 +1,20 @@
+{
+  "title": "Network access",
+  "allow": "Allow access from other devices on the network",
+  "allow_help": "Phones, tablets and other computers in the same network can then use vinyl-check in their browser, for example right at the turntable. Each device enters the access code once. When this is off, vinyl-check can only be used on this computer.",
+  "remote_hint": "You are using vinyl-check from another device. Network access can only be changed on the computer that runs vinyl-check.",
+  "addresses": "Address for other devices",
+  "address_pick": "Network",
+  "qr_hint": "Scan the QR code with the phone's camera. It contains the access code, so the phone is signed in right away.",
+  "no_qr": "No QR code available: the package segno is not installed.",
+  "code": "Access code",
+  "code_hint": "Or open the address on the device and enter this code once.",
+  "new_code": "New code",
+  "new_code_confirm": "Create a new access code? Every device that is signed in has to enter the new code.",
+  "new_code_done": "New access code created",
+  "firewall_hint": "If the firewall of this computer asks whether vinyl-check may accept incoming connections, allow it for private networks.",
+  "no_address": "No network address found. Is this computer connected to a network?",
+  "turned_on": "Network access on",
+  "turned_off": "Network access off",
+  "config_hint_desktop": "These values are in {file}; create the file if it does not exist yet. Quit and reopen vinyl-check after changing it."
+}

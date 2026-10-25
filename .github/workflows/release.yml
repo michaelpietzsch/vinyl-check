@@ -1,0 +1,47 @@
+name: Release
+
+# Push a tag like v1.0.0 to build the packages and publish a GitHub release with them.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Tag matches package version
+        run: |
+          v=$(python -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('vinylcheck/__init__.py').read()).group(1))")
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $v"; exit 1; }
+      - name: Test
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pytest -q
+      - name: Build
+        run: python -m build
+      - name: Release notes from CHANGELOG.md
+        run: |
+          python - <<'EOF'
+          import os, re
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          notes = m.group(1).strip() if m else f"vinyl-check {version}"
+          # The desktop apps are attached by desktop.yml a few minutes after this release is created
+          notes += ("\n\n### Desktop apps\n\nThe macOS disk image (Apple Silicon) and the Windows installer follow "
+                    "a few minutes after this release is published. They are not signed yet: see "
+                    "[Code signing](https://github.com/michaelpietzsch/vinyl-check/blob/main/docs/code-signing.md) "
+                    "for the first start.")
+          open("release-notes.md", "w", encoding="utf-8").write(notes)
+          EOF
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "vinyl-check ${GITHUB_REF_NAME#v}" --notes-file release-notes.md

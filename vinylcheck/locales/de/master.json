@@ -1,0 +1,23 @@
+{
+  "part_start": "Anfang",
+  "part_middle": "Mitte",
+  "part_end": "Ende",
+  "wow_unremarkable": "unauffällig",
+  "wow_eccentric": "Mittelloch außermittig (Schwankung nimmt nach innen zu)",
+  "wow_constant": "gleichbleibend: eher Plattenteller oder Antrieb",
+  "wow_increases_slightly": "nimmt leicht nach innen zu",
+  "channels_swapped": "Kanäle vertauscht (links ↔ rechts)",
+  "reason_other_side": "Die Aufnahme passt nicht zu diesem Master, aber zum Master von Seite {side}: andere Seite aufgelegt oder Etikett vertauscht.",
+  "reason_no_match": "Die Aufnahme passt nicht zu diesem Master: andere Platte, andere Seite oder zu wenig Musik aufgenommen.",
+  "warn_polarity_inverted": "Polarität: gedreht. Beide Kanäle sind gegenüber dem Master umgedreht. Das kann an jeder Stelle der Kette liegen (Schnitt, Tonabnehmer, Vorverstärker des Plattenspielers) und ist höchstens im direkten Vergleich hörbar.",
+  "warn_polarity_left": "Polarität: links verpolt. Ein Kanal ist gegenüber dem Master umgedreht: Bass und Mitte löschen sich teils aus, das Stereobild wird diffus. Erst Tonabnehmer-Anschluss und Kabel prüfen, sonst liegt es am Schnitt.",
+  "warn_polarity_right": "Polarität: rechts verpolt. Ein Kanal ist gegenüber dem Master umgedreht: Bass und Mitte löschen sich teils aus, das Stereobild wird diffus. Erst Tonabnehmer-Anschluss und Kabel prüfen, sonst liegt es am Schnitt.",
+  "warn_channels_swapped": "Kanäle vertauscht: Links auf dem Vinyl ist rechts im Master. Kabel und Tonabnehmer-Anschluss prüfen, sonst liegt es am Schnitt.",
+  "warn_eccentric": "Gleichlauf je Umdrehung bis ±{wow:.2f} %, nach innen zunehmend: Mittelloch etwa {ecc:.2f} mm außermittig.",
+  "warn_ends_early": "Aufnahme endet {s} s vor dem Ende der Musik im Master.",
+  "warn_starts_late": "Aufnahme beginnt erst nach dem Musikanfang des Masters.",
+  "warn_pre_echo": {
+    "one": "Vorecho in {n} Pause, am stärksten {db:.0f} dB zur Musik: in leisen Einsätzen hörbar.",
+    "other": "Vorecho in {n} Pausen, am stärksten {db:.0f} dB zur Musik: in leisen Einsätzen hörbar."
+  }
+}

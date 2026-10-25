@@ -1,0 +1,262 @@
+# Changelog
+
+All notable changes to vinyl-check are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.1] – unreleased
+
+### Added
+
+- The version is shown next to the logo; a click opens *Device and service* in the settings.
+- Recording on macOS and Windows through PortAudio (`sounddevice`): Core Audio, WASAPI (exclusive mode by default,
+  shared mode as a fallback) and ASIO (where a driver is installed). The same rules as with `arecord` apply: the
+  configured rate and sample format, no resampling (a device that cannot record at the configured rate is refused
+  with a message that says what to change), dropouts counted, inputs picked with `capture_channels` and
+  `input_channels`. Samples that the host API delivers as floating point are converted back to the converter's
+  integer values exactly.
+- Configuration keys `audio_backend` (`auto`, `alsa`, `portaudio`; environment variable `VINYLCHECK_AUDIO_BACKEND`),
+  `wasapi_exclusive` and `asio`. `auto` keeps `arecord` on Linux, so existing installations need no change.
+- The device selection of the turntable profile lists PortAudio devices with audio system, inputs and default rate.
+  Their names (`<audio system>: <device name>`) stay valid across restarts and re-plugging, and `device` in the
+  configuration also accepts a part of the name. The settings show which audio system records.
+- The recording status shows a note when WASAPI exclusive mode is not available, and when a device delivers only
+  digital silence (on macOS usually missing microphone access). A device that stops delivering audio ends the
+  recording with a message.
+- Setup guide: recording on macOS and Windows (Core Audio, WASAPI, ASIO, bit depth, exclusive mode, enhancements,
+  system sounds).
+- Desktop apps for macOS (Apple Silicon, disk image) and Windows (x64, installer with uninstaller), built with
+  PyInstaller from the same code base. The engine runs on 127.0.0.1 and the interface opens in a native window
+  (pywebview); closing the window stops the engine, and the app asks first while a recording or an analysis runs.
+  The computer is kept awake during a recording. PyTorch (second opinion) is not part of the apps. From source:
+  `pip install ".[desktop]"` and `vinyl-check-desktop`.
+- Access from other devices in the desktop app: the setting *Allow access from other devices on the network* (off
+  by default) opens the interface to the local network and shows the address, a QR code and an access code. Other
+  devices enter the code once (or scan the QR code, which carries it) and stay signed in with a cookie; the
+  computer itself never needs it, and a new code signs all devices out. A service can require a code too, with the
+  new configuration key `access_code`; without it, a station stays open to its network as before.
+- `vinyl-check-desktop --selftest` checks an installation without a window: API, interface, WebSocket, an analysis
+  in the worker process, a PDF report, the QR code, PortAudio and the window toolkit. CI runs it on the built apps
+  (`.github/workflows/desktop.yml`), which are attached to each release.
+- The license page `/licenses` with vinyl-check's license and, in the desktop apps, the notices of all bundled
+  third-party software (`THIRD-PARTY-NOTICES.txt`, generated at build time), linked from the settings.
+- [Code signing](docs/code-signing.md): status of the apps (not signed yet), first start on macOS and Windows, and
+  how signing can be switched on. Windows signing is prepared in the workflow and stays off until configured.
+- *Settings → Audio interface*: recording device, sample rate, bit depth, the pair of inputs and, on Windows, WASAPI
+  exclusive mode and ASIO can be set in the interface (`/api/audio`), so the desktop apps need no configuration
+  file. The device list shows audio interfaces first with their inputs and current rate; microphones, phones and
+  virtual devices are listed separately and never chosen automatically. Only the rates the device reports are
+  offered, and the page says when the interface would be switched to another rate. *Test* opens the device with
+  the form's values for one second and shows the peak level per input or the reason it was refused (arecord's
+  messages included). Values set there take precedence over the configuration file and apply from the next
+  recording or level check without a restart; changes are refused while one runs.
+- *Settings → Discogs*: the personal access token and the Discogs user name can be entered in the interface
+  (`/api/discogs/account`), so the desktop apps need no configuration file for Discogs either. An empty user name
+  is taken from the token. *Test connection* (`/api/discogs/test`) asks Discogs whom the token belongs to without
+  saving it and warns when that is not the user name entered. The values apply at once without a restart, take
+  precedence over `discogs_token` and `discogs_username` in the configuration file, and *Remove access token*
+  deletes them. The token is kept in the database; the API only ever returns its last four characters and it is
+  never logged. Switching to another account drops the previous account's cached collection. Connecting through a
+  Discogs app (OAuth) works as before.
+
+### Changed
+
+- The interface starts in English for everyone. The new configuration key `language` sets another default (for
+  example `"de"` on a station used in German), `"auto"` follows the browser as before; a language chosen in the
+  settings always wins.
+- License: vinyl-check is now licensed under the PolyForm Noncommercial License 1.0.0. Personal and other
+  non-commercial use stays free; commercial use requires a commercial license from the author.
+- `sounddevice` is a dependency on macOS and Windows. On Linux it is optional (extra `[portaudio]`) and only
+  imported when PortAudio records.
+- Entries of `/api/devices` carry the field `device` (the value to store in a profile); ALSA entries keep `alsa`.
+- Without a service configuration (no `VINYLCHECK_CONFIG`, no `/etc/vinyl-check/config.toml`), configuration,
+  database and recordings live in the user's folders: `~/Library/Application Support/vinyl-check` on macOS,
+  `%LOCALAPPDATA%\vinyl-check` on Windows and the XDG folders on Linux. Service installations keep their paths.
+- The PDF reports use the IBM Plex fonts that now ship with the package (SIL Open Font License); the system's fonts
+  remain the fallback.
+- The idle restart after a deployment only applies to the service, not to the desktop app.
+- Windows: ASIO is used by default where an interface has an ASIO driver (`asio = "auto"`, the new default; `true`
+  and `false` still work, `false` = WASAPI only). PortAudio's ASIO build is loaded, which carries WASAPI as well;
+  ASIO drivers are listed first and preferred by the automatic choice, WASAPI exclusive mode serves devices without
+  one. A rate the ASIO driver refuses points to its control panel.
+- Without a configured device, vinyl-check picks an audio interface with enough inputs (an ASIO driver first, then
+  USB) and never a microphone, phone or virtual device; without one it asks to choose a device. On macOS and
+  Windows the rate follows the interface's current rate and the bit depth is 24 bit for interfaces, unless set in
+  the settings or the configuration file. A station (arecord) keeps its configured values.
+- The level check listens on the active turntable profile's device, like the recording.
+- `/licenses` names ASIO as a trademark of Steinberg Media Technologies GmbH; the third-party notices of the
+  Windows app state the Steinberg ASIO SDK Licensing Agreement.
+- When Discogs is not set up, the interface and the API point to *Settings → Discogs*; only a service also names
+  the configuration file, as the alternative.
+- In test mode (a test file instead of a turntable), *Settings → Audio interface* shows a note instead of the
+  choice of inputs, which the test file ignores.
+- Stopping the service or quitting the desktop app ends a running analysis at once instead of waiting for it to
+  finish; it keeps its state and runs again at the next start.
+
+### Fixed
+
+- Quitting the desktop app shuts the analysis process down cleanly, within a few seconds and with a hard exit as
+  the fallback when something hangs, so Python's resource tracker no longer warns about leaked semaphores.
+- Covers are requested with the credentials in use; with a Discogs app (OAuth) the request carried an empty token.
+
+## [1.0.0] – 2026-10-23
+
+First release.
+
+### Added
+
+- Multilingual interface in English and German. The web interface, API messages and errors, analysis findings and
+  PDF reports come from translation catalogs (`vinylcheck/locales/`, `vinylcheck/static/locales/`). The language
+  follows the browser, can be chosen in the settings and falls back to English. Numbers and dates follow the chosen
+  language. Messages are stored language-neutral and rendered in the reader's language.
+- Tests that keep all catalogs complete, with identical keys and placeholders in every language.
+- Continuous integration on GitHub Actions: lint, tests on Linux (Python 3.11 to 3.14, with and without PyTorch),
+  macOS and Windows, package build; releases are built from version tags.
+- Packaging with `pyproject.toml`: `pip install .`, the console command `vinyl-check`, and the optional extra
+  `[ml]` for the second-opinion network (PyTorch).
+- Documentation: setup guide (from USB turntable to high end), user guide, measurement methods, architecture of
+  stations and a central hub, design system, translating guide, contributing guide.
+
+### Changed
+
+- English code base: modules, identifiers, comments, docstrings, log messages and tests are in English. Modules
+  renamed, for example `alignment`, `learning` and `second_opinion`.
+- Installation-specific values (hosts, addresses) are no longer part of the repository. `deploy.sh` takes its
+  target from `VC_TARGET` or `--target=user@host`; `--now` restarts at once.
+- Stored and exchanged values are English codes: judgements of detections and skips, skip kinds, visual findings,
+  master polarity and gaps, approval verdicts, side length sources, alignment band types, roles and channel modes,
+  anti-skating verdicts and target map ids. API result keys follow (`explanation`, `interpretation`, `target`,
+  `previous`/`current`). The interface shows them through the catalogs as before.
+- **Existing databases are migrated automatically** on the first start, and a backup is kept next to the database
+  (`<name>.pre-1.0.0-<time>.sqlite`). Notes, titles and other text you typed stay as they are. Texts that earlier
+  versions stored with a result (warnings, alignment findings and advice) are kept in German; analyse a recording
+  again to get them in the selected language.
+- The configuration section `[justage]` is now `[alignment]`; the old name is still read, with a warning in the log.
+- Interface addresses are `#record`, `#alignment` and `#docs`; old bookmarks keep working.
+- The idle-restart marker of a deployment is `restart-when-idle`, and database backups are named `….pre-….sqlite`.
+- Brand files renamed to `vinyl-check-wordmark.svg` and `…-inverse.svg`.
+- The in-app documentation describes the current grading: weighted clicks and pops in the music, with the limits of
+  grading scheme 5.
+
+### Fixed
+
+- Analyses failed on Windows because the worker process could not lower its priority (no `os.nice`).
+- Alignment advice was appended twice when a target map was applied again, and was not removed when the map judged
+  the value as ok.
+
+## Pre-release history
+
+Versions before 1.0.0 were developed and used privately and were not published. Their history is summarised below
+by minor version.
+
+### 0.9.x
+
+- Learning from master comparisons and manual judgements: an estimate of how many detections are real, validated
+  per recording by cross-validation. Computing the grade from the estimate is optional.
+- Test pressing approval report with charts: timeline with stamper defects and real clicks per copy, spectrogram
+  with markers, excerpts around each audible defect, frequency response, wow and level per track.
+- Approval report as a PDF generated on the server (ReportLab, IBM Plex) instead of browser printing.
+- PDF report per recording.
+- Judged detections are hidden from the event list, with a toggle to show them again.
+- What-if: "don't count" per detection or skip, with the grade recalculated live and nothing saved.
+- Descriptive regions in the event list: lead-in, run-out, lead-in groove, end groove, track, pause between tracks.
+
+### 0.8.x
+
+- Engineer mode: measure a recording against the digital master of the side. Covers alignment, polarity, wrong
+  side, speed of the cut, wow per revolution and centre-hole eccentricity, channels, frequency response, level per
+  track, pauses and pre-echo, which clicks are really on the vinyl, and a grade against the master.
+- Copies compared on the master's time axis: defects common to several copies point to the stamper or the cut.
+- Judging detections directly in the clicks chart. False alarms are shown in grey.
+- Grading schemes 3 to 5: grade from the music only, weighted 90 % clicks and 10 % pops, and milder limits that
+  accept the dust no cleaning removes. Stored analyses are regraded automatically when the scheme changes.
+- One grade everywhere, with the grade against the master next to it. An interim grade "by ear" was dropped.
+- Record grade over all copies, with the best and worst side left out from four sides on.
+- Separate copy column in the recordings table.
+- Comparing more than two recordings against a reference recording.
+- Test pressing approval with checkpoints and a recommendation. Calibrated on real test pressings: up to three
+  audible defects per side common to all copies are a note to the pressing plant, not a reason to reject.
+
+### 0.7.x
+
+- Heavy computations run in a separate low-priority process. A crash there no longer takes down the service.
+- Second opinion from the GrooveClean click network, queried only at the detector's candidates and cached per file
+  checksum.
+- Manual judgements of detections (click, false alarm, unsure) and of skips (run-out groove, no skip), with an
+  immediate recount and an export for training.
+- Recording conditions: uncleaned, after wet cleaning, after dry cleaning, other.
+- System page with running and queued jobs and machine load.
+- Per-track table from the Discogs tracklist, with track borders snapped to the pauses.
+- Preview listening without recording, hover-to-listen, zoom in the clicks and level charts, synchronised time
+  cursor, play from any position, loop in zoom, mini player, report as its own page.
+- Sleeve sticker suggestion per grade.
+- Deploy waits for idle: new code is staged and the service restarts itself once nothing is recording or analysing.
+- Findings (scratch, warp, dirt and more) per copy and side.
+- Grade from the music, with pauses counting at most one step.
+- Quiet passages also detected relative to the music level.
+- Side, copy and condition editable in the recordings table. The table is sortable.
+- Grading scale and criteria as a pop-up on the grade tiles.
+- Own cover upload and tracklist for records that are not on Discogs.
+- In-app documentation page and clipping thresholds in the settings.
+
+### 0.6.x
+
+- Stripe check: a click must be a thin vertical line in the spectrogram, which separates crackle from drum and
+  cymbal hits. Pops need click strength, and clipped peaks never count.
+- Turntable click floor, measured in the silent groove of the test record and stored in the profile.
+- "Listen to the clicks only": a difference track of all counted clicks.
+- One sensitivity control per turntable profile and per recording.
+- F only when the stylus skips back. No grade when the groove is clipped. Noise no longer counts in the grade.
+- Copy label per recording, comparison of copies, history per side with changes in percent, and the record grade
+  as the average of its sides.
+
+### 0.5.x
+
+- Predicting the end of a side from earlier recordings or the Discogs tracklist, with browser notifications.
+- Clipping reported with position, sample count and time.
+- Back skips only with high similarity and an exact revolution period.
+- Groove silence measured from the quietest full second, recurring-scratch chains, clicks and level charts.
+- Comparisons only between recordings of the same side. Without a common alignment the result is "not comparable".
+
+### 0.4.x
+
+- Turntable profiles with a five-step alignment assistant. The active profile adapts every analysis (capture
+  device, chain noise, reference level, speed).
+- Target presets for alignment findings (standard, DIN 45500, strict lab values, manufacturer data), editable in
+  the settings.
+- Direct Discogs integration: read the collection, write the measured condition back, OAuth login.
+- Technical data per recording: true peak, loudness per ITU-R BS.1770-4, correlation, tonal balance, rumble, hum.
+- Recording level checked against the alignment reference.
+- The run-out groove after the music is no longer reported as a skip, and clipping only counts inside the groove.
+
+### 0.3.x
+
+- Alignment mode with a test record: bands recognised by their signal, measurements with targets and advice, live
+  meter, comparison of runs.
+- Skip detector for groove skips.
+- Spectrograms, with the overview stored in the database so it survives audio deletion.
+- Channel selection for interfaces that only record with all channels open.
+- Live charts for frequency response, frequency and level, plus a 31-band analyzer with ballistics.
+- Covers from Discogs.
+- Automatic stop in the run-out groove.
+- Listening in the browser, with rewind during a recording.
+- Design system in the app: logo, dark anthracite palette, icon set, menu and settings page.
+- Fixes from the first measurements with a real test record.
+
+### 0.2.x
+
+- Data integrity: recordings synced to disk, SHA-256 checksum per recording, verified before every re-analysis and
+  comparison.
+- Retention: original audio is deleted after a configurable number of days, and measurements are kept.
+- The service starts even when the data drive fails, and refuses to record without it.
+
+### 0.1.x
+
+- Click, pop and crackle detection from the prediction error of an autoregressive model.
+- Analysis of quiet passages and groove noise, and a suggested condition grade.
+- Before/after comparison with sample-accurate alignment.
+- Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
+
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/michaelpietzsch/vinyl-check/releases/tag/v1.0.0

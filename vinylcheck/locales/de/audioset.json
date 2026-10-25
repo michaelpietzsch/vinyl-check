@@ -1,0 +1,17 @@
+{
+  "unknown": "Unbekannte Einstellung",
+  "device_invalid": "Kein Gerätename",
+  "rate_invalid": "Eine dieser Abtastraten wählen: {rates} Hz",
+  "format_invalid": "16, 24 oder 32 Bit wählen (S16_LE, S24_3LE oder S32_LE)",
+  "inputs_invalid": "{n} verschiedene Eingänge zwischen 1 und {max} wählen, zum Beispiel [3, 4]",
+  "bool_invalid": "Ein oder aus erwartet",
+  "locked": "Die Audio-Einstellungen lassen sich nicht ändern, während eine Aufnahme oder Pegelprüfung läuft.",
+  "test_busy": "Eine Aufnahme oder Pegelprüfung läuft. Nach deren Ende erneut testen.",
+  "test_no_audio": "Das Gerät ließ sich öffnen, hat aber keinen Ton geliefert.",
+  "hint_rate_asio": "Der ASIO-Treiber behält die Rate aus seinem Bedienfeld (oder von einem externen Takt). Die Rate dort einstellen oder unter Einstellungen → Audio-Interface die Rate des Treibers wählen.",
+  "alsa_format": "„{device}“ kann {bits} Bit ({format}) nicht direkt liefern (arecord: {detail}). Eine andere Bittiefe wählen.",
+  "alsa_channels": "„{device}“ kann nicht mit {channels} Kanälen aufnehmen (arecord: {detail}). Manche Interfaces nehmen nur mit allen Eingängen auf: capture_channels in der Konfigurationsdatei auf deren Anzahl setzen.",
+  "alsa_rate": "„{device}“ kann nicht ohne Umrechnung mit {rate} Hz aufnehmen (arecord: {detail}). Eine Rate wählen, die das Gerät anbietet.",
+  "alsa_error": "arecord: {detail}",
+  "asio_notice": "ASIO ist eine Marke und Software der Steinberg Media Technologies GmbH."
+}

@@ -1,0 +1,20 @@
+{
+  "skip_back": {
+    "one": "Nadel {n}× zurückgesprungen (Rille wiederholt): {places}. Abtastung und Antiskating prüfen (Justage-Modus).",
+    "other": "Nadel {n}× zurückgesprungen (Rille wiederholt): {places}. Abtastung und Antiskating prüfen (Justage-Modus)."
+  },
+  "skip_place": "{time} ({pct:.0f} % der Seite)",
+  "long_repeat": "Eine Wiederholung läuft über viele Umdrehungen: hängende Nadel oder ein Loop in der Musik, der genau eine Umdrehung lang ist. Bitte anhören.",
+  "level_too_low": "Aufnahme {diff:.0f} dB leiser als beim Einmessen des Plattenspielers (Musik {music:.1f} dBFS, Referenzton {ref:.1f} dBFS): Gain am Interface verstellt? Knackser-Zahlen und Note sind so nicht mit anderen Aufnahmen vergleichbar.",
+  "level_too_high": "Aufnahme {diff:.0f} dB lauter als beim Einmessen: Übersteuerungsgefahr, Gain am Interface prüfen.",
+  "clip_in_music": {
+    "one": "{n} übersteuertes Sample in der Musik (bei {time}):",
+    "other": "{n} übersteuerte Samples in der Musik (erste bei {time}):"
+  },
+  "clip_unusable": "Pegel zu hoch, Aufnahme für den Vergleich ungeeignet.",
+  "clip_tight": "Pegel knapp, die Zählung stimmt noch.",
+  "clip_reduce_gain": "Gain am Interface zurücknehmen.",
+  "clip_at_needle_drop": "{n} übersteuerte Samples beim Aufsetzen oder Abheben der Nadel, ohne Einfluss auf die Werte.",
+  "not_separable": "Musik und Rillenrauschen nicht trennbar (Abstand < 15 dB). Keine ruhigen Passagen.",
+  "too_little_quiet": "Weniger als 6 s ruhige Rille gefunden. Einlauf/Auslauf mit aufnehmen."
+}

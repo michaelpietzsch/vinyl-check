@@ -1,0 +1,24 @@
+{
+  "metric_clicks_music_per_min": "Clicks/min in der Musik",
+  "metric_clicks_quiet_per_min": "Clicks/min in ruhigen Passagen",
+  "metric_ticks_quiet_per_min": "Knistern/min in ruhigen Passagen",
+  "metric_pops_per_min": "Pops/min in der Musik",
+  "metric_noise_rel_db": "Rauschen relativ zur Musik (dB)",
+  "label_confirmed": "(bestätigt)",
+  "label_above_floor": "über Laufwerksgrund",
+  "label_secondary": "(Pause: höchstens eine Stufe Abzug)",
+  "label_info_only": "(nur Info, nicht in der Note)",
+  "no_metrics": "Keine auswertbaren Messgrößen (keine Musik gefunden?)",
+  "clipped": "Keine Note: {n} übersteuerte Samples in der Rille. Das ist ein Fehler der Aufnahme (Gain), nicht der Platte. Leiser aufnehmen und wiederholen.",
+  "weight_item": "{label} {pct} %",
+  "weighted": "Gewichtet: {weights} (schlechteste Einzelnote wäre {worst}).",
+  "f_without_skip": "{label} liegt über der G-Grenze, die Seite spielt aber ohne Sprung durch: G. F gibt es nur, wenn die Nadel zurückspringt.",
+  "secondary_penalty": "{label}: {grade}, das kostet eine Stufe. Die Note kommt aus der Musik, Pausen zählen höchstens eine Stufe.",
+  "skipped_back": {
+    "one": "F: Nadel {n}× zurückgesprungen (Rille wiederholt).",
+    "other": "F: Nadel {n}× zurückgesprungen (Rille wiederholt)."
+  },
+  "uncalibrated": "Grenzwerte noch nicht kalibriert: Note ist eine grobe Einschätzung.",
+  "floor_applied": "Clicks und Knistern in ruhigen Passagen sind um den Laufwerksgrund vermindert ({clicks} Clicks, {ticks} Knistern je Minute in der stillen Rille der Testplatte).",
+  "not_in_grade": "Nicht in der Note: {metrics}."
+}

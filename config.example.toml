@@ -1,0 +1,74 @@
+# vinyl-check — configuration
+# Installed to: /etc/vinyl-check/config.toml (deploy.sh only creates it, never overwrites it)
+# Every key is optional; the values shown are the defaults unless noted. Unknown keys are an error.
+
+data_dir = "/mnt/data/vinyl-check"      # recordings (WAV) → a fast data disk (SSD/NVMe)
+state_dir = "/var/lib/vinyl-check"      # database → system disk (small)
+require_mount = "/mnt/data"             # no recording without this mounted disk; "" = no check (default)
+host = "0.0.0.0"
+port = 8080
+language = "en"                         # interface language until a user picks one in the settings; "auto" = browser
+# access_code = ""                      # other devices must enter this code once (then a cookie); "" = open network
+
+# Device, rate, bit depth and inputs can also be set in the interface (Settings → Audio interface); values saved
+# there take precedence over the keys below until "Back to the configuration file" removes them.
+device = ""                             # empty = first USB capture device, otherwise e.g. "hw:CARD=CODEC,DEV=0"
+rate = 48000
+channels = 2
+# capture_channels = 4                  # only if the device refuses 2 channels ("Channels count non available")
+# input_channels = [1, 2]               # which of them are left, right (1-based)
+# sample_format: S16_LE | S24_3LE | S32_LE, as the interface supports (arecord --dump-hw-params); 24 bit if possible
+sample_format = "S16_LE"
+
+# Audio backend (docs/setup-guide.md, "Recording on macOS and Windows"): "alsa" = arecord on the hw: device,
+# "portaudio" = Core Audio (macOS), WASAPI or ASIO (Windows); "auto" = arecord on Linux when it is installed,
+# PortAudio elsewhere. Leave it at "auto" on the Raspberry Pi.
+# audio_backend = "auto"
+# With PortAudio, device is "<audio system>: <name>" as the turntable profile lists it, or a part of the name,
+# for example "Core Audio: USB Audio CODEC", "Windows WASAPI: Line (USB Audio CODEC)" or just "Scarlett".
+# wasapi_exclusive = true               # Windows: exclusive mode, past the Windows mixer; shared mode if not possible
+# asio = "auto"                         # Windows: offer and prefer ASIO drivers where installed; false = WASAPI only
+
+max_record_minutes = 45
+min_free_gb = 2.0
+retention_days = 30                     # delete original audio after this many days (measurements stay), 0 = never
+discogs_sync_minutes = 15               # sync the collection this often; a search without hits syncs at once
+
+# Discogs (optional): either a personal access token plus user name (Discogs → Settings → Developers; easier to
+# enter in the web interface under Settings → Discogs, which takes precedence over these two keys) …
+# discogs_token = ""
+# discogs_username = ""
+# … or an OAuth app (Discogs → Settings → Developers → Applications), authorized in the web interface
+# discogs_consumer_key = ""
+# discogs_consumer_secret = ""
+# discogs_url = ""                      # deprecated, ignored (was an external service, e.g. "http://<host>:4990")
+
+# [detect]                               # click detection
+# threshold = 8.0                        # higher = fewer but surer hits
+# order = 32
+# frame = 2048
+# merge_ms = 1.5
+
+# [analysis]
+# click_strength = 25.0                  # from this strength a "click", below it "crackle"
+# pop_dbfs = -20.0                       # from this level a "pop"
+# no_groove_dbfs = -75.0                 # quieter = stylus up (only without calibration)
+
+# [grading]                              # upper limits per grade: NM, VG+, VG, G+, G (above: F)
+# calibrated = false                     # true once checked against records of known condition
+# graded = ["clicks_music_per_min", "pops_per_min"]           # what makes the grade: the music
+# weights = [["clicks_music_per_min", 0.9], ["pops_per_min", 0.1]]   # [] = worst single grade
+# secondary = []                         # e.g. ["clicks_quiet_per_min"]: pauses may cost at most one step
+# clicks_music_per_min = [8, 15, 30, 50, 100]
+# clicks_quiet_per_min = [3, 10, 30, 80, 200]
+# ticks_quiet_per_min = [20, 60, 150, 400, 1000]
+# pops_per_min = [2.0, 5.0, 10.0, 20.0, 40.0]
+# noise_rel_db = [-55, -48, -42, -36, -30]
+
+# [alignment]                            # turntable alignment with a test record
+# thd_limit_pct = 3.0                    # THD from which a channel counts as distorted on the anti-skating ramp
+# knee_db = 6.0                          # … or a jump above the trend of the lower half of the ramp (and > 1 %)
+# balance_db = 1.0                       # channel balance tolerance (typical cartridge spec: 1 dB)
+# resonance_hz = [8.0, 12.0]             # target band of the tonearm/cartridge resonance
+# target_ref_dbfs = -20.0                # level setting: 1 kHz reference tone of the test record at the interface
+# target_ref_tol_db = 4.0

@@ -1,0 +1,4 @@
+{
+  "no_anchors": "No common music found (0 anchors): the recordings cannot be aligned. A before/after comparison needs two recordings of the same record side.",
+  "too_few_anchors": "Only {used} of at least {needed} required anchors found: the recordings do not line up reliably (different side, different pressing or too little music)."
+}

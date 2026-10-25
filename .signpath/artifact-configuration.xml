@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows installer. Used only once Windows signing through SignPath is set
+  up (docs/code-signing.md); add it to the SignPath project as its artifact configuration.
+
+  desktop.yml submits the GitHub artifact "windows-installer-unsigned": a zip file whose root holds the installer
+  vinyl-check-<version>-windows-x64-setup.exe, and passes the version as the parameter "version". Only a file with
+  exactly this name, product name and product version (the version resource written by packaging/windows/vinyl-check.iss)
+  is signed.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="vinyl-check-${version}-windows-x64-setup.exe" product-name="vinyl-check" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

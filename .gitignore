@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Runtime data of a local instance: recordings, database, configuration with keys
+data/
+state/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+config.toml
+*.wav

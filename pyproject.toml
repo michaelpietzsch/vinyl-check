@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinyl-check"
+dynamic = ["version"]
+description = "Measure the condition of vinyl records: click and pop detection, condition grading, cleaning comparison, turntable alignment with test records and comparison against the master."
+readme = "README.md"
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE", "vinylcheck/weights/LICENSE-grooveclean.txt"]
+requires-python = ">=3.11"
+authors = [{ name = "Michael Pietzsch" }]
+keywords = ["vinyl", "turntable", "record", "audio", "click detection", "grading", "test pressing", "dsp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Natural Language :: German",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "soundfile>=0.12",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "websockets>=12",
+    "reportlab>=4.0",
+    "pillow>=10",
+    # Recording through PortAudio (Core Audio, WASAPI, ASIO); the wheels bring PortAudio along. Linux records with
+    # arecord and only needs it with the extra [portaudio].
+    "sounddevice>=0.5; sys_platform == 'darwin' or sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+# Second opinion on strong clicks by a small neural network (GrooveClean weights ship with the package)
+ml = ["torch>=2.1"]
+# Recording through PortAudio on Linux (instead of arecord); needs the system library libportaudio2
+portaudio = ["sounddevice>=0.5"]
+# Desktop app (vinyl-check-desktop): native window around the interface, QR code for access from the phone
+desktop = ["pywebview>=5.3", "segno>=1.6"]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "build>=1.2", "segno>=1.6"]
+
+[project.scripts]
+vinyl-check = "vinylcheck.__main__:main"
+
+[project.gui-scripts]
+vinyl-check-desktop = "vinylcheck.desktop:main"
+
+[project.urls]
+Homepage = "https://github.com/michaelpietzsch/vinyl-check"
+Documentation = "https://github.com/michaelpietzsch/vinyl-check/tree/main/docs"
+Issues = "https://github.com/michaelpietzsch/vinyl-check/issues"
+Changelog = "https://github.com/michaelpietzsch/vinyl-check/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = { attr = "vinylcheck.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["vinylcheck*"]
+
+[tool.setuptools.package-data]
+vinylcheck = ["static/**/*", "locales/**/*.json", "weights/*", "fonts/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# The code base deliberately uses compact one-liners (a; b and named lambdas) in numeric code
+ignore = ["E702", "E731", "E741"]

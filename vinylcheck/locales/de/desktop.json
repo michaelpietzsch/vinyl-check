@@ -1,0 +1,5 @@
+{
+  "quit_busy": "Eine Aufnahme oder Analyse läuft. vinyl-check trotzdem beenden? Eine Aufnahme endet hier, eine Analyse beginnt beim nächsten Start von vinyl-check von vorn.",
+  "quit": "Beenden",
+  "cancel": "Abbrechen"
+}

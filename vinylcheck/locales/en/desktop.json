@@ -1,0 +1,5 @@
+{
+  "quit_busy": "A recording or an analysis is running. Quit vinyl-check anyway? A recording stops here; an analysis starts again the next time you open vinyl-check.",
+  "quit": "Quit",
+  "cancel": "Cancel"
+}

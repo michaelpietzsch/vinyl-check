@@ -1,0 +1,20 @@
+{
+  "title": "Zugriff im Netzwerk",
+  "allow": "Zugriff von anderen Geräten im Netzwerk erlauben",
+  "allow_help": "Handys, Tablets und andere Rechner im selben Netzwerk können vinyl-check dann im Browser verwenden, zum Beispiel direkt am Plattenspieler. Jedes Gerät gibt einmal den Zugangscode ein. Ist das aus, lässt sich vinyl-check nur auf diesem Rechner verwenden.",
+  "remote_hint": "Du verwendest vinyl-check von einem anderen Gerät aus. Der Zugriff im Netzwerk lässt sich nur auf dem Rechner ändern, auf dem vinyl-check läuft.",
+  "addresses": "Adresse für andere Geräte",
+  "address_pick": "Netzwerk",
+  "qr_hint": "Den QR-Code mit der Kamera des Handys scannen. Er enthält den Zugangscode, das Handy ist damit sofort angemeldet.",
+  "no_qr": "Kein QR-Code verfügbar: Das Paket segno ist nicht installiert.",
+  "code": "Zugangscode",
+  "code_hint": "Oder auf dem Gerät die Adresse öffnen und diesen Code einmal eingeben.",
+  "new_code": "Neuer Code",
+  "new_code_confirm": "Einen neuen Zugangscode erzeugen? Jedes angemeldete Gerät muss dann den neuen Code eingeben.",
+  "new_code_done": "Neuer Zugangscode erzeugt",
+  "firewall_hint": "Fragt die Firewall dieses Rechners, ob vinyl-check eingehende Verbindungen annehmen darf, für private Netzwerke erlauben.",
+  "no_address": "Keine Netzwerkadresse gefunden. Ist dieser Rechner mit einem Netzwerk verbunden?",
+  "turned_on": "Zugriff im Netzwerk an",
+  "turned_off": "Zugriff im Netzwerk aus",
+  "config_hint_desktop": "Diese Werte stehen in {file}; die Datei anlegen, falls es sie noch nicht gibt. Nach einer Änderung vinyl-check beenden und neu öffnen."
+}

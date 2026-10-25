@@ -1,0 +1,14 @@
+{
+  "http_error": "Discogs {code}: {reason}",
+  "token_invalid": "token invalid or expired (Discogs → Settings → Developers)",
+  "rate_limited": "Discogs rate limit (60 requests per minute), please try again in a moment",
+  "unreachable": "Discogs not reachable: {error}",
+  "app_not_configured": "Discogs app not set up (discogs_consumer_key/secret)",
+  "no_request_token": "Discogs did not return a request token",
+  "no_access_token": "Discogs did not return an access token",
+  "not_configured": "Discogs is not set up (Settings → Discogs)",
+  "no_identity": "Discogs did not say whom the token belongs to",
+  "unknown_grade": "Unknown grade '{grade}'",
+  "not_in_collection": "The record is not in the collection (or the collection has not been synced yet)",
+  "instance_unknown": "Collection instance unknown: sync the collection"
+}

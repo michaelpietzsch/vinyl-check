@@ -1,0 +1,69 @@
+# vinyl-check — vinyl record test bench (web interface on :8080)
+# Installed to: /etc/systemd/system/vinyl-check.service (by deploy.sh)
+#
+# Sandbox instead of a container: own unprivileged user, system/etc/boot read-only.
+# If the data disk (/mnt/data) is missing, the web interface still runs; the application itself refuses to
+# record (require_mount), so nothing is written to the SD card.
+#
+# ProtectSystem=full rather than strict: with strict, /mnt/data/vinyl-check had to be bound in via ReadWritePaths,
+# and a data disk that failed with I/O errors at boot made the whole service start fail, in an endless restart
+# loop. With full, /mnt is not protected; the user vinylcheck can still only write to /mnt/data/vinyl-check there
+# (file permissions 750).
+
+[Unit]
+Description=vinyl-check – vinyl record test bench (web interface :8080)
+After=network-online.target sound.target mnt-data.mount
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=vinylcheck
+Group=vinylcheck
+SupplementaryGroups=audio
+Environment=VINYLCHECK_CONFIG=/etc/vinyl-check/config.toml
+Environment=PYTHONPATH=/opt/vinyl-check
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/opt/vinyl-check
+# Deploy when idle: deploy.sh puts the code into /opt/vinyl-check.staged; on the next start ExecStartPre (as root,
+# "+") swaps it in. The service ends itself as soon as nothing is running (marker
+# /var/lib/vinyl-check/restart-when-idle), hence Restart=always instead of on-failure.
+ExecStartPre=+/bin/sh -c 'if [ -d /opt/vinyl-check.staged ]; then rm -rf /opt/vinyl-check.old && mv /opt/vinyl-check /opt/vinyl-check.old && mv /opt/vinyl-check.staged /opt/vinyl-check && rm -rf /opt/vinyl-check.old; fi'
+ExecStart=/usr/bin/python3 -m vinylcheck
+Restart=always
+RestartSec=3
+# Analysing one LP side needs 1–2 GB. The computing child process (heavy.py) holds a whole side plus PyTorch,
+# about 2.2 GB for a 23-minute side; the service itself about 0.35 GB. With 3G the child process would die on
+# 30-minute sides (a Raspberry Pi 5 with 8 GB has room for 5G).
+MemoryMax=5G
+
+# ─── Sandbox ────────────────────────────────────────────────────────────────
+NoNewPrivileges=yes
+ProtectSystem=full
+StateDirectory=vinyl-check
+StateDirectoryMode=0750
+ProtectHome=yes
+PrivateTmp=yes
+DevicePolicy=closed
+DeviceAllow=char-alsa rw
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
