@@ -4,6 +4,10 @@ name: Desktop apps
 # them as workflow artifacts: the macOS disk image (Apple Silicon) and the Windows installer. On a version tag the two
 # files are attached to the GitHub release, which release.yml creates; this workflow waits for it.
 #
+# The Windows installer contains PortAudio with ASIO support. It is only built and published once the repository
+# variable WINDOWS_INSTALLER is "true": distributing ASIO support needs the signed Steinberg ASIO SDK licensing
+# agreement (the SDK's other license, GPLv3, does not fit this project's license).
+#
 # Windows code signing is optional and off until it is configured (docs/code-signing.md): with the secret
 # SIGNPATH_API_TOKEN set, the installer is signed through SignPath before it is published; without it, the unsigned
 # installer is published.
@@ -60,6 +64,7 @@ jobs:
 
   windows:
     name: Windows installer (x64)
+    if: vars.WINDOWS_INSTALLER == 'true'
     runs-on: windows-latest
     env:
       # Only used to decide whether the signing step runs; the action reads the secret itself
@@ -155,7 +160,10 @@ jobs:
 
   publish:
     name: Attach to the GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # the Windows job may be switched off (see above); the disk image is attached all the same
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') && !cancelled() && needs.macos.result == 'success'
+      && contains(fromJSON('["success", "skipped"]'), needs.windows.result)
     needs: [macos, windows]
     runs-on: ubuntu-latest
     permissions:
@@ -166,6 +174,7 @@ jobs:
           name: macos-dmg
           path: assets
       - uses: actions/download-artifact@v8
+        if: needs.windows.result == 'success'
         with:
           name: windows-installer
           path: assets

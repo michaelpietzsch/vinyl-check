@@ -35,8 +35,8 @@ jobs:
           m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
           notes = m.group(1).strip() if m else f"vinyl-check {version}"
           # The desktop apps are attached by desktop.yml a few minutes after this release is created
-          notes += ("\n\n### Desktop apps\n\nThe macOS disk image (Apple Silicon) and the Windows installer follow "
-                    "a few minutes after this release is published. They are not signed yet: see "
+          notes += ("\n\n### Desktop apps\n\nThe desktop apps are attached a few minutes after this release is "
+                    "published. They are not signed yet: see "
                     "[Code signing](https://github.com/michaelpietzsch/vinyl-check/blob/main/docs/code-signing.md) "
                     "for the first start.")
           open("release-notes.md", "w", encoding="utf-8").write(notes)

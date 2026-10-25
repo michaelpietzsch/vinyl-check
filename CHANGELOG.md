@@ -5,7 +5,7 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] – unreleased
+## [1.0.1] – 2026-10-26
 
 ### Added
 
@@ -30,7 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   PyInstaller from the same code base. The engine runs on 127.0.0.1 and the interface opens in a native window
   (pywebview); closing the window stops the engine, and the app asks first while a recording or an analysis runs.
   The computer is kept awake during a recording. PyTorch (second opinion) is not part of the apps. From source:
-  `pip install ".[desktop]"` and `vinyl-check-desktop`.
+  `pip install ".[desktop]"` and `vinyl-check-desktop`. This release ships the macOS disk image; the Windows
+  installer follows once the licensing for its ASIO support is in place.
 - Access from other devices in the desktop app: the setting *Allow access from other devices on the network* (off
   by default) opens the interface to the local network and shows the address, a QR code and an access code. Other
   devices enter the code once (or scan the QR code, which carries it) and stay signed in with a cookie; the

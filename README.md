@@ -193,7 +193,7 @@ vinyl-check also runs as a desktop app with the same interface in its own window
 | System | File |
 |---|---|
 | macOS 11 or newer, Apple Silicon | `vinyl-check-<version>-macos-arm64.dmg` |
-| Windows 10 or 11, 64-bit | `vinyl-check-<version>-windows-x64-setup.exe` |
+| Windows 10 or 11, 64-bit | `vinyl-check-<version>-windows-x64-setup.exe` (follows in a later release) |
 
 **Install.** On macOS, open the disk image and drag vinyl-check to *Applications*. On Windows, run the installer: it
 installs for your user without administrator rights (or for all users, if you choose so) and adds a Start menu
