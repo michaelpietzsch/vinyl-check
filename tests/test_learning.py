@@ -251,8 +251,8 @@ def test_feature_version_2_as_defined():
     assert set(learning.FIXED_SCALING_V2) == set(names)
     # features constant on many profiles are centred at that value, so their intercepts stay comparable
     assert learning.FIXED_SCALING_V2["chain_margin"][0] == 4.0 and learning.FIXED_SCALING_V2["gc_missing"][0] == 1.0
-    assert all(learning.FIXED_SCALING_V2[f] == learning.FIXED_SCALING[f] for f in names
-               if f in learning.FIXED_SCALING and f != "gc_missing")
+    assert learning.FIXED_SCALING["gc_missing"][0] == 1.0                # version 1 too, as the hub's specification
+    assert all(learning.FIXED_SCALING_V2[f] == learning.FIXED_SCALING[f] for f in names if f in learning.FIXED_SCALING)
 
 
 def test_zero_point_and_fallback():

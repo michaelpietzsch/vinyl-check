@@ -62,16 +62,16 @@ DENSITY_S = 0.5            # window (±s) for the event density feature
 # active until version "2" (below) has been evaluated on real stations.
 FEATURE_VERSION = "1"
 # Fixed common scaling of feature version "1": (centre, scale) per feature. These are the values of the hub's
-# specification (Vinyl-Mind, spec/v1/features.json, provisional there): a contribution is only comparable with other
-# stations' if every station uses exactly the same numbers, so they are copied here verbatim and a test compares them
-# with the specification. They are a convention, not statistics of any data set; changing them is a change of the
-# specification (and of FEATURE_VERSION), coordinated with the hub.
+# specification (Vinyl-Mind, spec/v1/features.json, "stable" there): a contribution does not carry the scaling and is
+# only comparable with other stations' if every station uses exactly the same numbers, so they are copied here
+# verbatim and a test compares them with the specification. They are a convention, not statistics of any data set,
+# and never change within the feature version; another scaling is another FEATURE_VERSION.
 FIXED_SCALING = {
     "log_strength": (2.7, 0.7),     # log1p of the detector peak; ~2.4 (strength 10) … 6.2 (strength 500)
     "amp_rel": (-15.0, 10.0),       # dB relative to the music reference; real clicks −40 … −15, music −5 … +5
     "log_dur": (0.7, 0.5),          # log1p of the duration in ms; ~0.1 … 1.5
     "gc": (0.5, 0.3),               # second-opinion score 0 … 1 (0.5 when missing)
-    "gc_missing": (0.5, 0.5),       # 0/1
+    "gc_missing": (1.0, 0.5),       # 0/1; centred at "no second opinion", the common case (see FIXED_SCALING_V2)
     "music": (0.5, 0.5),            # 0/1
     "both_ch": (0.5, 0.5),          # 0/1
     "log_density": (0.5, 0.6),      # log1p of the neighbours within ±DENSITY_S; 0 … ~3
@@ -123,11 +123,11 @@ REF_ABOVE_MUSIC_DB = 5.0
 # intercept contains the effect of the constant value, and averaging it with intercepts of profiles where the feature
 # varied biases the global model (in the synthetic evaluation, centre 3 for chain_margin made the averaged click model
 # several times worse than version 1). So a feature that is constant on many profiles has its centre at that value:
-# chain_margin at its saturation (the chain plays no role, as on most chains), gc_missing at 1 (most stations run
-# without the optional second-opinion network, and crackle never gets a score). The other centres are version 1's.
+# chain_margin at its saturation (the chain plays no role, as on most chains), and gc_missing at 1 as in version 1
+# (most stations run without the optional second-opinion network, and crackle never gets a score). The other centres
+# are version 1's.
 FIXED_SCALING_V2 = {
     **{k: FIXED_SCALING[k] for k in FEATURES_V2 if k in FIXED_SCALING},
-    "gc_missing": (1.0, 0.5),        # 0/1; centre at "no second opinion", the common case
     "log_density_net": FIXED_SCALING["log_density"],  # like log_density; the chain's own neighbours removed
     "amp_ref": (-20.0, 10.0),        # dB relative to the reference tone; real clicks −50 … −15, music −15 … +5
     "chain_margin": (CHAIN_MARGIN_MAX_DB / 10, 1.0),  # 0 … 4; detected events ≳ 1.8, most at the saturation 4
@@ -302,6 +302,32 @@ def to_coef(m: dict, version: str = FEATURE_VERSION) -> list[float]:
     sd[i] · (centre[i] − mu[i]))."""
     f = to_fixed(m, version)
     return [f["intercept"], *f["weights"]]
+
+
+def mask_uninformative(coef: list, X: np.ndarray, prior: dict | None = None,
+                       version: str = FEATURE_VERSION) -> tuple[list[float], list[bool]]:
+    """Coefficients as a contribution reports them (the hub's spec/README.md, "Features that never vary"), and per
+    feature whether it was informative.
+
+    A feature that took one single value x0 in all rows of `X` (the examples the kind was fitted on; on a station
+    without a second opinion `gc` is always 0.5 and `gc_missing` always 1) says nothing about its weight: in the fit it
+    only trades off against the intercept. Its weight is replaced by the prior's (`prior` in the fixed scaling, the
+    model the profile trained towards; 0 without one), and the intercept takes the difference at x0, so that every
+    prediction on these examples stays exactly the same."""
+    c, s = _scaling(version)
+    out = [float(x) for x in coef]
+    pw = _check_weights(prior, version) if prior else np.zeros(len(c))
+    X = np.asarray(X, float)
+    informative = []
+    for i in range(len(c)):
+        col = X[:, i] if X.ndim == 2 and len(X) else np.zeros(0)
+        if len(col) and np.all(col == col[0]):
+            out[0] += (out[i + 1] - float(pw[i])) * (float(col[0]) - float(c[i])) / float(s[i])
+            out[i + 1] = float(pw[i])
+            informative.append(False)
+        else:
+            informative.append(True)
+    return [round(x, 6) for x in out], informative
 
 
 def from_coef(coef: list, version: str = FEATURE_VERSION) -> dict:
