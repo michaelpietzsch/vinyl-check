@@ -23,26 +23,35 @@ Planned as 1.1.0.
   comes back to the engine's loopback address by itself (OAuth with PKCE, `/vinyl-mind/callback`); *Connect with a
   code* shows a short code and a QR code to confirm on a phone (device flow), for a Raspberry Pi used from a phone or
   when the browser does not come back. The station joins with the invitation and the binding it receives, after
-  checking that they name the configured hub and its key. The secrets of the sign-in stay in memory only, never in
-  the database, the logs or the interface. *Other ways to join*: an invitation code from the operator of a hub
-  without accounts, or the operator's approval, after confirming the server key's fingerprint; *Where do I get a
-  code?* explains it, with a link when the configuration names one (`vinyl_mind_invite_url`).
+  checking that they name the configured hub (its canonical address, compared as a string) and its key. The secrets
+  of the sign-in stay in memory only, never in the database, the logs or the interface. *Other ways to join*: an
+  invitation code from the operator of a hub without accounts, or the operator's approval, after confirming the
+  server key's fingerprint; *Where do I get a code?* explains it, with a link when the configuration names one
+  (`vinyl_mind_invite_url`).
+- The server address is kept in the hub's canonical form (https, lower case, no `:443`, no path, no trailing slash);
+  an address with a path is refused in the settings.
 - Keys: one Ed25519 key pair per hub, a file in the state directory (mode 600, never in the database, the logs or an
   API answer), deleted on disconnecting; *Reconnect* makes a new one. Every request is signed as the specification
   says, names the client (`Vinyl-Mind-Client: vinyl-check/1.1.0`) and sends its body with `Content-Length`; plain
-  HTTP is refused except to the computer itself; redirects are not followed.
+  HTTP is refused except to the computer itself; redirects are not followed. When the hub's operator revokes the
+  station (or the hub no longer knows it), the key and the state for that hub are deleted on the station as well,
+  also when leaving is refused, and the settings say so; connecting again makes a new key.
 - Contributions per turntable profile: the learning model trained on the recordings made with that profile, without
   any prior, as coefficients in the hub's shared scaling with example counts and the cross-check (estimate error, raw
-  count error, AUC), and the profile's chain class. Each profile gets a random ID (16 bytes, base64url). Nothing is
-  sent while a recording runs or while both switches are off; contributions only when they changed, at most hourly
-  per profile. A hub that no longer accepts this version gets nothing more until vinyl-check is updated.
+  count error, AUC; errors above the schema's maximum sent as the maximum), and the profile's chain class. Features
+  that never varied in a profile's examples (on a station without the second opinion `gc` and `gc_missing`) are
+  marked as not informative, with the prior's weight and the intercept shifted so that the predictions stay the
+  same. Each profile gets a random ID (16 bytes, base64url). Nothing is sent while a recording runs or while both
+  switches are off; contributions only when they changed, at most hourly per profile. A hub that no longer accepts
+  this version gets nothing more until vinyl-check is updated.
 - Global models are verified as a JWS against the accepted server key before anything in them is read, validated,
   checked on the station's own master recordings and reported per profile; a published one becomes the starting
   point (prior) of the training per kind only where the estimate does not get worse. Withdrawn models are dropped.
 - Turntable profiles have two fields for Vinyl-Mind, *Connection* (USB turntable, turntable with audio interface)
   and *Cartridge type* (MM, MC, unknown), preset to a guess from the profile's device and cartridge.
 - Learning: coefficients in a fixed shared scaling per feature version (`FIXED_SCALING`, for feature version 1 the
-  values of the hub's specification), `train(prior=...)` fits in that scaling and pulls every coefficient, the
+  values of the hub's specification, stable there, with `gc_missing` centred at 1), `train(prior=...)` fits in that
+  scaling and pulls every coefficient, the
   intercept included, towards a prior with strength 100 instead of towards zero (without a prior nothing changes),
   the cross-check also reports the AUC, training data can be limited to one turntable profile, and the detector has
   a version.

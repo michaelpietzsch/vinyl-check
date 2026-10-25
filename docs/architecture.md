@@ -119,7 +119,7 @@ profiles.
 
 | Content | Why |
 |---|---|
-| intercept and weights per kind, in the fixed shared scaling of the feature version | the knowledge itself; a fixed scaling (instead of each station's own mean and spread) makes weights comparable |
+| intercept and weights per kind, in the fixed shared scaling of the feature version, with the features that never varied in the profile's examples marked as not informative | the knowledge itself; a fixed scaling (instead of each station's own mean and spread) makes weights comparable, and the hub combines each weight only from profiles where it was learned |
 | number of examples per kind, split into master classifications and manual judgements | weighting: a profile with 2,000 judged events counts more than one with 20 |
 | cross-check quality per kind (estimate error per recording, of the raw count, AUC; recordings with a master) | weighting and filtering out profiles whose model does not work |
 | coarse chain class (USB turntable / turntable with audio interface; MM / MC / unknown), two fields of the profile | separate global models per class once a class has enough profiles |
@@ -285,10 +285,6 @@ and an optional LAN mode for phones and tablets near the turntable.
   recordings too.
 - Whether feature version 2 becomes the default, and its exact normalisation: needs master comparisons or judgements
   of the same records on several measured chains (`tools/eval_features.py real` on a copy of a station database).
-- How the hub combines intercepts of profiles on which a feature is constant at different values (stations with and
-  without the second opinion): the specification's feature version 1 centres `gc_missing` at 0.5 and has no way to
-  mark a weight as uninformative, so separate groups, centring at the common value (as feature version 2 does) or a
-  marker in the contribution are open.
 - Feature version 2 in the hub's specification (`spec/v2`), with its fixed scaling, once real stations have shown
   whether it helps.
 - Should grades and record conditions per Discogs release be shared too (a shared condition database), or only

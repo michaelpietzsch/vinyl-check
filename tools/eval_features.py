@@ -14,8 +14,8 @@ For every feature version (learning.FEATURE_VERSIONS) and event kind it measures
 - **transfer A→B**: the weights trained on all of A's recordings, in the fixed common scaling of the version, applied
   unchanged to B's recordings;
 - **federated →C**: the mean of the other chains' weights applied to C, what a Vinyl-Mind hub would hand back (each
-  weight averaged only over the chains where its feature varied; the hub's specification has no such marker yet, see
-  docs/architecture.md, open decisions);
+  weight averaged only over the chains where its feature varied, as the hub does with `informative`,
+  docs/vinyl-mind.md);
 - **similarity**: the cosine of two chains' weight vectors (features informative in both), their distance relative
   to their mean length, and the gap between their intercepts.
 

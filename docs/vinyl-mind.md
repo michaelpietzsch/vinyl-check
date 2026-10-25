@@ -16,8 +16,8 @@ is right:
 | `docs/aggregation.md` | how contributions are combined, published and withdrawn, and why the prior is as it is |
 | `docs/station-side.md` | the list of what a station implements |
 
-vinyl-check 1.1.0 implements **protocol version 1** (API `/v1`, feature version 1, `docs/connect.md` as of the hub's
-commit `953f648`). The station's code is `vinylcheck/vinylmind.py`; a copy of `spec/v1` in `tests/vinyl_mind_spec/`
+vinyl-check 1.1.0 implements **protocol version 1** (API `/v1`, feature version 1, `docs/connect.md`) as of the hub's
+commit `7655923`. The station's code is `vinylcheck/vinylmind.py`; a copy of `spec/v1` in `tests/vinyl_mind_spec/`
 lets the tests check every document the station sends against the hub's schemas.
 
 ## Versions
@@ -26,7 +26,7 @@ lets the tests check every document the station sends against the hub's schemas.
 |---|---|---|
 | client | `vinyl-check/<version>`, e.g. `vinyl-check/1.1.0`: the header `Vinyl-Mind-Client` on every request and `client` in every contribution | `vinylmind.CLIENT` |
 | feature version | 1 (the default); 2 is the station's own proposal (below), sent only to a hub that lists 2 in `feature_versions` of `GET /v1/server`, otherwise the settings say why nothing is sent | configuration `feature_version` |
-| shared scaling | exactly `spec/v1/features.json`; a test compares them | `learning.FIXED_SCALING` |
+| shared scaling | exactly `spec/v1/features.json` (`gc_missing` centred at 1, the common case); feature version 1 is *stable* there, so its scaling never changes, and a test compares them | `learning.FIXED_SCALING` |
 | detector version | `"1"`, raised whenever the detector reports other events or values on the same audio | `detect.VERSION` |
 
 A hub can accept only some client and detector versions. When it answers `client_not_accepted`, the station stops
@@ -35,10 +35,14 @@ contributing and asks the user to update; status and disconnecting keep working.
 ## Connecting
 
 The server is `https://api.vinylcheck.net` unless the configuration says otherwise (`vinyl_mind_url`, for a group of
-stations with a self-hosted hub; one place in the code: `vinylmind.DEFAULT_VINYL_MIND_URL`). Plain HTTP is accepted
-only for this computer itself (tests, a hub on the same machine). *Check server* asks `GET /v1/server`, checks that the
-public key matches its fingerprint, shows the fingerprint, and warns when this computer's clock is more than a minute
-off the hub's (signed requests are refused beyond five minutes) or when the hub does not accept this client.
+stations with a self-hosted hub; one place in the code: `vinylmind.DEFAULT_VINYL_MIND_URL`). The address is kept in
+the hub's canonical form (`docs/connect.md`): `https`, scheme and host in lower case, no `:443`, no path, no trailing
+slash (`vinylmind.canonical_url`); the settings refuse an address with a path, since a hub is served at the root of
+its host name and the account service names it in exactly this form. The specification knows only `https`; plain
+HTTP is accepted for this computer itself only, for tests and development. *Check server* asks `GET /v1/server`,
+checks that the public key matches its fingerprint, shows the fingerprint, and warns when this computer's clock is
+more than a minute off the hub's (signed requests are refused beyond five minutes) or when the hub does not accept
+this client.
 
 **With an account** (the hub names a `connect_url`): *Connect with Vinyl-Mind*, as desktop apps connect to an online
 account (`docs/connect.md`):
@@ -58,7 +62,8 @@ account (`docs/connect.md`):
   expires.
 
 The token endpoint answers `invitation`, `binding`, `server_url` and `server_fingerprint`. The station continues only
-if `server_url` is the configured hub and `server_fingerprint` the key that `GET /v1/server` presents; then it joins
+if `server_url` is, as a string, the configured hub's canonical address and `server_fingerprint` the key that
+`GET /v1/server` presents; then it joins
 with `POST /v1/join` and the invitation and binding. A one-time code is exchanged once; when the account service
 refuses it, the user starts again. A join refused for a while (the hub's daily limit, a recording) is tried again by
 itself with the same invitation, kept in memory only. *Reconnect* makes a new key pair and goes through the flow again
@@ -75,12 +80,16 @@ configuration key `vinyl_mind_invite_url` adds a link to where the operator hand
 **Secrets.** The one-time code, the PKCE verifier, the device code, the invitation and the binding stay in the
 engine's memory: never stored, logged or sent to the interface, which only sees the progress (waiting, the user code,
 connected, an error). The station's private key is a file per hub in the state directory (`vinyl-mind/<hash>.key`,
-mode 600, directory 700), never in the database, a log, an export or an API answer; disconnecting deletes it, a
-revoked station connects again with a new one.
+mode 600, directory 700), never in the database, a log, an export or an API answer; disconnecting deletes it.
 
-**States** shown in the settings: connected, waiting for approval, revoked by the server, server key changed (nothing
-more is sent until the user disconnects and connects again), station key missing, client version not accepted, server
-unreachable, feature version not combined by this hub.
+**Disconnected by the hub.** When the hub answers `403 revoked` (the operator revoked the station; leaving is refused
+too, because the hub keeps a revoked key on record and has already deleted what the station sent) or `401
+unknown_key` (the hub no longer knows the station), the station deletes its key and its Vinyl-Mind state for that hub
+as well, and the settings say so until the note is dismissed or the station connects again, with a new key.
+
+**States** shown in the settings: connected, waiting for approval, server key changed (nothing more is sent until the
+user disconnects and connects again), station key missing, client version not accepted, server unreachable, feature
+version not combined by this hub.
 
 ## What the station sends
 
@@ -102,22 +111,31 @@ switches are off. Failures are retried with growing pauses, and a `Retry-After` 
 
 **A contribution** per turntable profile: the learning model trained on the recordings of that profile only, without
 any prior (the hub must not get its own result back). A kind is included once its model is fitted and cross-checked
-on at least two recordings with a master, usable or not (the hub filters by the self-check), and while its numbers
-are within the specification's bounds:
+on at least two recordings with a master, usable or not (the hub filters by the self-check), and while its
+coefficients are within the specification's bound of ±50:
 
 ```json
 {"spec": "vinyl-mind/contribution", "feature_version": 1, "detector_version": "1",
  "client": {"name": "vinyl-check", "version": "1.1.0"},
  "chain": {"source": "turntable_interface", "cartridge": "mc"}, "trained_at": 1793000000,
- "kinds": {"click": {"coef": [0.42, 1.31, 0.88, -0.12, 0.95, -0.21, -0.35, 0.18, -0.44, -0.27, 0.31],
+ "kinds": {"click": {"coef": [0.42, 1.31, 0.88, -0.12, 0.0, 0.0, -0.35, 0.18, -0.44, -0.27, 0.31],
+                     "informative": [true, true, true, false, false, true, true, true, true, true],
                      "n_real": 812, "n_false": 1490, "n_manual": 140, "n_master": 2162,
                      "master_recordings": 10, "cv_err_est": 0.04, "cv_err_raw": 0.15, "auc": 0.91}}}
 ```
 
 - `coef`: the intercept and one weight per feature in the shared scaling, converted exactly from the station's own
   standardisation (`learning.to_coef`, the formula of `spec/README.md`).
+- `informative`, only when a feature took one single value in all examples of the kind (on a station without the
+  second opinion `gc` is always 0.5 and `gc_missing` always 1): `false` at its place. Its weight cannot be learned,
+  only traded off against the intercept, so the station reports the prior's weight instead (0: a contribution is
+  trained without one) and shifts the intercept so that every prediction stays exactly the same
+  (`learning.mask_uninformative`, *Features that never vary* in `spec/README.md`). The hub combines each weight only
+  from the profiles for which it was informative.
 - `n_manual` counts judgements by hand, `n_master` master classifications; `master_recordings`, `cv_err_est`,
-  `cv_err_raw` and `auc` are the cross-check of `learning.train`.
+  `cv_err_raw` and `auc` are the cross-check of `learning.train`. Errors above the schema's maximum (possible on a
+  quiet master with a few real events) are sent as the maximum, 10 for the estimate and 100 for the raw count; the
+  kind stays in the contribution, and the hub gives such a model no weight anyway. Check reports do the same with 100.
 - `chain`: two fields of the turntable profile, asked in the profile dialog (*Connection*: USB turntable or turntable
   with audio interface; *Cartridge type*: MM, MC or unknown), guessed from the profile's device and cartridge until
   set.
@@ -159,26 +177,26 @@ from the connected hub) and uses it as the prior after the user confirmed what i
 ## Feature version 2 (the station's proposal)
 
 Not part of the hub's specification yet. With `feature_version = "2"` the features are relative to the recording's
-turntable profile (definitions and reasons in [measurement](measurement.md#learning)); features 0–3, 5, 6, 8 and 9
-are those of version 1 with its scaling, the others:
+turntable profile (definitions and reasons in [measurement](measurement.md#learning)); features 0–6, 8 and 9 are
+those of version 1 with its scaling, the others:
 
 | # | Name | Definition | Centre | Scale |
 |---|---|---|---|---|
-| 4 | `gc_missing` | as in version 1 | 1.0 | 0.5 |
 | 7 | `log_density_net` | ln(1 + max(0, n − λ)), λ = the profile's click floor per second × 1 s | 0.5 | 0.6 |
 | 10 | `amp_ref` | event level in dBFS minus the profile's reference level | −20.0 | 10.0 |
 | 11 | `chain_margin` | (event level − chain noise) / 10, clipped to 0 … 4 | 4.0 | 1.0 |
 
-Only recordings whose profile has a measured zero point count in a version-2 contribution. Versions 1 and 2 are never
-mixed: not in contributions, models, reports, package files or priors. A coefficient of a feature that did not vary
-in a profile's data is 0, and averaging it is only exact where the feature sat at its centre; version 2 therefore
-centres the features that are constant on many profiles at that value.
+Only recordings whose profile has a measured zero point count in a version-2 contribution, which has the same form
+with twelve features (`informative` too). Versions 1 and 2 are never mixed: not in contributions, models, reports,
+package files or priors. Features that are constant on many profiles are centred at that value (`gc_missing` at 1,
+as in version 1, `chain_margin` at its saturation), so that their constant does not shift the intercept.
 
 ## Tests
 
 `tests/test_vinylmind.py` runs the station against a fake hub and a fake account service that implement the
 specification on their own: the signing test vector, JWS refusals, schema validation of every document, both sign-in
-flows with their error cases, contributions, models, reports, withdrawal, feature version 2. `tests/test_vinylmind_hub.py`
-runs the station against a real hub binary when `VINYL_MIND_BIN` names one (`go build -o <dir>/vinyl-mind
-./cmd/vinyl-mind` in the Vinyl-Mind repository), with the account service served over HTTPS with a throwaway
-certificate; it is skipped otherwise, and `VINYL_CHECK_SKIP_HUB=1` skips it always.
+flows with their error cases, the canonical server address, features that never vary (predictions unchanged),
+clipped errors, contributions, models, reports, withdrawal, revoked stations, feature version 2.
+`tests/test_vinylmind_hub.py` runs the station against a real hub binary when `VINYL_MIND_BIN` names one (`go build
+-o <dir>/vinyl-mind ./cmd/vinyl-mind` in the Vinyl-Mind repository), with the account service served over HTTPS with a
+throwaway certificate; it is skipped otherwise, and `VINYL_CHECK_SKIP_HUB=1` skips it always.
