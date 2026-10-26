@@ -70,6 +70,8 @@ def test_full_flow(client):
     assert snip.status_code == 200 and snip.content[:4] == b"RIFF"
     diff = client.get(f"/api/recordings/{a['id']}/clicks.wav")                       # difference track: clicks only
     assert diff.status_code == 200 and diff.content[:4] == b"RIFF" and int(diff.headers["x-events"]) > 0
+    ranged = client.get(f"/api/recordings/{a['id']}/clicks.wav", headers={"Range": "bytes=0-3, 8-11"})
+    assert ranged.status_code == 200 and ranged.content == diff.content             # whole file, no range requests
     import io as _io
     d, _ = sf.read(_io.BytesIO(diff.content), dtype="int16", always_2d=True)
     assert len(d) == int(a["duration_s"] * SR) and np.mean(d != 0) < 0.05 and np.abs(d).max() > 0
@@ -485,6 +487,21 @@ def test_record_cover_is_fetched_once_and_cached(client, monkeypatch):
     no_rel = client.post("/api/records", json={"artist": "X", "title": "Y"}).json()["id"]
     r = client.get(f"/api/records/{no_rel}/cover")
     assert r.status_code == 404 and r.json()["detail"] == "No Discogs release ID"
+
+
+def test_no_api_docs_and_whole_file_downloads(client):
+    """No generated API documentation; cover images are sent whole (no range requests); masters only in engineer
+    mode."""
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(path).status_code == 404, path
+    rid = client.post("/api/records", json={"title": "Whole files"}).json()["id"]
+    png = b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 8
+    assert client.put(f"/api/records/{rid}/cover", content=png).status_code == 200
+    url = client.get(f"/api/records/{rid}/cover").json()["url"]
+    r = client.get(url, headers={"Range": "bytes=0-9, 20-29, 40-49"})
+    assert r.status_code == 200 and r.content == png and "content-range" not in r.headers
+    r = client.put(f"/api/records/{rid}/masters/A", content=b"RIFF")
+    assert r.status_code == 403 and "engineer mode" in r.json()["detail"]
 
 
 def test_own_cover_and_tracklist_without_discogs(client):

@@ -36,6 +36,7 @@
   "image_too_large": "Image larger than 5 MB",
   "image_type": "Only JPEG, PNG or WebP",
   "side_letter": "Side: a single letter (A, B …)",
+  "engineer_mode_required": "Masters can only be uploaded in engineer mode (Settings)",
   "master_too_large": "Master larger than 3 GB",
   "master_no_space": "Not enough space for the master ({gb:.1f} GB)",
   "master_unreadable": "Not a readable audio file (WAV, FLAC or AIFF)",

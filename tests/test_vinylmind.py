@@ -840,7 +840,7 @@ def test_contribution_documents(station):
         doc = row["payload"]
         assert vinylmind.validate_contribution(doc) == [] and not _schema_errors("contribution", doc)
         assert doc["feature_version"] == 1 and doc["detector_version"] == detect.VERSION == "1"
-        assert doc["client"] == {"name": "vinyl-check", "version": "1.1.0"}
+        assert doc["client"] == {"name": "vinyl-check", "version": vinylmind.__version__}
         assert re.fullmatch(r"[A-Za-z0-9_-]{22}", row["vm_id"]) and len(_unb64u(row["vm_id"])) == 16
         assert row["vm_id"] == db.profile_vm_id(row["id"])
         click = doc["kinds"]["click"]
@@ -920,7 +920,7 @@ def test_cross_check_errors_are_clipped_not_dropped():
     k = vinylmind.contribution_kind(info, data["click"]["X"])
     assert k["cv_err_est"] == 10.0 and k["cv_err_raw"] == 100.0
     doc = {"spec": "vinyl-mind/contribution", "feature_version": 1, "detector_version": "1",
-           "client": {"name": "vinyl-check", "version": "1.1.0"},
+           "client": {"name": "vinyl-check", "version": vinylmind.__version__},
            "chain": {"source": "usb_turntable", "cartridge": "mm"}, "kinds": {"click": k}}
     assert vinylmind.validate_contribution(doc) == [] and not _schema_errors("contribution", doc)
 
@@ -978,7 +978,7 @@ def test_join_contribute_adopt_report_leave(station, hub):
     assert {k: strip(v) for k, v in got.items()} == {k: strip(v) for k, v in preview.items()}
     # every request names the client; every body announces its length
     for method, target, headers, body in hub.requests:
-        assert headers.get("vinyl-mind-client") == "vinyl-check/1.1.0", target
+        assert headers.get("vinyl-mind-client") == f"vinyl-check/{vinylmind.__version__}", target
         if body:
             assert headers["content-length"] == str(len(body)) and "transfer-encoding" not in headers
     # nothing changed: nothing is sent again
@@ -1149,6 +1149,47 @@ def test_leaving_a_station_the_hub_dropped(station, hub, code):
     station.app_.state.vinylmind.last_refresh = 0
     st = station.post("/api/vinylmind/refresh").json()
     assert st["state"] == "not_joined" and st["notice"]["code"] == "revoked"
+
+
+def test_published_model_never_rolls_back(station, hub):
+    """A hub that withdraws a model and shows an older one as published again cannot put the old model back into
+    use: the station keeps its local model until a newer one comes. A model of another group than the one asked
+    for is refused."""
+    app = station.app_
+    _join(station, hub)
+    assert station.put("/api/vinylmind", json={"contribute": True, "use_model": True}).status_code == 200
+    station.post("/api/vinylmind/sync")                                   # contributions: something to combine
+    v1 = hub.publish(hub.combine())
+    v2 = hub.publish(hub.combine())                                       # the station only ever sees v2
+    r = station.post("/api/vinylmind/sync").json()
+    assert r["status"]["prior"]["ref"] == v2 and r["status"]["model"]["version"] == v2
+    # v2 is withdrawn, v1 shows as published again: older than the model adopted before, so not used
+    hub.models[v2].update(status="withdrawn", reason="rolled\nback\x1b[0m")
+    r = station.post("/api/vinylmind/sync").json()
+    assert r["status"]["prior"] is None and r["status"]["withdrawn"]["version"] == v2
+    assert r["status"]["withdrawn"]["reason"] == "rolledback[0m"           # no control characters
+    state = json.loads(app.state.db.setting(vinylmind.S_MODEL))
+    assert state["checked"][str(v1)]["rollback"] is True and state["checked"][str(v1)]["adopted"] == []
+    assert state["adopted"]["1/1/all"]["version"] == v2
+    assert all(rep["adopted"] is False for (_, _, v), rep in hub.reports.items() if v == v1)
+    assert "prior" not in json.loads(app.state.db.setting("learn_model"))
+    assert station.post("/api/vinylmind/sync").json()["result"]["model"] == "unchanged"
+    # a newer model is adopted again
+    v3 = hub.publish(hub.combine())
+    r = station.post("/api/vinylmind/sync").json()
+    assert r["status"]["prior"]["ref"] == v3 and json.loads(app.state.db.setting(vinylmind.S_MODEL))["adopted"]["1/1/all"]["version"] == v3
+    # the signed payload names another chain class than the entry the hub lists it under: refused, v3 stays
+    v4 = hub.publish(hub.combine(), chain_class="usb_turntable.mm")
+    hub.models[v4]["payload"]["chain_class"] = "all"
+    resp = station.post("/api/vinylmind/sync")
+    assert resp.status_code >= 400 and "(group)" in resp.json()["detail"]
+    assert station.get("/api/vinylmind").json()["prior"]["ref"] == v3
+    assert str(v4) not in json.loads(app.state.db.setting(vinylmind.S_MODEL))["checked"]
+
+
+def test_hub_messages_lose_control_characters():
+    assert vinylmind._text("ok\n\x1b[31mred\r\n" + "x" * 400) == "ok[31mred" + "x" * 291
+    assert vinylmind._text(None) == "None" and vinylmind._text("") == ""
 
 
 def test_models_outlive_a_disconnect_by_the_hub(station, hub):
@@ -1362,7 +1403,7 @@ def test_connect_in_the_browser(station, account, caplog):
     r = _connect(station, account)
     q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(r["url"]).query))
     assert r["url"].startswith(account.connect_url + "?")
-    assert q["response_type"] == "code" and q["client_id"] == "vinyl-check" and q["client"] == "vinyl-check/1.1.0"
+    assert q["response_type"] == "code" and q["client_id"] == "vinyl-check" and q["client"] == f"vinyl-check/{vinylmind.__version__}"
     assert q["redirect_uri"] == "http://127.0.0.1:8123/vinyl-mind/callback" and q["code_challenge_method"] == "S256"
     assert len(_unb64u(q["state"])) == 16 and len(_unb64u(q["code_challenge"])) == 32 and q["lang"] == "en"
     assert "%2B" in r["url"] or "+" not in q["station"]                    # the fingerprint is URL-encoded

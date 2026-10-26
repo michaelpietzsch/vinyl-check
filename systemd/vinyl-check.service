@@ -39,6 +39,9 @@ MemoryMax=5G
 # ─── Sandbox ────────────────────────────────────────────────────────────────
 NoNewPrivileges=yes
 ProtectSystem=full
+# The code is read-only for the service (ProtectSystem=full does not cover /opt). ExecStartPre above runs outside
+# the sandbox ("+") and still swaps the staged code in.
+ReadOnlyPaths=/opt
 StateDirectory=vinyl-check
 StateDirectoryMode=0750
 ProtectHome=yes

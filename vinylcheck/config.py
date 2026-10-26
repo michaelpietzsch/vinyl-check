@@ -43,6 +43,7 @@ class Config:
     port: int = 8080
     language: str = "en"           # interface language until a user chooses one; "auto" = follow the browser
     access_code: str = ""          # other devices must enter this code once (then a cookie); empty = open network
+    trusted_hosts: tuple[str, ...] = ()   # host names a reverse proxy serves the interface under (Host header check)
     device: str = ""               # empty = first USB capture device
     rate: int = 48000
     channels: int = 2

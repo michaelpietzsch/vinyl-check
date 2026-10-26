@@ -42,6 +42,10 @@ shasum -a 256 vinyl-check-*-macos-arm64.dmg                         # macOS
 Get-FileHash vinyl-check-*-windows-x64-setup.exe -Algorithm SHA256   # Windows (PowerShell)
 ```
 
+Every release also carries a `SHA256SUMS` file and a build provenance attestation: with the
+[GitHub CLI](https://cli.github.com/), `gh attestation verify <file> --repo michaelpietzsch/vinyl-check` confirms that
+the file was built by this repository's workflow from the tagged commit.
+
 ## Switching signing on
 
 Signing needs a certificate in the publisher's name and, for most services, a paid plan. The build is prepared so

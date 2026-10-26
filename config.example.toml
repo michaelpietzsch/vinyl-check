@@ -9,6 +9,8 @@ host = "0.0.0.0"
 port = 8080
 language = "en"                         # interface language until a user picks one in the settings; "auto" = browser
 # access_code = ""                      # other devices must enter this code once (then a cookie); "" = open network
+# trusted_hosts = []                    # names a reverse proxy serves the interface under, e.g. ["vinyl.example.net"];
+                                        # IP addresses, localhost, .local names and the host name are always accepted
 
 # Device, rate, bit depth and inputs can also be set in the interface (Settings → Audio interface); values saved
 # there take precedence over the keys below until "Back to the configuration file" removes them.

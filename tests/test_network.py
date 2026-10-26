@@ -49,6 +49,8 @@ def test_helpers():
         assert network.host_ok(ok), ok
     for bad in ("evil.example:8080", "127.0.0.1.nip.example", "[bad"):
         assert not network.host_ok(bad), bad
+    assert network.host_ok("vinyl.example.net:443", ("Vinyl.Example.net.",))      # a configured proxy name
+    assert not network.host_ok("vinyl.example.net", ("other.example.net",))
     assert network.same_origin("http://127.0.0.1:8123", "127.0.0.1:8123")
     assert not network.same_origin("http://evil.example", "127.0.0.1:8123") and not network.same_origin("null", "x:1")
     for a in network.lan_addresses(timeout=0.5):
@@ -72,8 +74,38 @@ def test_service_stays_open(tmp_path):
         n = lan.get("/api/network").json()
         assert n["desktop"] is False and n["required"] is False and n["code"] is None
         assert local.put("/api/network", json={"lan_enabled": True}).status_code == 409
-        r = lan.get("/api/status", headers={"Host": "pi.example", "Origin": "http://elsewhere.example"})
-        assert r.status_code == 200                                    # no host/origin checks on a service
+        r = lan.get("/api/status", headers={"Origin": "http://elsewhere.example"})
+        assert r.status_code == 200                                    # reading cross-origin is guarded by CORS
+
+
+def test_service_host_and_origin_checks(tmp_path):
+    """A service checks Host and Origin like the desktop app: a web page open in a browser in the local network
+    cannot change anything on the station or read its WebSocket, and a DNS name that points to the station is
+    refused unless it is configured (a reverse proxy)."""
+    app = create_app(_cfg(tmp_path, trusted_hosts=("Vinyl.Example.net",)))
+    local, lan = _clients(app)
+    with local:
+        assert lan.get("/api/health", headers={"Host": "rebind.example"}).status_code == 400
+        for host in ("192.168.1.10:8080", "pi.local", "vinyl.example.net", "localhost:8080"):
+            assert lan.get("/api/health", headers={"Host": host}).status_code == 200, host
+        foreign = {"Origin": "http://evil.example"}
+        assert lan.post("/api/retention/run", headers=foreign).status_code == 403
+        assert lan.delete("/api/records/1", headers=foreign).status_code == 403
+        assert lan.put("/api/vinylmind", json={"contribute": True}, headers=foreign).status_code == 403
+        assert lan.post("/api/records", json={"title": "x"}, headers={"Origin": "null"}).status_code == 403
+        assert lan.get("/api/status", headers=foreign).status_code == 200
+        same = {"Origin": LAN_URL}
+        assert lan.post("/api/records", json={"title": "x"}, headers=same).status_code == 200
+        assert lan.post("/api/records", json={"title": "y"}).status_code == 200    # scripts send no Origin
+        # behind a reverse proxy with TLS: Origin and Host both carry the proxy's name
+        proxied = {"Host": "vinyl.example.net", "Origin": "https://vinyl.example.net"}
+        assert lan.post("/api/records", json={"title": "z"}, headers=proxied).status_code == 200
+        ws_lan = LAN_URL.replace("http", "ws") + "/api/ws"
+        with pytest.raises(Exception):
+            with lan.websocket_connect(ws_lan, headers=foreign):
+                pass
+        with lan.websocket_connect(ws_lan, headers=same) as ws:
+            assert json.loads(ws.receive_text())["version"]
 
 
 def test_service_with_configured_code(tmp_path):

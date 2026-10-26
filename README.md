@@ -276,7 +276,8 @@ Linux (XDG). The most important keys:
 |---|---|---|
 | `data_dir`, `state_dir` | `/mnt/data/vinyl-check`, `/var/lib/vinyl-check` | recordings and database (service; see above for the user folders) |
 | `language` | `"en"` | interface language until a user picks one in the settings; `"auto"` follows the browser |
-| `access_code` | `""` | other devices in the network must enter this code once; empty = open to the local network |
+| `access_code` | `""` | other devices in the network must enter this code once; empty = open to the local network (the [setup guide](docs/setup-guide.md#running-as-a-service-in-a-network) recommends a code) |
+| `trusted_hosts` | `[]` | names a reverse proxy serves the interface under, e.g. `["vinyl.example.net"]`; IP addresses, `localhost`, `.local` names and the host name are always accepted |
 | `device` | `""` | capture device (ALSA `hw:` name, or PortAudio `<audio system>: <name>`), empty = chosen automatically |
 | `rate`, `channels`, `sample_format` | `48000`, `2`, `"S16_LE"` | capture format (`S16_LE`, `S24_3LE`, `S32_LE`) |
 | `capture_channels`, `input_channels` | — | for interfaces that only record with all their channels open |

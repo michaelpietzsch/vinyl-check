@@ -37,7 +37,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import HTTPConnection
@@ -797,7 +797,10 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if recorder.active:
             recorder.stop()
 
-    app = FastAPI(title="vinyl-check", version=__version__, lifespan=lifespan, default_response_class=LocalizedJSONResponse)
+    # No generated API documentation (/docs, /redoc, /openapi.json): the interface does not use it, and a service in
+    # a network has no reason to describe itself to whoever asks
+    app = FastAPI(title="vinyl-check", version=__version__, lifespan=lifespan, default_response_class=LocalizedJSONResponse,
+                  docs_url=None, redoc_url=None, openapi_url=None)
     network.install(app, cfg, db, desktop)        # access check + /access, /api/network; inside the language middleware
     licenses.install(app)                         # /licenses: own license and third-party notices
     vinylmind.install(app, vm)                    # /api/vinylmind*: Settings → Vinyl-Mind
@@ -1167,8 +1170,10 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         lc = local_cover(rid)
         if not lc:
             raise HTTPException(404, i18n.msg("api.no_own_cover"))
-        return FileResponse(lc, media_type=COVER_TYPES[lc.suffix[1:]],
-                            headers={"Cache-Control": "public, max-age=31536000, immutable"})   # ?v= changes
+        # whole file, no range requests: at most 5 MB, and FileResponse's range handling had a weakness in older
+        # Starlette releases (the Debian packages a service runs on)
+        return Response(lc.read_bytes(), media_type=COVER_TYPES[lc.suffix[1:]],
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})       # ?v= changes
 
     @app.put("/api/records/{rid}/cover")
     async def put_record_cover(rid: int, request: Request):
@@ -1221,7 +1226,10 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     @app.put("/api/records/{rid}/masters/{side}")
     async def put_master(rid: int, side: str, request: Request, name: str = ""):
         """Upload the master of a side: raw bytes in the body (WAV, FLAC or AIFF, at most 3 GB), streamed to disk.
-        Replaces an existing one. In engineer mode every analyzed recording of this side is then measured against it."""
+        Replaces an existing one. In engineer mode every analyzed recording of this side is then measured against it;
+        the upload is only accepted in that mode (the largest write the interface allows)."""
+        if not cfg.engineer_mode:
+            raise HTTPException(403, i18n.msg("api.engineer_mode_required"))
         if not db.record(rid):
             raise HTTPException(404, i18n.msg("api.record_not_found"))
         side = side.strip().upper()[:1]
@@ -2155,8 +2163,18 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                         cand = (data[s:e].astype(np.float64) * ramp[:, None]).astype(np.int16)
                         y[s:e] = np.where(np.abs(cand) > np.abs(y[s:e]), cand, y[s:e])
                     out.write(y)
-        return FileResponse(str(tmp), media_type="audio/wav", filename=f"{rec_id:05d}-clicks.wav",
-                            headers={"X-Events": str(len(evs))}, background=BackgroundTask(os.unlink, str(tmp)))
+        size = tmp.stat().st_size
+
+        def stream():
+            # streamed in blocks as a plain download (no range requests, see the cover image); the file goes once
+            # the response is sent
+            with open(tmp, "rb") as f:
+                while chunk := f.read(1024 * 1024):
+                    yield chunk
+        headers = {"X-Events": str(len(evs)), "Content-Length": str(size),
+                   "Content-Disposition": f'attachment; filename="{rec_id:05d}-clicks.wav"'}
+        return StreamingResponse(stream(), media_type="audio/wav", headers=headers,
+                                 background=BackgroundTask(os.unlink, str(tmp)))
 
     sg_cache: dict = {}            # (recording, section) → finished image; the latest 16 (zoom)
 

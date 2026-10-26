@@ -177,6 +177,12 @@ def short_fingerprint(fp: str | None) -> str | None:
     return f"{fp[:19]}…" if fp else None
 
 
+def _text(s, n: int = 300) -> str:
+    """A message from the hub or the account service, fit for logs and the interface: printable characters only
+    (no line breaks or escape sequences), at most `n` characters."""
+    return "".join(ch for ch in str(s) if ch.isprintable())[:n]
+
+
 def compact_json(obj) -> bytes:
     """The bytes of a request body: compact UTF-8 JSON, finite numbers only (the hub refuses anything else)."""
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
@@ -796,9 +802,9 @@ def _hub_error(status: int, code: str | None, message: str | None, retry_after: 
     if code in HUB_ERRORS:
         return HubError(i18n.msg(f"vinylmind.err_{code}"), code=code, status=status, retry_after=retry_after)
     if code == "invalid":
-        return HubError(i18n.msg("vinylmind.err_invalid", message=str(message or "–")[:300]), code=code,
+        return HubError(i18n.msg("vinylmind.err_invalid", message=_text(message or "–")), code=code,
                         status=status)
-    return HubError(i18n.msg("vinylmind.http_error", status=status, message=str(message or code or "–")[:300]),
+    return HubError(i18n.msg("vinylmind.http_error", status=status, message=_text(message or code or "–")),
                     code=code, status=status, retry_after=retry_after)
 
 
@@ -1970,7 +1976,7 @@ class VinylMind:
         if in_use is not None and (not isinstance(pub, dict) or pub.get("version") != in_use):
             entry = client.model(in_use)
             if entry is None or entry.get("status") == "withdrawn":
-                m["withdrawn"] = {"version": in_use, "reason": str((entry or {}).get("reason") or "")[:300],
+                m["withdrawn"] = {"version": in_use, "reason": _text((entry or {}).get("reason") or ""),
                                   "at": now}
                 self._drop_server_prior()
                 result = "withdrawn"
@@ -1980,7 +1986,7 @@ class VinylMind:
             seen = m["checked"].get(str(entry["version"]))
             if seen and seen.get("status") == entry.get("status"):
                 continue                                 # checked and reported in this state already
-            m["checked"][str(entry["version"])] = self._take_model(client, j, entry)
+            m["checked"][str(entry["version"])] = self._take_model(client, j, entry, m, query)
             self._put(S_MODEL, m)
             result = "new"
         # keep the state small: the model in use and the newest few
@@ -1990,8 +1996,15 @@ class VinylMind:
         self._put(S_MODEL, m | {"etag": etag, "polled_at": now})
         return result
 
-    def _take_model(self, client: Client, j: dict, entry: dict) -> dict:
-        """Verify, validate, check, adopt (published models only) and report one model entry."""
+    def _take_model(self, client: Client, j: dict, entry: dict, m: dict, query: list) -> dict:
+        """Verify, validate, check, adopt (published models only) and report one model entry.
+
+        Only a published model can become the prior, never a candidate. The model must belong to the group that was
+        asked for (`query`: feature version, detector version, chain class; the hub may answer a chain class with
+        its model over all classes). And the version never goes backwards: a published model older than the one
+        adopted before for the same group (a smaller version, or an earlier `created_at`) is checked and reported
+        but not used, also after the newer one was withdrawn; the station then keeps its local model. So a hub
+        that withdraws and rolls back cannot put an old model back into use."""
         if entry.get("status") not in ("published", "candidate") or not entry.get("jws"):
             raise HubError(i18n.msg("vinylmind.model_invalid", error="entry"), code="model_rejected")
         payload = verify_jws(entry["jws"], unb64u(j["server_key"]), j["fingerprint"])   # before anything else
@@ -2004,17 +2017,28 @@ class VinylMind:
             raise HubError(e.message, code="model_rejected") from None
         if payload["version"] != entry["version"]:
             raise HubError(i18n.msg("vinylmind.model_invalid", error="version"), code="model_rejected")
+        if payload["detector_version"] != query[1] or payload["chain_class"] not in (query[2], "all"):
+            raise HubError(i18n.msg("vinylmind.model_invalid", error="group"), code="model_rejected")
         kinds = {k: learning.from_coef(v["coef"], self.feature_version) for k, v in payload["kinds"].items()}
         data, _ = learning.training_data(self.db, version=self.feature_version)
         check = check_model(data, kinds, self.feature_version)
         published = entry["status"] == "published"
-        adopted = sorted(k for k, c in check.items() if adopt(c)) if published else []
-        if published:
+        group = "/".join(str(q) for q in query)
+        before = (m.get("adopted") or {}).get(group)
+        rollback = bool(published and before and (int(payload["version"]) < int(before["version"])
+                                                  or payload["created_at"] < before["created_at"]))
+        adopted = sorted(k for k, c in check.items() if adopt(c)) if published and not rollback else []
+        if rollback:
+            log.warning("Vinyl-Mind: published model %s is older than model %s adopted before: not used, the local "
+                        "model stays", payload["version"], before["version"])
+        elif published:
             if adopted:
                 self._put(S_PRIOR, {"source": "server", "type": "model", "ref": payload["version"],
                                     "feature_version": self.feature_version,
                                     "detector_version": payload["detector_version"], "hub": j["fingerprint"],
                                     "kinds": {k: kinds[k] for k in adopted}, "accepted_at": time.time()})
+                m.setdefault("adopted", {})[group] = {"version": payload["version"],
+                                                      "created_at": payload["created_at"], "at": time.time()}
                 self._retrain()
             else:
                 prior = self._get(S_PRIOR)
@@ -2024,8 +2048,8 @@ class VinylMind:
         log.info("Vinyl-Mind: model %s (%s) checked; adopted for %s", payload["version"], entry["status"],
                  adopted or "no kind")
         return {"version": payload["version"], "status": entry["status"], "chain_class": payload["chain_class"],
-                "created_at": payload["created_at"], "check": check, "adopted": adopted, "at": time.time(),
-                "reported": self._report(client, payload, kinds, bool(adopted))}
+                "created_at": payload["created_at"], "check": check, "adopted": adopted, "rollback": rollback,
+                "at": time.time(), "reported": self._report(client, payload, kinds, bool(adopted))}
 
     def _report(self, client: Client, payload: dict, kinds: dict, adopted: bool) -> list:
         """PUT a check report per profile that has at least two master recordings for a kind of the model; returns

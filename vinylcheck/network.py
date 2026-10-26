@@ -6,13 +6,15 @@ tablet at the turntable can use the same interface. Requests that do not come fr
 the access code: entered once on a small login page (/access), or carried by the QR code in the settings, it is kept
 as a cookie. Requests from the computer itself (loopback) never need it. A new code signs all devices out.
 
-A service installation (Raspberry Pi station) is meant for a trusted local network and stays open as before, unless
-`access_code` is set in its configuration file; then the same check applies with that fixed code.
+A service installation (Raspberry Pi station) is open to its local network unless `access_code` is set in its
+configuration file; then the same check applies with that fixed code. The setup guide recommends setting one.
 
-On the desktop two more checks keep web pages open in the user's own browser away from the local engine: the Host
-header must name this computer (an IP address, localhost, a .local name or the host name), which defeats DNS
-rebinding, and a request that changes something, or opens the WebSocket, must come from the interface's own origin
-(cross-site request forgery).
+Two more checks apply in both modes and keep web pages open in a user's browser away from the engine: the Host
+header must name this computer (an IP address, localhost, a .local name, the host name, or a name listed in
+`trusted_hosts`, for a reverse proxy in front of a service), which defeats DNS rebinding, and a request that
+changes something, or opens the WebSocket, must come from the interface's own origin (cross-site request forgery,
+cross-site WebSocket hijacking). Requests without an Origin header (scripts, curl) are not affected: browsers always
+send one with cross-site writes.
 
 Server catalog: ``network`` (login page and messages). The settings section is in the web catalog ``network``.
 """
@@ -87,9 +89,10 @@ def _own_names() -> frozenset[str]:
     return frozenset({name, name.split(".")[0] + ".local"})
 
 
-def host_ok(host_header: str | None) -> bool:
-    """Does the Host header name this computer? IP literals, localhost, .local (mDNS) names and the host name pass.
-    A DNS rebinding attack needs a public domain name that points to this computer, and fails here."""
+def host_ok(host_header: str | None, trusted: tuple[str, ...] | frozenset[str] = ()) -> bool:
+    """Does the Host header name this computer? IP literals, localhost, .local (mDNS) names, the host name and the
+    configured `trusted_hosts` (the names a reverse proxy serves the interface under) pass. A DNS rebinding attack
+    needs a public domain name that points to this computer, and fails here."""
     if not host_header:
         return True                     # HTTP/1.0 clients; browsers always send a Host header
     try:
@@ -99,6 +102,8 @@ def host_ok(host_header: str | None) -> bool:
     if not name:
         return False
     if name == "localhost" or name.endswith(".local") or name in _own_names():
+        return True
+    if name in {t.strip().lower().rstrip(".") for t in trusted}:
         return True
     try:
         ipaddress.ip_address(name)
@@ -371,13 +376,14 @@ class AccessMiddleware:
         if scope["type"] not in ("http", "websocket"):
             return await self.app(scope, receive, send)
         acc, headers = self.access, Headers(scope=scope)
-        if acc.desktop:
-            if not host_ok(headers.get("host")):
-                return await self._deny(scope, receive, send, 400, "network.bad_host")
-            origin = headers.get("origin")
-            changes = scope["type"] == "websocket" or scope.get("method") not in ("GET", "HEAD", "OPTIONS")
-            if origin and changes and not same_origin(origin, headers.get("host")):
-                return await self._deny(scope, receive, send, 403, "network.cross_site")
+        # Host and Origin are checked in both modes: a service in a local network is as exposed to a web page in
+        # a user's browser (DNS rebinding, cross-site writes) as the desktop app with network access
+        if not host_ok(headers.get("host"), acc.cfg.trusted_hosts):
+            return await self._deny(scope, receive, send, 400, "network.bad_host")
+        origin = headers.get("origin")
+        changes = scope["type"] == "websocket" or scope.get("method") not in ("GET", "HEAD", "OPTIONS")
+        if origin and changes and not same_origin(origin, headers.get("host")):
+            return await self._deny(scope, receive, send, 403, "network.cross_site")
         client = (scope.get("client") or ("", 0))[0]
         if not acc.required or is_loopback(client) or scope["path"] in acc.open_paths:
             return await self.app(scope, receive, send)

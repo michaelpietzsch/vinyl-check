@@ -20,11 +20,12 @@ Product names below are examples, not recommendations or requirements.
 4. [High end](#3-high-end)
 5. [Example setups](#example-setups)
 6. [Recording on macOS and Windows](#recording-on-macos-and-windows)
-7. [Turntable alignment basics](#turntable-alignment-basics)
-8. [Alignment with vinyl-check and a test record](#alignment-with-vinyl-check-and-a-test-record)
-9. [Level calibration](#level-calibration)
-10. [Your first recording](#your-first-recording)
-11. [Checklist before every session](#checklist-before-every-session)
+7. [Running as a service in a network](#running-as-a-service-in-a-network)
+8. [Turntable alignment basics](#turntable-alignment-basics)
+9. [Alignment with vinyl-check and a test record](#alignment-with-vinyl-check-and-a-test-record)
+10. [Level calibration](#level-calibration)
+11. [Your first recording](#your-first-recording)
+12. [Checklist before every session](#checklist-before-every-session)
 
 ## The measurement chain
 
@@ -291,9 +292,38 @@ example `capture_channels = 4` and `input_channels = [3, 4]`).
 ### Linux with PortAudio
 
 Linux records with `arecord` by default. To record through PortAudio instead, for example on a desktop with
-PipeWire or JACK, install the system library (`libportaudio2` on Debian and Ubuntu) and
-`pip install "vinyl-check[portaudio]"`, then set `audio_backend = "portaudio"`. Prefer the device entries with
-`(hw:…)` in their name: `default`, `pulse` and `sysdefault` go through the sound server, which may resample.
+PipeWire or JACK, install the system library (`libportaudio2` on Debian and Ubuntu) and the optional extra from
+the source checkout, `pip install ".[portaudio]"` (or the release wheel: `pip install "vinyl_check-<version>-py3-none-any.whl[portaudio]"`),
+then set `audio_backend = "portaudio"`. Prefer the device entries with `(hw:…)` in their name: `default`, `pulse`
+and `sysdefault` go through the sound server, which may resample.
+
+## Running as a service in a network
+
+A station installed as a service (`deploy.sh`, a Raspberry Pi) listens on all interfaces by default
+(`host = "0.0.0.0"`): every device in the network reaches the interface, and with it everything the interface can
+do, from starting a recording to deleting records. Keep the station in your own network, never on the internet; to
+use it from elsewhere, forward the port over SSH or use a VPN.
+
+- **Set an access code.** With `access_code = "…"` in the configuration file, every other device enters the code
+  once (it stays signed in with a cookie); the station itself never needs it. Without a code, the service writes a
+  warning to its log at start. The desktop app's network access always uses a code.
+- **What the service checks on its own.** Two checks apply to a service as to the desktop app: the `Host` header
+  must name the station (an IP address, `localhost`, a `.local` name, its host name), which defeats DNS rebinding,
+  and requests that change something, or open the WebSocket, must come from the interface's own origin, which keeps
+  web pages open in a browser in the same network from acting on the station (cross-site request forgery). Scripts
+  and `curl` send no `Origin` header and are not affected.
+- **Behind a reverse proxy.** If nginx or Caddy serves the interface under a DNS name with TLS, pass the `Host`
+  header through unchanged and list the name in `trusted_hosts = ["vinyl.example.net"]`; otherwise the station
+  answers 400 *Unknown host name* for that name. The proxy must forward WebSocket upgrades for the live status.
+- **Keep the configuration file and the database to yourself.** They hold the Discogs token and OAuth secrets in
+  clear text: treat them, and any backup of them, like a password. `deploy.sh` sets the permissions on a service
+  (`config.toml` readable by root and the service only, the state directory by the service only).
+- **Distribution packages.** `deploy.sh` installs the Python libraries as Debian packages, which can be older than
+  the versions on PyPI; Debian 13 ships Starlette 0.46 with published advisories. The interface does not use the
+  affected features (form parsing, range requests on file downloads, the HTTP endpoint classes), so a service on
+  these packages is not exposed to them as of vinyl-check 1.1.1; installations with `pip` get Starlette 1.10 or
+  newer. Keep the system's automatic updates on either way.
+- The generated API documentation (`/docs`, `/openapi.json`) is switched off; the API is described in the README.
 
 ## Turntable alignment basics
 

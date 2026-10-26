@@ -36,6 +36,7 @@
   "image_too_large": "Bild größer als 5 MB",
   "image_type": "Nur JPEG, PNG oder WebP",
   "side_letter": "Seite: ein Buchstabe (A, B …)",
+  "engineer_mode_required": "Master lassen sich nur im Tontechniker-Modus hochladen (Einstellungen)",
   "master_too_large": "Master größer als 3 GB",
   "master_no_space": "Zu wenig Platz für den Master ({gb:.1f} GB)",
   "master_unreadable": "Keine lesbare Audiodatei (WAV, FLAC oder AIFF)",

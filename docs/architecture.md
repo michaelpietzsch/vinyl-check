@@ -204,7 +204,9 @@ model. The design:
 - **Signed models.** The server signs every global model with its own key. The station verifies the signature with
   the key it accepted when joining (the fingerprint in the settings) before it even evaluates the model. Switching
   servers means accepting a new key explicitly.
-- **TLS only**, with certificate validation; no plain HTTP, not even on the local network.
+- **TLS only** towards the hub and the account service, with certificate validation; no plain HTTP, not even on
+  the local network. (The station's own web interface is a different matter: in a local network it is plain HTTP
+  unless a reverse proxy adds TLS, see the setup guide, *Running as a service in a network*.)
 - **Strict input checks on the server**: a fixed JSON schema per `feature_version`, size limits, finite numbers
   within plausible bounds, counts that fit the reported quality.
 - **Limited influence per station.** New stations start with low trust that grows with consistent contributions and

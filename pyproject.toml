@@ -33,6 +33,9 @@ dependencies = [
     "scipy>=1.10",
     "soundfile>=0.12",
     "fastapi>=0.110",
+    # Starlette releases before 1.10 carry published advisories (request parsing, file responses); the interface
+    # also avoids the affected paths for installations from distribution packages (docs/setup-guide.md)
+    "starlette>=1.10",
     "uvicorn>=0.27",
     "websockets>=12",
     "reportlab>=4.0",

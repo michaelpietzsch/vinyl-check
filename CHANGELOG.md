@@ -5,6 +5,39 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] – 2026-10-26
+
+A security release after an independent review of the station, the hub and the account service.
+
+### Security
+
+- The `Host` header check (DNS rebinding) and the `Origin` check on requests that change something and on the
+  WebSocket (cross-site request forgery, cross-site WebSocket hijacking) now apply to a service as well, not only to
+  the desktop app. A service behind a reverse proxy lists the names it is served under in the new configuration key
+  `trusted_hosts`; IP addresses, `localhost`, `.local` names and the host name are always accepted.
+- A service that listens on all interfaces without an `access_code` logs a warning at start; the setup guide has a
+  new section, *Running as a service in a network*, and recommends a code for every station other devices can reach.
+- The generated API documentation (`/docs`, `/redoc`, `/openapi.json`) is switched off.
+- Master uploads are accepted only in engineer mode, which is the only place the interface offers them.
+- Cover images and the clicks-only track are sent as whole files without range requests: older Starlette releases,
+  as shipped by Debian 13, had a weakness in range handling. Installations with `pip` require Starlette 1.10 or
+  newer; the setup guide describes the state for distribution packages.
+- Messages from the hub or the account service lose control characters before they reach the log or the interface.
+- Vinyl-Mind: a published model is used only when it belongs to the group that was asked for (detector version,
+  chain class), and never when it is older than the model adopted before for that group (version or creation time).
+  After the hub withdraws a newer model, the station keeps its local model rather than an older global one; a
+  rollback on the hub cannot put an old model back into use. Candidates were never used as the prior; a test now
+  covers it.
+- `systemd/vinyl-check.service`: `/opt` is read-only for the service (`ReadOnlyPaths`).
+- Build and release: GitHub Actions are pinned to commits, the release workflow builds with read-only permissions
+  and publishes in a separate job, and every release carries `SHA256SUMS` and a build provenance attestation
+  (`gh attestation verify`, see [code signing](docs/code-signing.md)).
+
+### Changed
+
+- The setup guide no longer refers to a `vinyl-check` package on PyPI, where none is published yet: install from a
+  source checkout or from the release wheel. CI fails when the documentation reintroduces the command.
+
 ## [1.1.0] – 2026-10-26
 
 ### Added
@@ -329,7 +362,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/michaelpietzsch/vinyl-check/releases/tag/v1.0.0
