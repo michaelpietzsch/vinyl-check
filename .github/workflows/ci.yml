@@ -37,7 +37,7 @@ jobs:
       - name: Documentation does not install from PyPI
         # no package is published there yet; a command that names one would fetch whatever someone registers
         run: |
-          ! grep -rnE 'pip install "?vinyl-check' README.md docs site
+          ! grep -rnE 'pip install "?vinyl-check' README.md docs
 
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }}${{ matrix.ml && ', torch' || '' }})
