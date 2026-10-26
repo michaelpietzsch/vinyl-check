@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 A security release after an independent review of the station, the hub and the account service.
 
+### Added
+
+- The Windows installer (x64, recording through ASIO or WASAPI) is attached to this release: the ASIO SDK
+  licensing agreement is in place. It is not signed yet, see [code signing](docs/code-signing.md).
+
 ### Security
 
 - The `Host` header check (DNS rebinding) and the `Origin` check on requests that change something and on the
