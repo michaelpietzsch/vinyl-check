@@ -196,16 +196,22 @@ jobs:
           echo "::error::No release $GITHUB_REF_NAME after 30 minutes (did release.yml fail?). The apps are kept as artifacts of this run; re-run this job once the release exists."
           exit 1
       - name: Checksums
-        # release.yml wrote SHA256SUMS for the packages; the apps are appended
+        # release.yml wrote SHA256SUMS for the packages; lines of files uploaded here are replaced (a re-run builds
+        # the apps anew), then the apps are appended
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --output SHA256SUMS || : > SHA256SUMS
+          ls assets > names.txt
+          awk 'NR == FNR { skip[$0] = 1; next } !($NF in skip)' names.txt SHA256SUMS > SHA256SUMS.new
+          mv SHA256SUMS.new SHA256SUMS
           (cd assets && sha256sum *) >> SHA256SUMS
           cat SHA256SUMS
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: assets/*
+          subject-path: |
+            assets/*
+            SHA256SUMS
       - name: Upload
         env:
           GH_TOKEN: ${{ github.token }}
