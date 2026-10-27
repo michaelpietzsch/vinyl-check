@@ -44,16 +44,18 @@ def test_restart_waits_for_a_quiet_interface(tmp_path):
     with TestClient(app) as c:
         started = c.get("/api/status").json()["started_at"]
         assert started and c.get("/api/status").json()["started_at"] == started
+        assert app.state.restart["last_write"] == 0.0                          # reading does not count as working
         assert c.post("/api/records", json={"title": "x"}).status_code == 200     # someone is working here
-        wrote = time.time()
+        wrote = app.state.restart["last_write"]
+        assert wrote > 0
+        for _ in range(3):
+            c.get("/api/status")
+        assert app.state.restart["last_write"] == wrote
         (cfg.state_dir / "restart-when-idle").touch()
-        for _ in range(10):
-            c.get("/api/status")                                 # reading does not count as working
-            time.sleep(0.03)
-        assert not fired
-        deadline = time.time() + 3
+        deadline = time.time() + 5
         while not fired and time.time() < deadline:
             time.sleep(0.02)
+        # the restart came, but not before the quiet spell after the change (independent of the machine's speed)
         assert len(fired) == 1 and fired[0] - wrote >= 0.6
 
 
