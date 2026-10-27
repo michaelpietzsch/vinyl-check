@@ -336,6 +336,12 @@ the conventions of the chosen language. To add a language, see [docs/translating
   and signing in with an account on the project's website is next.
 - **More test records**: band layouts beyond the Analogue Productions AAPT 1, 45 rpm alignment tones.
 - **Grade calibration** against a larger set of records with known condition.
+- **Wow per revolution without a reference**: tell from the recording alone whether a record wobbles (off-center
+  hole, warp). The pitch drift of stable partials in the music is tracked and locked in on the rotation frequency
+  over all revolutions of a side; the music averages out, the wobble does not. An off-center hole grows toward
+  the inner grooves, the turntable's own once-per-revolution wow does not, and the hole's phase stays fixed across
+  the side. Reported only where the music allows it (sustained tones), checked against recordings with a master
+  comparison, which measures the hole against the digital master already (engineer mode).
 - **WAV import** of recordings made elsewhere.
 
 ## Contributing
