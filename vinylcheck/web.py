@@ -110,6 +110,19 @@ class LanguageMiddleware:
             await self.app(scope, receive, send)
 
 
+class _WriteClock:
+    """Notes when a request last changed something (any method but GET/HEAD/OPTIONS) in `clock["last_write"]`: the
+    restart when idle waits for a quiet spell after it."""
+
+    def __init__(self, app, clock: dict):
+        self.app, self.clock = app, clock
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("method") not in ("GET", "HEAD", "OPTIONS"):
+            self.clock["last_write"] = time.time()
+        await self.app(scope, receive, send)
+
+
 class RecordIn(BaseModel):
     artist: str = ""
     title: str = ""
@@ -536,7 +549,9 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         os.kill(os.getpid(), signal.SIGTERM)
         threading.Timer(15, lambda: os._exit(0)).start()   # in case uvicorn hangs (open WebSockets)
 
-    restart_cfg = {"poll": 3.0, "do": _restart_now, "requested": False}   # tests replace do/poll
+    # "quiet": seconds without a change made in the interface (any request but GET/HEAD/OPTIONS, noted by
+    # _WriteClock) before the restart, so that it does not cut into someone working there; tests replace do/poll/quiet
+    restart_cfg = {"poll": 3.0, "do": _restart_now, "requested": False, "quiet": 60.0, "last_write": 0.0}
 
     def _restart_loop() -> None:
         while True:
@@ -545,6 +560,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                 continue
             ws = worker.status()
             if recorder.active or ws["current"] or ws["queued"]:
+                continue
+            if time.time() - restart_cfg["last_write"] < restart_cfg["quiet"]:
                 continue
             log.info("New code is staged and nothing is running: restarting the service")
             restart_cfg["requested"] = True
@@ -807,6 +824,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     if cfg.language != "auto" and not i18n.supported(cfg.language):
         raise ValueError(f"Unknown language {cfg.language!r}: use 'auto' or one of {', '.join(i18n.languages())}")
     app.add_middleware(LanguageMiddleware, default=cfg.language)
+    app.add_middleware(_WriteClock, clock=restart_cfg)
     app.state.desktop = desktop
 
     @app.exception_handler(StarletteHTTPException)
@@ -866,6 +884,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                           "usable": [k for k, v in ((learn_model() or {}).get("kinds") or {}).items() if v.get("usable")]},
                 "ui_build": _ui_build(),
                 "restart_pending": restart_pending(),
+                "started_at": round(started_at, 3),         # changes with every restart: the interface reloads its view
                 "clip_limits": {"mention": cfg.clip_mention_samples, "max": cfg.clip_max_samples, "grace_s": cfg.clip_grace_s},
                 "second_opinion": second_opinion.info(),
                 "discogs_write": dc.enabled,

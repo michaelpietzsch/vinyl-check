@@ -13,7 +13,7 @@
   "tab_settings_title": "Settings, device and service",
   "ui_updated": "The interface has been updated.",
   "reload_now": "Reload now",
-  "restart_pending": "A new version is ready. The service restarts as soon as no recording and no analysis is running; reload the page afterwards.",
+  "restart_pending": "The service restarts to apply a new version or changed settings, as soon as no recording and no analysis is running and nothing has been changed here for a minute. The page updates itself afterwards.",
   "pill_storage_free": "Storage {gb} GB free",
   "pill_storage_bad": "Storage: {reason}",
   "pill_profile_title": "Active turntable",
@@ -131,5 +131,7 @@
   "doc_op_system": "<b>System</b> (tab): running and queued analyses, CPU, memory, temperature. The pill at the top right opens the same list.",
   "doc_limits_head": "Limits",
   "doc_limits_p": "The grade limits are not calibrated; anchor points by ear are being collected. The noise depends on the chain. The deck baseline is only valid as long as the test record was clean during setup. In pink noise and dense cymbal passages every detector is blind or noisy; the audit is the way to measure that.",
-  "version_title": "Version, licenses and service details"
+  "version_title": "Version, licenses and service details",
+  "offline": "No connection to the station. Is it restarting? Try again in a moment.",
+  "offline_write": "No answer from the station: the change may have arrived all the same. Reload the page and check before you try again."
 }

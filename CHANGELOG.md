@@ -5,7 +5,24 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.2] – 2026-10-27
+
+### Fixed
+
+- When the station did not answer, the interface showed the browser's own message (“Failed to fetch”). Requests now
+  go through one place: reads are tried again after 1, 2 and 4 seconds, which covers a restart of the service, also
+  behind a reverse proxy that answers 502–504 meanwhile. Writes are not repeated, since they may have arrived; the
+  message says so in the interface language.
+- After a restart of the service, a page could keep showing the state from before (for example the hint that the
+  grade limits are not calibrated, after they were marked as calibrated). The status now carries the start time of
+  the service, and the interface reloads the current view by itself after a restart, unless something is being typed
+  or a report page is open.
+
+### Changed
+
+- The restart when idle (after an update or a changed configuration) also waits until nothing has been changed in
+  the interface for a minute, so that it does not cut into someone working there. The notice says so and no longer
+  asks to reload the page.
 
 ### Removed
 
@@ -373,7 +390,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.0...v1.0.1

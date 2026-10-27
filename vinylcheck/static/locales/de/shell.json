@@ -13,7 +13,7 @@
   "tab_settings_title": "Einstellungen, Gerät und Dienst",
   "ui_updated": "Die Oberfläche wurde aktualisiert.",
   "reload_now": "Jetzt neu laden",
-  "restart_pending": "Neue Version liegt bereit. Der Dienst startet neu, sobald keine Aufnahme und keine Analyse mehr läuft; danach einmal neu laden.",
+  "restart_pending": "Der Dienst startet neu, um eine neue Version oder geänderte Einstellungen zu übernehmen, sobald keine Aufnahme und keine Analyse mehr läuft und hier eine Minute lang nichts geändert wurde. Die Seite aktualisiert sich danach von selbst.",
   "pill_storage_free": "Speicher {gb} GB frei",
   "pill_storage_bad": "Speicher: {reason}",
   "pill_profile_title": "Aktiver Plattenspieler",
@@ -128,5 +128,7 @@
   "doc_op_system": "<b>System</b> (Reiter): laufende und wartende Analysen, CPU, Speicher, Temperatur. Die Pille oben rechts klappt dieselbe Liste auf.",
   "doc_limits_head": "Grenzen",
   "doc_limits_p": "Die Notengrenzen sind nicht kalibriert; Ankerpunkte nach Gehör werden gesammelt. Das Rauschen hängt an der Kette. Der Laufwerksgrund gilt nur, solange die Testplatte beim Einmessen sauber war. Im rosa Rauschen und in dichten Becken-Passagen ist jeder Detektor blind oder laut; das Audit ist der Weg, das zu messen.",
-  "version_title": "Version, Lizenzen und Details zum Dienst"
+  "version_title": "Version, Lizenzen und Details zum Dienst",
+  "offline": "Keine Verbindung zur Station. Startet sie gerade neu? Gleich noch einmal versuchen.",
+  "offline_write": "Keine Antwort von der Station: Die Änderung ist vielleicht trotzdem angekommen. Seite neu laden und nachsehen, bevor du es noch einmal versuchst."
 }

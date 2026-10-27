@@ -18,6 +18,7 @@ def test_restart_fires_when_idle(tmp_path):
     app = create_app(cfg)
     fired = []
     app.state.restart["poll"] = 0.05
+    app.state.restart["quiet"] = 0.0
     app.state.restart["do"] = lambda: fired.append(time.time())
     with TestClient(app) as c:
         assert c.get("/api/status").json()["restart_pending"] is False
@@ -29,6 +30,31 @@ def test_restart_fires_when_idle(tmp_path):
         assert len(fired) == 1
         time.sleep(0.2)
         assert len(fired) == 1                                   # only once, even if the flag stays
+
+
+def test_restart_waits_for_a_quiet_interface(tmp_path):
+    """A change made in the interface (any write request) postpones the restart by the quiet spell; reading does
+    not. The status names the start time of the process, which changes with every restart."""
+    cfg = _cfg(tmp_path)
+    app = create_app(cfg)
+    fired = []
+    app.state.restart["poll"] = 0.05
+    app.state.restart["quiet"] = 0.6
+    app.state.restart["do"] = lambda: fired.append(time.time())
+    with TestClient(app) as c:
+        started = c.get("/api/status").json()["started_at"]
+        assert started and c.get("/api/status").json()["started_at"] == started
+        assert c.post("/api/records", json={"title": "x"}).status_code == 200     # someone is working here
+        wrote = time.time()
+        (cfg.state_dir / "restart-when-idle").touch()
+        for _ in range(10):
+            c.get("/api/status")                                 # reading does not count as working
+            time.sleep(0.03)
+        assert not fired
+        deadline = time.time() + 3
+        while not fired and time.time() < deadline:
+            time.sleep(0.02)
+        assert len(fired) == 1 and fired[0] - wrote >= 0.6
 
 
 def test_stale_flag_is_ignored(tmp_path):

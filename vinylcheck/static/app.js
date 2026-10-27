@@ -64,8 +64,24 @@ function toast(msg, ms = 3500) {
 }
 
 // JSON API call; errors become exceptions with the server's (already localized) message
+// The station did not answer: no network, or the service is restarting (a few seconds after an update or a changed
+// configuration; a reverse proxy in front of it then answers 502–504 with a page of its own). Reads are tried again
+// after 1, 2 and 4 s; writes are not, since they may have arrived, and the message says so.
+const RETRY_MS = [1000, 2000, 4000];
+const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function request(path, opts = {}) {
+  const read = ["GET", "HEAD"].includes((opts.method || "GET").toUpperCase());
+  for (let attempt = 0; ; attempt++) {
+    let r = null;
+    try { r = await fetch(path, opts); } catch (e) { if (e.name === "AbortError") throw e; }
+    const down = !r || ([502, 503, 504].includes(r.status) && !r.headers.get("content-type")?.includes("json"));
+    if (!down) return r;
+    if (read && attempt < RETRY_MS.length) { await sleep(RETRY_MS[attempt]); continue; }
+    throw new Error(T(read ? "shell.offline" : "shell.offline_write"));
+  }
+}
 async function api(path, opts = {}) {
-  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts,
+  const r = await request(path, { headers: { "Content-Type": "application/json" }, ...opts,
     body: opts.body && typeof opts.body !== "string" && !(opts.body instanceof Blob) ? JSON.stringify(opts.body) : opts.body });
   if (!r.ok) {
     let msg = r.statusText;
@@ -196,9 +212,30 @@ function checkRestart(s) {                                   // a deploy waits u
     document.body.prepend(d);
   } else if (!s.restart_pending && h) h.remove();
 }
+// The service restarted (an update, a changed configuration): show the current view again with fresh data, so that
+// nothing on it reflects the state before. Not while something is being typed, and not on a report page; changed
+// interface files are offered for reload by checkUiBuild.
+let serverStart = null;
+function checkServerRestart(s) {
+  if (s.started_at == null) return;
+  const before = serverStart;
+  serverStart = s.started_at;
+  if (before == null || before === s.started_at) return;
+  if (document.activeElement?.matches("input, textarea, select, [contenteditable]")) return;
+  refreshView().catch(() => {});
+}
+async function refreshView() {
+  if (!$("#view").classList.contains("hidden")) return;
+  if (state.mode !== "record") return setMode(state.mode);
+  if (!state.record) return loadRecords();
+  state.record = await api(`/api/records/${state.record.id}`);       // keeps the selected recordings, unlike openRecord
+  try { await loadProfilesById(); } catch (_) {}
+  renderRecord(); loadRecords();
+}
 function renderStatus(s) {
   checkUiBuild(s); checkRestart(s);
   state.status = s;
+  checkServerRestart(s);
   const pills = [];
   const st = s.storage;
   pills.push(st.ok ? `<span class="pill ok">${ico("ok",14)} ${T("shell.pill_storage_free", { gb: st.free_gb ?? "?" })}</span>`
@@ -2331,7 +2368,7 @@ function renderVinylMind(s) {
     $("#vm-export").disabled = !ps.length;
   }).catch(() => {});
   $("#vm-export").onclick = guard(async () => {
-    const r = await fetch(`/api/vinylmind/export?profile=${encodeURIComponent($("#vm-exp").value)}`);
+    const r = await request(`/api/vinylmind/export?profile=${encodeURIComponent($("#vm-exp").value)}`);
     if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail; } catch (_) {} throw new Error(m); }
     const file = (r.headers.get("content-disposition") || "").match(/filename="([^"]+)"/)?.[1] || "vinyl-mind-contribution.json";
     const a = document.createElement("a");
@@ -3245,7 +3282,7 @@ try {
 let SG_LUT = sgLut(sgScale);
 
 async function fetchSpectrogram(recId, q) {
-  const r = await fetch(`/api/recordings/${recId}/spectrogram?` + new URLSearchParams(Object.fromEntries(Object.entries(q).filter(([, v]) => v != null))));
+  const r = await request(`/api/recordings/${recId}/spectrogram?` + new URLSearchParams(Object.fromEntries(Object.entries(q).filter(([, v]) => v != null))));
   if (!r.ok) { let msg = r.statusText; try { msg = (await r.json()).detail; } catch (_) {} throw new Error(msg); }
   const h = (k) => +r.headers.get(k);
   return { data: new Uint8Array(await r.arrayBuffer()), rows: h("x-rows"), cols: h("x-cols"), t0: h("x-t0"), t1: h("x-t1"),
