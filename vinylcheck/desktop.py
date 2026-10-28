@@ -13,7 +13,7 @@ the process is stopped (Ctrl+C).
 
 `--selftest` starts the engine without a window, on a temporary data directory with a synthetic test side, and checks
 the API, the interface, the WebSocket, a complete analysis in the worker process, a PDF report with the bundled fonts,
-the QR code, PortAudio (host APIs and input devices) and the window toolkit. It prints one line per check and exits with 0 (all passed) or 1. CI runs it on the
+the QR code, HTTPS with the system's certificates, PortAudio (host APIs and input devices) and the window toolkit. It prints one line per check and exits with 0 (all passed) or 1. CI runs it on the
 built apps; `--output FILE` also writes the result to a file, because a windowed Windows app has no console.
 
 Analyses run in a spawned child process (jobs.py). A frozen app (PyInstaller) starts that child from its own
@@ -30,6 +30,7 @@ import multiprocessing
 import os
 import shutil
 import signal
+import ssl
 import sys
 import tempfile
 import threading
@@ -454,12 +455,31 @@ def selftest(output: str | None = None, timeout: float = 240.0) -> int:
             assert network.qr_svg("http://192.0.2.1:8080/") is not None, "segno missing: no QR code"
             return "access code and QR code"
 
+        def https():
+            # A packaged app on macOS or Windows must use the system's trusted certificates: its own OpenSSL points to
+            # a directory of the build machine (that is how every HTTPS connection once failed on users' Macs while
+            # CI, which has that directory, passed). Then one real connection to the project's hub.
+            from . import tls, vinylmind
+            if getattr(sys, "frozen", False) and sys.platform in ("darwin", "win32"):
+                assert tls.source() == "system", f"certificates from {tls.source()}, not from the system"
+            req = urllib.request.Request(vinylmind.DEFAULT_VINYL_MIND_URL + "/v1/server",
+                                         headers={"User-Agent": f"vinyl-check/{__version__} selftest"})
+            try:
+                with urllib.request.urlopen(req, timeout=20, context=tls.context()) as r:
+                    assert r.status == 200, r.status
+            except urllib.error.URLError as e:
+                if isinstance(e.reason, ssl.SSLError):
+                    raise
+                raise _Skip(f"no network ({e.reason}), certificates from {tls.source()}") from None
+            return f"certificates from {tls.source()}, hub reachable"
+
         check("health", health)
         check("interface", index)
         check("websocket", websocket)
         check("analysis", analysis)
         check("pdf report", pdf)
         check("network access", net)
+        check("https", https)
         check("audio (PortAudio)", _audio_check)
         if getattr(sys, "frozen", False) or _import_webview() is not None:
             check("window toolkit", _gui_check)

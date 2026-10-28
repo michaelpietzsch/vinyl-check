@@ -33,7 +33,7 @@ class FakeApi:
         self.calls = []
         self.media = {5605854: "Good (G)", 12345: "Near Mint (NM or M-)", 777: "Very Good (VG)"}
 
-    def __call__(self, req, timeout=0):
+    def __call__(self, req, timeout=0, context=None):
         url = req.full_url
         self.calls.append((req.get_method(), url, dict(req.header_items()), req.data))
         assert dict(req.header_items()).get("Authorization") == "Discogs token=tok123"
@@ -94,7 +94,7 @@ def test_disabled_without_token(tmp_path):
 
 def test_errors_are_messages_rendered_per_language(tmp_path, monkeypatch):
     """HTTP errors and network failures become i18n messages; the sync error is kept for the status."""
-    def unauthorized(req, timeout=0):
+    def unauthorized(req, timeout=0, context=None):
         raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, io.BytesIO(b'{"message": "no"}'))
 
     monkeypatch.setattr(discogs.urllib.request, "urlopen", unauthorized)
@@ -107,7 +107,7 @@ def test_errors_are_messages_rendered_per_language(tmp_path, monkeypatch):
         assert str(ei.value).startswith("Discogs 401: Token ungültig")
     assert d.status()["error"] == ei.value.message and not d.status()["syncing"]
 
-    def offline(req, timeout=0):
+    def offline(req, timeout=0, context=None):
         raise OSError("network down")
 
     monkeypatch.setattr(discogs.urllib.request, "urlopen", offline)
@@ -143,7 +143,7 @@ def test_oauth_flow_and_signed_requests(tmp_path, monkeypatch):
     """App keys → request token → authorization (verifier) → access token; then an OAuth header instead of a token."""
     seen = []
 
-    def fake(req, timeout=0):
+    def fake(req, timeout=0, context=None):
         url, auth = req.full_url, dict(req.header_items()).get("Authorization", "")
         seen.append((url, auth))
         if url.endswith("/oauth/request_token"):
@@ -194,7 +194,7 @@ class AccountApi:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, req, timeout=0):
+    def __call__(self, req, timeout=0, context=None):
         url, auth = req.full_url, dict(req.header_items()).get("Authorization", "")
         self.calls.append((url, auth))
         if url.startswith("https://api.discogs.com/releases/"):

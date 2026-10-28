@@ -31,7 +31,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from . import i18n
+from . import i18n, tls
 
 API = "https://api.discogs.com"
 FIELD_MEDIA, FIELD_SLEEVE, FIELD_NOTES = 1, 2, 3          # default fields of a Discogs collection
@@ -186,7 +186,7 @@ class Discogs:
                                      headers={"Authorization": auth or self._auth_header(), "User-Agent": self.ua,
                                               "Content-Type": "application/json", "Accept": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            with urllib.request.urlopen(req, timeout=20, context=tls.context()) as resp:
                 raw = resp.read()
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as e:
@@ -208,7 +208,7 @@ class Discogs:
                                      headers={"Authorization": header, "User-Agent": self.ua,
                                               "Content-Type": "application/x-www-form-urlencoded"})
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            with urllib.request.urlopen(req, timeout=20, context=tls.context()) as resp:
                 return {k: v[0] for k, v in urllib.parse.parse_qs(resp.read().decode()).items()}
         except urllib.error.HTTPError as e:
             reason = e.read().decode(errors="replace")[:200] or e.reason
@@ -390,7 +390,7 @@ class Discogs:
             return self._req(url)
         req = urllib.request.Request(url, headers={"User-Agent": self.ua, "Accept": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10, context=tls.context()) as resp:
                 return json.loads(resp.read() or b"{}")
         except (urllib.error.HTTPError, OSError, ValueError) as e:
             raise DiscogsError(i18n.msg("discogs.unreachable", error=str(e))) from e

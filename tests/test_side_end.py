@@ -60,7 +60,7 @@ def test_recording_uses_side_length_and_reports_remaining(tmp_path, monkeypatch)
     wav = tmp_path / "record.wav"
     sf.write(wav, audio, SR, subtype="PCM_16")
 
-    def fake(req, timeout=0):
+    def fake(req, timeout=0, context=None):
         url = req.full_url
         if "/releases/777" in url:
             return io.BytesIO(json.dumps({"id": 777, "master_id": 9, "tracklist": [{"position": "A1", "duration": ""}]}).encode())

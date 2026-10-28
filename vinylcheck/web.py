@@ -45,7 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
-from . import audio_settings, licenses, network, vinylmind
+from . import audio_settings, licenses, network, tls, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key
 from .jobs import MASTER_KINDS, Worker
@@ -1168,7 +1168,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                                          headers={"User-Agent": f"vinyl-check/{__version__}",
                                                   **({"Authorization": dc.auth_header()} if dc.enabled else {})})
             try:
-                with urllib.request.urlopen(req, timeout=8) as resp:
+                with urllib.request.urlopen(req, timeout=8, context=tls.context()) as resp:
                     data = json.loads(resp.read())
             except Exception as e:  # noqa: BLE001 — Discogs unreachable: no cover, nothing else fails
                 raise HTTPException(502, i18n.msg("api.discogs_unreachable", error=str(e))) from e

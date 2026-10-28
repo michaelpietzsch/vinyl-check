@@ -42,6 +42,9 @@ dependencies = [
     "pillow>=10",
     # Ed25519 keys and signatures for Vinyl-Mind (station identity, signed requests, signed models)
     "cryptography>=41",
+    # HTTPS against the operating system's trusted certificates (tls.py): a packaged app's own OpenSSL does not know
+    # where they are on macOS and Windows
+    "truststore>=0.10; sys_platform == 'darwin' or sys_platform == 'win32'",
     # Recording through PortAudio (Core Audio, WASAPI, ASIO); the wheels bring PortAudio along. Linux records with
     # arecord and only needs it with the extra [portaudio].
     "sounddevice>=0.5; sys_platform == 'darwin' or sys_platform == 'win32'",

@@ -5,6 +5,25 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] – 2026-10-28
+
+This release also contains the changes of 1.1.2 below, which was not published on its own.
+
+### Fixed
+
+- The macOS app could not open any HTTPS connection (“CERTIFICATE_VERIFY_FAILED … unable to get local issuer
+  certificate”): testing a Discogs token, syncing the collection, cover images and signing in to Vinyl-Mind all
+  failed. The OpenSSL bundled with the app looked for the trusted certificates in a directory of the build machine.
+  All HTTPS connections now share one context with the operating system's trusted certificates (macOS keychain,
+  Windows certificate store; on Linux and the Raspberry Pi the system's OpenSSL as before). `SSL_CERT_FILE` still
+  takes precedence when set.
+- The self-test of the packaged apps checks HTTPS with the system's certificates and one real connection, so CI
+  catches this kind of failure: the build machines had the directory, the users' computers did not.
+
+### Added
+
+- A support address: questions and problems to info@vinylcheck.net (README, setup guide).
+
 ## [1.1.2] – 2026-10-27
 
 ### Fixed
@@ -390,8 +409,9 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.2...HEAD
-[1.1.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.2
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.3
+[1.1.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.3
 [1.1.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.0.0...v1.0.1

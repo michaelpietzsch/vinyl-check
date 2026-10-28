@@ -344,6 +344,11 @@ the conventions of the chosen language. To add a language, see [docs/translating
   comparison, which measures the hole against the digital master already (engineer mode).
 - **WAV import** of recordings made elsewhere.
 
+## Support
+
+Questions, problems and bug reports: [info@vinylcheck.net](mailto:info@vinylcheck.net), or an issue on GitHub.
+Security vulnerabilities please report privately to the same address, not in a public issue.
+
 ## Contributing
 
 Contributions are welcome: bug reports, measurements from your setup, translations and code. Please read

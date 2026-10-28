@@ -470,7 +470,7 @@ def test_record_cover_is_fetched_once_and_cached(client, monkeypatch):
     from vinylcheck import web
     calls = []
 
-    def fake_urlopen(req, timeout=0):
+    def fake_urlopen(req, timeout=0, context=None):
         calls.append(req.full_url)
         body = json.dumps({"images": [{"type": "secondary", "uri": "https://i.discogs.com/b.jpg", "uri150": "https://i.discogs.com/b150.jpg"},
                                       {"type": "primary", "uri": "https://i.discogs.com/a.jpg", "uri150": "https://i.discogs.com/a150.jpg"}]})
@@ -800,7 +800,7 @@ def test_measured_grade_can_be_written_to_collection(tmp_path, monkeypatch):
     sf.write(wav, audio, SR, subtype="PCM_16")
     written = {}
 
-    def fake_urlopen(req, timeout=0):
+    def fake_urlopen(req, timeout=0, context=None):
         url = req.full_url
         if "/collection/folders/0/releases" in url:
             item = {"instance_id": 42, "folder_id": 1, "date_added": "2026-09-07T10:00:00-07:00",

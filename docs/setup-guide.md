@@ -26,6 +26,7 @@ Product names below are examples, not recommendations or requirements.
 10. [Level calibration](#level-calibration)
 11. [Your first recording](#your-first-recording)
 12. [Checklist before every session](#checklist-before-every-session)
+13. [Help](#help)
 
 ## The measurement chain
 
@@ -477,3 +478,9 @@ After calibration, leave the gain alone. Both modes, record checks and alignment
 
 **Every few weeks, or after any change to the turntable:** play the test record again (a new run) and compare it
 with the last one. Re-align the profile after changing the stylus, cartridge, interface or location.
+
+## Help
+
+Something does not work as described, or a measurement looks wrong? Write to
+[info@vinylcheck.net](mailto:info@vinylcheck.net) with the version (shown next to the logo), the operating system and,
+if possible, the recording or a screenshot.

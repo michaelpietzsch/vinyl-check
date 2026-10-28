@@ -40,7 +40,6 @@ import math
 import os
 import re
 import secrets
-import ssl
 import threading
 import time
 import urllib.error
@@ -57,7 +56,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, detect, i18n, learning, network
+from . import __version__, detect, i18n, learning, network, tls
 
 log = logging.getLogger("vinylcheck.vinylmind")
 
@@ -764,7 +763,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _opener():
-    return urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+    return urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=tls.context()))
 
 
 def _read(resp) -> bytes:
