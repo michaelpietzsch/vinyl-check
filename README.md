@@ -348,10 +348,11 @@ the conventions of the chosen language. To add a language, see [docs/translating
 
 ## Roadmap
 
-- **Updates from the interface** (planned for 1.3). 1.2 shows when a new version is out; installing it will differ
-  per platform: a service (Raspberry Pi, Linux) fetches the release wheel, checks its checksum and provenance
-  attestation and restarts once idle, as `deploy.sh` does today; the macOS and Windows apps download the installer,
-  check it the same way and start it, which works without warnings only once the apps are signed.
+- **Updates from the interface** (planned for 1.4). Since 1.2 the station shows when a new version is out;
+  installing it will differ per platform: a service (Raspberry Pi, Linux) fetches the release wheel, checks its
+  checksum and provenance attestation and restarts once idle, as `deploy.sh` does today; the macOS and Windows apps
+  download the installer, check it the same way and start it, which works without warnings only once the apps are
+  signed.
 - **Linux desktop app** (AppImage) next to the macOS and Windows apps, and signed apps on both systems.
 - **Vinyl-Mind**: stations learn together. Each turntable profile trains its model locally, with the measured
   profile as the zero point so that setups become comparable; only model weights and counts are shared,
