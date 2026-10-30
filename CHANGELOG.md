@@ -5,43 +5,44 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] – unreleased
+## [1.2.0] – 2026-10-30
 
 ### Added
 
-- Storage on the System tab (status only): the application folder (database, keys, caches) and the user-data folder
-  (recordings and masters) with their paths, drives (kind and model where known), free space and what they hold.
-- *Settings → Storage*: moving the user-data folder to another folder or drive. A drop-down offers a folder on every
-  drive found, earlier folders, the folder of the configuration file and one on the system drive (drives listed in
-  `/etc/fstab` but not mounted are shown, not selectable); a path of one's own only after choosing "Other folder".
-  The choice is checked at once (space, write access, files of the same name). Progress (percent, files, GB,
-  speed, time left) shows in the settings, on the System tab and in the header. Every file is copied through a temporary file and compared
-  with its original (SHA-256 of what was read and of the copy read back); only then does the station switch, in one
-  step: the stored paths are rewritten in one transaction and the new folder is used without a restart. The
-  originals are deleted afterwards if chosen, once no analysis runs. A cancelled, failed or interrupted move leaves
-  the station on the old folder; started again, it continues where it stopped.
-- Files the database refers to outside the user-data folder (left behind when `data_dir` was changed in the
-  configuration file) are listed and can be gathered into the folder in use, the same way; a move takes them along.
-- Readable file names for new recordings: number, artist and title (and the copy), side and kind, e.g.
+- **Storage.** The System page shows the user-data folder (recordings and masters) and the application folder
+  (database, keys, caches) with their paths, drives (kind and model where known, and which is the system drive),
+  free space and what they hold.
+- **Moving the user-data folder** under *Settings → Storage*. A drop-down offers a folder on every drive found,
+  earlier folders, the folder of the configuration file and one on the system drive (drives listed in `/etc/fstab`
+  but not mounted are shown, not selectable); a path of one's own only after choosing *Other folder*. The choice is
+  checked at once (space, write access, files of the same name). Every file is copied through a temporary file and
+  compared with its original (SHA-256 of what was read and of the copy read back); only then does the station
+  switch, in one step: the stored paths are rewritten in one transaction and the new folder is used without a
+  restart. The originals are deleted afterwards if chosen, once no analysis runs. Progress (percent, files, GB,
+  speed, time left) shows in the settings, on the System page and in the header. A cancelled, failed or interrupted
+  move leaves the station on the old folder; started again, it continues where it stopped.
+- **Gathering**: files the database refers to outside the user-data folder (left behind when `data_dir` was changed
+  in the configuration file) are listed and can be brought into the folder in use the same way; a move takes them
+  along.
+- **Relinking**: point the station at a folder that already holds the data (a drive mounted under another name, a
+  copy made by hand) without copying.
+- **Readable file names** for new recordings: number, artist and title (and the copy), side and kind, e.g.
   `00042_Pink-Floyd_The-Wall_A_before.wav`; turntable measurements carry the profile name. Umlauts are written out,
   other characters become `-`. *Settings → Storage → Rename files* brings older recordings to the scheme (renames,
   then rewrites the stored paths in one transaction; undone if that fails).
-- Relinking: point the station at a folder that already holds the data (a drive mounted under another name, a copy
-  made by hand) without copying.
-- A folder on a separate drive sets `require_mount` to that drive, so a missing drive stops recordings instead of
-  filling the system disk.
-
-- A note when a new version is out: once a day the station asks GitHub for the latest release (sending only its
+- **A note when a new version is out**: once a day the station asks GitHub for the latest release (sending only its
   version) and shows *Version x.y.z available* in the header, on the System page and under *Settings → Updates*,
   with a link to the release page. Switch: *Settings → Updates* or `update_check` in the configuration file.
 
 ### Changed
 
 - The folder chosen in the interface is kept in the database and takes precedence over `data_dir` (and
-  `require_mount`) in the configuration file.
+  `require_mount`) in the configuration file. A folder on a separate drive sets `require_mount` to that drive, so
+  a missing drive stops recordings instead of filling the system disk.
 - While a move runs, recording and uploading a master are refused, the retention cleanup waits, and a restart
   staged by `deploy.sh` waits for the move to end (the deploy script also counts a move as busy).
-- The free-space display in the header and the System tab names the folder it belongs to.
+- The free-space display in the header and on the System page names the folder it belongs to.
+- Vinyl-Mind: a hub admits client versions explicitly; stations on 1.2 need a hub that lists `vinyl-check/1.2.*`.
 
 ## [1.1.3] – 2026-10-28
 
@@ -447,7 +448,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.3
 [1.1.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.3
 [1.1.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.0...v1.1.1
