@@ -1,6 +1,7 @@
 """The user-data folder (storage.py): checking a target, moving with verified copies, gathering files left outside,
 relinking, cancelling, and the guards while a move runs."""
 import json
+import os
 import shutil
 import threading
 import time
@@ -87,7 +88,7 @@ def test_move_copies_verifies_switches_and_deletes_the_originals(station, tmp_pa
     assert not any(p.is_file() for p in old.rglob("*"))            # originals deleted, empty folders removed
     assert not (old / "recordings").exists() and not (old / "masters").exists()
     assert cfg.data_dir == new and cfg.rec_dir == new / "recordings"
-    assert all(p.startswith(str(new) + "/") for p in storage.referenced(db))
+    assert all(p.startswith(str(new) + os.sep) for p in storage.referenced(db))
     assert db.setting(storage.S_DATA_DIR) == str(new)
     # a restart: the choice in the database wins over the configuration file
     fresh = replace(Config(), data_dir=old, state_dir=cfg.state_dir)
@@ -161,7 +162,7 @@ def test_a_move_takes_the_files_from_outside_along(station, tmp_path):
     mover.start(str(tmp_path / "third"))
     wait(mover)
     paths = storage.referenced(db)
-    assert sum(p.startswith(str(tmp_path / "third") + "/") for p in paths) == 4
+    assert sum(p.startswith(str(tmp_path / "third") + os.sep) for p in paths) == 4
     assert str(tmp_path / "missing" / "x.wav") in paths              # cannot be found: stays as it is
 
 
@@ -202,7 +203,7 @@ def test_relink_points_at_data_that_is_there(station, tmp_path):
     mover = storage.Mover(cfg, db)
     mover.relink(str(new))
     assert mover.status()["kind"] == "relink" and mover.status()["phase"] == "done"
-    assert cfg.data_dir == new and all(p.startswith(str(new) + "/") for p in storage.referenced(db))
+    assert cfg.data_dir == new and all(p.startswith(str(new) + os.sep) for p in storage.referenced(db))
     assert len(storage.files(old)) == 3                            # relinking copies and deletes nothing
 
 
@@ -277,7 +278,8 @@ def test_targets_offer_drives_earlier_folders_and_the_system_drive(station, tmp_
     assert kinds["previous"]["path"] == str(old)                       # where the old recordings still are
     assert kinds["config"]["path"] == str(tmp_path / "from-config")
     assert kinds["system"]["path"] == str(cfg.state_dir / "data")      # a service keeps its data apart
-    assert storage.targets(cfg, db, service=False)[-1]["path"] == str(cfg.state_dir)
+    desktop = {x["kind"]: x for x in storage.targets(cfg, db, service=False)}
+    assert desktop["system"]["path"] == str(cfg.state_dir)            # an app keeps its data in the user folder
     assert all({"free_gb", "total_gb", "drive", "available"} <= x.keys() for x in t)
     assert len({x["path"] for x in t}) == len(t)
 
