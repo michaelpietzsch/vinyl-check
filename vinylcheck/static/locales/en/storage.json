@@ -1,0 +1,71 @@
+{
+  "title": "Storage",
+  "intro": "vinyl-check keeps its database in the application folder, and the recordings and masters in the user-data folder, which can be on another drive.",
+  "app_folder": "Application folder",
+  "app_hint": "Database with all measurements, judgments and settings, keys and caches. It belongs to the installation and stays where it is.",
+  "data_folder": "User-data folder",
+  "data_hint": "Recordings and masters: the large files. They can move to another drive.",
+  "source_settings": "chosen here",
+  "source_config": "from the configuration file",
+  "free": "{free} GB free of {total} GB",
+  "usage": "{rec} recordings ({rec_gb} GB), {mas} masters ({mas_gb} GB)",
+  "drive": "Drive {mount}",
+  "mounted": "mounted",
+  "not_mounted": "not mounted: the station does not record",
+  "missing": "The folder cannot be reached (drive not mounted?). Measurements and grades stay visible; recording and listening do not work until it is back.",
+  "change": "Move or relink the user-data folder",
+  "target": "New folder",
+  "target_help": "The full path. On an extra drive, vinyl-check suggests a folder below.",
+  "suggestions": "Suggestions:",
+  "check": "Check",
+  "check_ok": "{files} files, {gb} GB will be copied; {free} GB are free there.",
+  "check_already": {
+    "one": "{n} file is there already and is checked, not copied again.",
+    "other": "{n} files are there already and are checked, not copied again."
+  },
+  "delete_originals": "Delete the originals after the move",
+  "delete_help": "Only after every copy has been checked and the station has switched to the new folder.",
+  "start": "Start moving",
+  "confirm": "Move {files} files ({gb} GB) to {path}? Recording is paused until the move is done.",
+  "relink": "Only relink",
+  "relink_help": "For data that is there already: a drive mounted under another name, or a copy made by hand. Nothing is copied; every file must be there.",
+  "relink_confirm": "Point the station at {path}? Nothing is copied.",
+  "relinked": "The station now uses {path}.",
+  "phase_copying": "Copying and checking",
+  "phase_switching": "Switching to the new folder",
+  "phase_cleaning": "Deleting the originals",
+  "progress": "{pct} % · {files_done} of {files_total} files · {done} of {total} GB",
+  "speed": "{speed} MB/s · about {eta} left",
+  "current": "Now: {name}",
+  "done": "Moved: {files} files, {gb} GB. The station now uses {path}.",
+  "done_relink": "Relinked: the station now uses {path}.",
+  "kept": {
+    "one": "{n} original could not be deleted and is still in {path}.",
+    "other": "{n} originals could not be deleted and are still in {path}."
+  },
+  "cleanup_incomplete": "The station restarted while deleting the originals: some may still be in {path}.",
+  "failed": "The move failed: {error}. The station keeps using {path}; nothing was lost.",
+  "cancelled": "Cancelled. The station keeps using {path}. Copies already made stay in the new folder; starting again continues there.",
+  "interrupted": "The move was interrupted by a restart. The station keeps using {path}; start the move again to continue.",
+  "cancel": "Cancel",
+  "cancel_confirm": "Cancel the move? The station keeps using the old folder.",
+  "dismiss": "Close",
+  "pill": "Moving {pct} %",
+  "paused_hint": "Recording is paused while the folder moves.",
+  "outside_info": {
+    "one": "{n} file ({gb} GB) is still outside the user-data folder: {rec} recordings, {mas} masters. It is in:",
+    "other": "{n} files ({gb} GB) are still outside the user-data folder: {rec} recordings, {mas} masters. They are in:"
+  },
+  "outside_hint": "Left behind when the folder was changed in the configuration file. Gathering copies them into the user-data folder, checks every copy against its original and then points the database at the copies.",
+  "outside_missing": {
+    "one": "{n} file the database refers to cannot be found (drive not mounted?); it stays as it is.",
+    "other": "{n} files the database refers to cannot be found (drive not mounted?); they stay as they are."
+  },
+  "gather": "Gather into the user-data folder",
+  "gather_confirm": "Copy {files} files ({gb} GB) into {path}? Recording is paused until it is done.",
+  "done_gather": "Gathered: {files} files, {gb} GB are now in {path}.",
+  "check_outside": {
+    "one": "Including {n} file ({gb} GB) from outside the user-data folder.",
+    "other": "Including {n} files ({gb} GB) from outside the user-data folder."
+  }
+}

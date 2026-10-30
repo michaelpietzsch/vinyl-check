@@ -1,0 +1,31 @@
+{
+  "not_absolute": "Bitte den vollständigen Pfad eines Ordners angeben, beginnend mit / (unter Windows mit einem Laufwerksbuchstaben).",
+  "same": "Das ist bereits der verwendete Ordner.",
+  "nested": "Der neue Ordner darf nicht im bisherigen liegen und der bisherige nicht im neuen.",
+  "not_a_folder": "Unter diesem Namen gibt es dort eine Datei, keinen Ordner.",
+  "not_writable": "vinyl-check darf in {path} nicht schreiben. Anderen Ordner wählen oder dort Schreibrechte geben.",
+  "not_writable_service": "Der Dienst darf in {path} nicht schreiben. Einmalig auf der Station: sudo install -d -o vinylcheck -g vinylcheck {path}",
+  "relink_missing": {
+    "one": "{n} Datei fehlt im neuen Ordner (z. B. {first}): Die Daten liegen dort noch nicht.",
+    "other": "{n} Dateien fehlen im neuen Ordner (z. B. {first}): Die Daten liegen dort noch nicht."
+  },
+  "conflicts": {
+    "one": "{n} Datei im neuen Ordner hat denselben Namen, aber eine andere Größe (z. B. {first}). Einen leeren Ordner wählen oder ihn vorher aufräumen.",
+    "other": "{n} Dateien im neuen Ordner haben denselben Namen, aber eine andere Größe (z. B. {first}). Einen leeren Ordner wählen oder ihn vorher aufräumen."
+  },
+  "no_space": "Zu wenig Platz: nötig sind {need_gb:.1f} GB (mit dem Mindest-Freiraum), frei sind {free_gb:.1f} GB.",
+  "outside": {
+    "one": "{n} Datei liegt außerhalb des Nutzdaten-Ordners und bleibt, wo sie ist.",
+    "other": "{n} Dateien liegen außerhalb des Nutzdaten-Ordners und bleiben, wo sie sind."
+  },
+  "drive_required": "Der Ordner liegt auf dem Laufwerk {mount}: Solange es nicht eingehängt ist, nimmt die Station nicht auf, damit nichts versehentlich auf dem Systemlaufwerk landet.",
+  "copy_differs": "Die Kopie von {name} weicht vom Original ab.",
+  "busy": "Es läuft bereits ein Umzug des Nutzdaten-Ordners.",
+  "recording": "Es läuft eine Aufnahme: den Ordner danach umziehen.",
+  "busy_recording": "Der Nutzdaten-Ordner zieht gerade um: Aufnehmen geht wieder, sobald der Umzug fertig ist.",
+  "busy_master": "Der Nutzdaten-Ordner zieht gerade um: den Master hochladen, sobald der Umzug fertig ist.",
+  "outside_missing": {
+    "one": "{n} Datei außerhalb des Nutzdaten-Ordners, auf die die Datenbank verweist, ist nicht auffindbar und bleibt, wie sie ist.",
+    "other": "{n} Dateien außerhalb des Nutzdaten-Ordners, auf die die Datenbank verweist, sind nicht auffindbar und bleiben, wie sie sind."
+  }
+}

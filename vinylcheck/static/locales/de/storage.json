@@ -1,0 +1,71 @@
+{
+  "title": "Speicher",
+  "intro": "vinyl-check hält seine Datenbank im App-Ordner und die Aufnahmen und Master im Nutzdaten-Ordner, der auch auf einem anderen Laufwerk liegen kann.",
+  "app_folder": "App-Ordner",
+  "app_hint": "Datenbank mit allen Messungen, Urteilen und Einstellungen, Schlüssel und Zwischenspeicher. Er gehört zur Installation und bleibt, wo er ist.",
+  "data_folder": "Nutzdaten-Ordner",
+  "data_hint": "Aufnahmen und Master: die großen Dateien. Sie können auf ein anderes Laufwerk umziehen.",
+  "source_settings": "hier gewählt",
+  "source_config": "aus der Konfigurationsdatei",
+  "free": "{free} GB frei von {total} GB",
+  "usage": "{rec} Aufnahmen ({rec_gb} GB), {mas} Master ({mas_gb} GB)",
+  "drive": "Laufwerk {mount}",
+  "mounted": "eingehängt",
+  "not_mounted": "nicht eingehängt: Die Station nimmt nicht auf",
+  "missing": "Der Ordner ist nicht erreichbar (Laufwerk nicht eingehängt?). Messwerte und Noten bleiben sichtbar; Aufnehmen und Anhören gehen erst wieder, wenn er da ist.",
+  "change": "Nutzdaten-Ordner umziehen oder neu zuordnen",
+  "target": "Neuer Ordner",
+  "target_help": "Der vollständige Pfad. Auf einem zusätzlichen Laufwerk schlägt vinyl-check unten einen Ordner vor.",
+  "suggestions": "Vorschläge:",
+  "check": "Prüfen",
+  "check_ok": "{files} Dateien, {gb} GB werden kopiert; dort sind {free} GB frei.",
+  "check_already": {
+    "one": "{n} Datei liegt schon dort und wird geprüft statt erneut kopiert.",
+    "other": "{n} Dateien liegen schon dort und werden geprüft statt erneut kopiert."
+  },
+  "delete_originals": "Originale nach dem Umzug löschen",
+  "delete_help": "Erst wenn jede Kopie geprüft ist und die Station auf den neuen Ordner umgestellt hat.",
+  "start": "Umzug starten",
+  "confirm": "{files} Dateien ({gb} GB) nach {path} umziehen? Aufnehmen ist bis zum Ende des Umzugs gesperrt.",
+  "relink": "Nur neu zuordnen",
+  "relink_help": "Für Daten, die schon dort liegen: ein Laufwerk, das unter anderem Namen eingehängt ist, oder eine Kopie von Hand. Es wird nichts kopiert; jede Datei muss vorhanden sein.",
+  "relink_confirm": "Die Station auf {path} umstellen? Es wird nichts kopiert.",
+  "relinked": "Die Station verwendet jetzt {path}.",
+  "phase_copying": "Kopieren und prüfen",
+  "phase_switching": "Umstellen auf den neuen Ordner",
+  "phase_cleaning": "Originale löschen",
+  "progress": "{pct} % · {files_done} von {files_total} Dateien · {done} von {total} GB",
+  "speed": "{speed} MB/s · noch etwa {eta}",
+  "current": "Gerade: {name}",
+  "done": "Umgezogen: {files} Dateien, {gb} GB. Die Station verwendet jetzt {path}.",
+  "done_relink": "Neu zugeordnet: Die Station verwendet jetzt {path}.",
+  "kept": {
+    "one": "{n} Original ließ sich nicht löschen und liegt noch in {path}.",
+    "other": "{n} Originale ließen sich nicht löschen und liegen noch in {path}."
+  },
+  "cleanup_incomplete": "Die Station wurde beim Löschen der Originale neu gestartet: Einige können noch in {path} liegen.",
+  "failed": "Der Umzug ist fehlgeschlagen: {error}. Die Station verwendet weiter {path}; nichts ging verloren.",
+  "cancelled": "Abgebrochen. Die Station verwendet weiter {path}. Schon kopierte Dateien bleiben im neuen Ordner; ein neuer Start setzt dort fort.",
+  "interrupted": "Der Umzug wurde durch einen Neustart unterbrochen. Die Station verwendet weiter {path}; den Umzug erneut starten, um fortzusetzen.",
+  "cancel": "Abbrechen",
+  "cancel_confirm": "Den Umzug abbrechen? Die Station verwendet weiter den alten Ordner.",
+  "dismiss": "Schließen",
+  "pill": "Umzug {pct} %",
+  "paused_hint": "Aufnehmen ist gesperrt, solange der Ordner umzieht.",
+  "outside_info": {
+    "one": "{n} Datei ({gb} GB) liegt noch außerhalb des Nutzdaten-Ordners: {rec} Aufnahmen, {mas} Master. Sie liegt in:",
+    "other": "{n} Dateien ({gb} GB) liegen noch außerhalb des Nutzdaten-Ordners: {rec} Aufnahmen, {mas} Master. Sie liegen in:"
+  },
+  "outside_hint": "Zurückgeblieben, als der Ordner in der Konfigurationsdatei geändert wurde. Holen kopiert sie in den Nutzdaten-Ordner, vergleicht jede Kopie mit ihrem Original und stellt dann die Datenbank auf die Kopien um.",
+  "outside_missing": {
+    "one": "{n} Datei, auf die die Datenbank verweist, ist nicht auffindbar (Laufwerk nicht eingehängt?); sie bleibt, wie sie ist.",
+    "other": "{n} Dateien, auf die die Datenbank verweist, sind nicht auffindbar (Laufwerk nicht eingehängt?); sie bleiben, wie sie sind."
+  },
+  "gather": "In den Nutzdaten-Ordner holen",
+  "gather_confirm": "{files} Dateien ({gb} GB) nach {path} holen? Aufnehmen ist bis zum Ende gesperrt.",
+  "done_gather": "Geholt: {files} Dateien, {gb} GB liegen jetzt in {path}.",
+  "check_outside": {
+    "one": "Davon {n} Datei ({gb} GB) von außerhalb des Nutzdaten-Ordners.",
+    "other": "Davon {n} Dateien ({gb} GB) von außerhalb des Nutzdaten-Ordners."
+  }
+}

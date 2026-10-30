@@ -425,3 +425,18 @@ canvas.ap-sg { display: block; width: 100%; height: 170px; border-radius: 4px; }
 .vm-prof-head { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: baseline; }
 .vm-json { max-height: 22rem; overflow: auto; margin: .4rem 0; padding: .6rem .8rem; background: var(--bg);
   border: 1px solid var(--line); border-radius: 4px; font: .78rem/1.45 var(--mono); white-space: pre; color: var(--ink); }
+
+/* Storage card (System tab) */
+.storage .stat { display: flex; flex-direction: column; gap: .2rem; }
+.storage .stat b.path { font-size: .95rem; font-weight: 600; }
+.storage code, .stat .stat-path code { word-break: break-all; }
+.stat .stat-path { display: block; max-width: 26rem; }
+.storage .bar { height: 8px; margin: .25rem 0; }
+.storage .bar i.ok { background: var(--ok); } .storage .bar i.warn { background: var(--warn); } .storage .bar i.bad { background: var(--bad); }
+.storage .bar i.move { background: var(--accent); }
+.storage .bar.big { height: 20px; margin: .45rem 0; }
+.storage-move { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: .6rem 0; }
+.storage .storage-target { display: block; margin: .6rem 0 .2rem; }
+.storage .storage-target input { display: block; width: 100%; max-width: 40rem; font-family: var(--mono); }
+.storage details summary { cursor: pointer; font-weight: 600; margin: .4rem 0; }
+.okbox { border-left: 3px solid var(--ok); padding: .35rem .6rem; background: color-mix(in srgb, var(--ok) 10%, transparent); margin: .4rem 0; font-size: .9rem; }

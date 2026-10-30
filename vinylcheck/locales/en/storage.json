@@ -1,0 +1,31 @@
+{
+  "not_absolute": "Enter the full path of a folder, starting with / (or a drive letter on Windows).",
+  "same": "That is the folder in use already.",
+  "nested": "The new folder must not lie inside the current one, nor the current one inside the new one.",
+  "not_a_folder": "There is a file of that name there, not a folder.",
+  "not_writable": "vinyl-check may not write to {path}. Choose another folder or allow writing there.",
+  "not_writable_service": "The service may not write to {path}. Once, on the station: sudo install -d -o vinylcheck -g vinylcheck {path}",
+  "relink_missing": {
+    "one": "{n} file is not in the new folder (e.g. {first}): the data is not there yet.",
+    "other": "{n} files are not in the new folder (e.g. {first}): the data is not there yet."
+  },
+  "conflicts": {
+    "one": "{n} file in the new folder has the same name but a different size (e.g. {first}). Choose an empty folder or clean it up first.",
+    "other": "{n} files in the new folder have the same name but a different size (e.g. {first}). Choose an empty folder or clean it up first."
+  },
+  "no_space": "Not enough space: {need_gb:.1f} GB needed (including the minimum free space), {free_gb:.1f} GB free.",
+  "outside": {
+    "one": "{n} file lies outside the user-data folder and stays where it is.",
+    "other": "{n} files lie outside the user-data folder and stay where they are."
+  },
+  "drive_required": "The folder is on the drive {mount}: while that drive is not mounted, the station does not record, so nothing lands on the system disk by mistake.",
+  "copy_differs": "The copy of {name} differs from the original.",
+  "busy": "A move of the user-data folder is already running.",
+  "recording": "A recording is running: move the folder afterwards.",
+  "busy_recording": "The user-data folder is being moved: recording is possible again once the move is done.",
+  "busy_master": "The user-data folder is being moved: upload the master once the move is done.",
+  "outside_missing": {
+    "one": "{n} file the database refers to outside the user-data folder cannot be found and stays as it is.",
+    "other": "{n} files the database refers to outside the user-data folder cannot be found and stay as they are."
+  }
+}

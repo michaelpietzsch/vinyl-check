@@ -125,7 +125,7 @@ min_report_stations = 1
 min_vote_age_days = 0
 
 [clients]
-allowed = ["vinyl-check/1.1.*"]
+allowed = ["vinyl-check/{vinylmind.__version__.rsplit('.', 1)[0]}.*"]
 detector_versions = ["1"]
 
 [accounts]

@@ -238,7 +238,7 @@ function renderStatus(s) {
   checkServerRestart(s);
   const pills = [];
   const st = s.storage;
-  pills.push(st.ok ? `<span class="pill ok">${ico("ok",14)} ${T("shell.pill_storage_free", { gb: st.free_gb ?? "?" })}</span>`
+  pills.push(st.ok ? `<span class="pill ok" title="${esc(st.data_dir || "")}">${ico("ok",14)} ${T("shell.pill_storage_free", { gb: st.free_gb ?? "?" })}</span>`
     : `<span class="pill bad" title="${esc(st.reason)}">${ico("bad",14)} ${T("shell.pill_storage_bad", { reason: esc(st.reason) })}</span>`);
   if (s.profile) pills.push(`<span class="pill ${s.profile.accepted ? "ok" : "warn"}" title="${esc(T(s.profile.accepted ? "shell.pill_profile_title" : "shell.pill_profile_title_unset"))}">${ico("tonearm", 14)} ${esc(s.profile.name)}</span>`);
   pills.push(s.calibration ? `<span class="pill ok">${ico("ok",14)} ${T("shell.pill_chain", { db: num(s.calibration.chain_db) })}</span>`
@@ -246,8 +246,12 @@ function renderStatus(s) {
   const w = s.worker.current;
   const job = w ? T(w.kind === "analyze" ? "shell.pill_job_analyze" : "shell.pill_job_compare", { id: w.id }) : "";
   pills.push(w ? `<button class="pill warn as-link" data-go="jobs" title="${esc(T("shell.show_jobs"))}"><span class="spin"></span>${job}${s.worker.queued ? ` · ${T("shell.pill_job_queued", { n: s.worker.queued })}` : ""} ▾</button>` : `<button class="pill as-link" data-go="jobs" title="${esc(T("shell.show_jobs"))}">${T("shell.pill_idle")} ▾</button>`);
+  const mv = s.storage_move;
+  if (mv?.active) pills.push(`<a class="pill warn" href="#jobs" data-storage-pill title="${esc(mv.dst)}"><span class="spin"></span>${T("storage.pill", { pct: num(mv.pct, 0) })}</a>`);
   if (s.fake_source) pills.push(`<span class="pill warn">${T("shell.pill_test_mode")}</span>`);
   $("#pills").innerHTML = pills.join("");
+  const sp = $("#pills [data-storage-pill]"); if (sp) sp.onclick = (e) => { e.preventDefault(); setMode("jobs"); };
+  if (state.mode === "jobs") updateStorageMove(mv);
 
   const r = s.recorder;
   document.body.classList.toggle("recording", !!r.active && r.mode === "record");
@@ -259,7 +263,7 @@ function renderStatus(s) {
   tj.disabled = !!isCheck; tj.title = isCheck ? T("shell.tab_turntable_locked") : T("shell.tab_turntable_title");
   tp.disabled = !!isJust; tp.title = isJust ? T("shell.tab_record_locked") : T("shell.tab_record_title");
   $("#btn-monitor").disabled = $("#btn-calibrate").disabled = !!r.active;
-  document.querySelectorAll(".btn-rec").forEach((b) => (b.disabled = !!r.active || !st.ok));
+  document.querySelectorAll(".btn-rec").forEach((b) => (b.disabled = !!r.active || !st.ok || !!s.storage_move?.active));
   $("#rec-label").textContent = r.active ? (r.mode === "record" ? T("shell.rec_label_recording", { kind: KIND[r.meta?.kind] || "" }) : T("shell.rec_label_monitor")) : T("shell.rec_ready");
   $("#rec-time").textContent = fmtTime(r.active ? r.elapsed_s : 0);
   const warn = [];
@@ -2581,7 +2585,7 @@ function setMode(m) {
   if (m === "alignment") loadSetups().then(() => { if (!state.setup && state.profileId) return openProfile(state.profileId); }).catch((e) => toast(e.message));
   if (m === "station") loadStation().catch((e) => toast(e.message));
   if (m === "system") loadSystem().catch((e) => toast(e.message));
-  if (m === "jobs") loadJobs().catch((e) => toast(e.message));
+  if (m === "jobs") { loadJobs().catch((e) => toast(e.message)); loadStorage().catch((e) => toast(e.message)); }
   if (state.status) renderLive(state.status);
 }
 
@@ -2634,7 +2638,7 @@ async function loadJobs() {
       <div class="stat"><span>${T("jobs.memory")}</span><b>${L.mem_used_mb == null ? "–" : num(L.mem_used_mb / 1024, 1) + " GB"}</b><span>${T("jobs.memory_sub", { total: L.mem_total_mb == null ? "–" : num(L.mem_total_mb / 1024, 1), rss: L.rss_mb == null ? "–" : num(L.rss_mb / 1024, 2) })}</span></div>
       <div class="stat"><span>${T("jobs.temperature")}</span><b class="${tCls}">${L.temp_c == null ? "–" : num(L.temp_c, 0) + " °C"}</b><span>${T("jobs.throttle")}</span></div>
       <div class="stat"><span>${T("jobs.uptime")}</span><b>${up}</b><span>${svc}</span></div>
-      <div class="stat"><span>${T("jobs.storage")}</span><b>${T("jobs.free", { size: fmtBytes(s.storage.free_gb) })}</b><span>${s.recorder.active ? T("jobs.recording_active", { mode: s.recorder.mode, t: fmtTime(s.recorder.elapsed_s || 0) }) : T("jobs.no_recording")}</span></div>
+      <div class="stat"><span>${T("jobs.storage")}</span><b>${T("jobs.free", { size: fmtBytes(s.storage.free_gb) })}</b><span class="stat-path"><code>${esc(s.storage.data_dir || "")}</code></span><span>${s.recorder.active ? T("jobs.recording_active", { mode: s.recorder.mode, t: fmtTime(s.recorder.elapsed_s || 0) }) : T("jobs.no_recording")}</span></div>
     </div>
     <canvas id="cpu-hist" class="chart small"></canvas>
     <p class="hint">${T("jobs.cpu_hint")}</p>
@@ -2655,6 +2659,154 @@ function drawCpuHist(c) {
   g.fillStyle = css("--muted"); g.font = "11px system-ui"; for (const p of [50, 100]) g.fillText(p + " %", 2, y(p) - 2);
   g.strokeStyle = css("--accent"); g.lineWidth = 1.5; g.beginPath();
   jobsHist.forEach((p, i) => (i ? g.lineTo(x(p.t), y(p.v)) : g.moveTo(x(p.t), y(p.v)))); g.stroke();
+}
+// ─── Storage (System tab): the application folder, the user-data folder, moving it with progress ──────────────
+// The card is drawn when the tab opens and after each change; while a move runs only its progress is redrawn
+// (from the status, every second), so the form keeps what was typed.
+const storageUi = { info: null, target: "", open: false, phase: null, checked: null };
+const gbOf = (b) => num((b || 0) / 1e9, 1);
+async function loadStorage() {
+  storageUi.info = await api("/api/storage");
+  if (state.mode === "jobs") renderStorage();
+}
+function storageDisk(x) {
+  if (x.total_gb == null) return { pct: 0, cls: "ok", text: "–" };
+  const pct = Math.round(100 * (1 - x.free_gb / x.total_gb));
+  return { pct, cls: pct > 95 ? "bad" : pct > 85 ? "warn" : "ok", text: T("storage.free", { free: num(x.free_gb, 1), total: num(x.total_gb, 1) }) };
+}
+function renderStorage() {
+  const box = $("#storage-box"), I = storageUi.info;
+  if (!box || !I) return;
+  const d = I.data, a = I.app, o = d.outside, u = d.usage, mv = state.status?.storage_move ?? I.move;
+  const dd = storageDisk(d), ad = storageDisk(a);
+  const drive = d.require_mount
+    ? `${T("storage.drive", { mount: `<code>${esc(d.require_mount)}</code>` })}: <span class="${d.mounted ? "ok" : "bad"}">${T(d.mounted ? "storage.mounted" : "storage.not_mounted")}</span>`
+    : T("storage.drive", { mount: `<code>${esc(d.mount)}</code>` });
+  const busy = !!mv?.active;
+  box.innerHTML = `
+    <h2>${ico("storage")} ${T("storage.title")}</h2>
+    <p class="hint">${T("storage.intro")}</p>
+    <div class="cards">
+      <div class="stat wide"><span>${T("storage.data_folder")} · ${T(d.source === "settings" ? "storage.source_settings" : "storage.source_config")}</span>
+        <b class="path"><code>${esc(d.path)}</code></b>
+        <div class="bar"><i class="${dd.cls}" style="width:${dd.pct}%"></i></div>
+        <span>${dd.text} · ${drive}</span>
+        <span>${T("storage.usage", { rec: u.recordings.files, rec_gb: gbOf(u.recordings.bytes), mas: u.masters.files, mas_gb: gbOf(u.masters.bytes) })}</span>
+        <span>${T("storage.data_hint")}</span></div>
+      <div class="stat wide"><span>${T("storage.app_folder")}</span>
+        <b class="path"><code>${esc(a.path)}</code></b>
+        <div class="bar"><i class="${ad.cls}" style="width:${ad.pct}%"></i></div>
+        <span>${ad.text} · ${T("storage.drive", { mount: `<code>${esc(a.mount)}</code>` })}</span>
+        <span>${T("storage.app_hint")}</span></div>
+    </div>
+    ${d.exists ? "" : `<div class="warnbox">${T("storage.missing")}</div>`}
+    ${o.files && !busy ? `<div class="warnbox">
+        <p>${T("storage.outside_info", { n: o.files, gb: gbOf(o.bytes), rec: o.recordings, mas: o.masters })}</p>
+        <p>${o.folders.map((f) => `<code>${esc(f)}</code>`).join(", ")}</p>
+        <p class="hint">${T("storage.outside_hint")}</p>
+        <label class="check"><input type="checkbox" id="storage-gather-delete" checked> ${T("storage.delete_originals")}</label>
+        <div class="row"><button id="storage-gather">${ico("storage", 16)} ${T("storage.gather")}</button></div>
+      </div>` : ""}
+    ${o.missing ? `<p class="hint">${T("storage.outside_missing", { n: o.missing })}</p>` : ""}
+    <div id="storage-progress"></div>
+    ${busy ? "" : `<details id="storage-change"${storageUi.open ? " open" : ""}><summary>${T("storage.change")}</summary>
+      <label class="storage-target">${T("storage.target")}
+        <input id="storage-target" list="storage-sugg" spellcheck="false" autocomplete="off" value="${esc(storageUi.target)}" placeholder="${esc(I.suggestions[0] || "")}"></label>
+      <datalist id="storage-sugg">${I.suggestions.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>
+      <p class="hint">${T("storage.target_help")}</p>
+      ${I.suggestions.length ? `<p class="hint">${T("storage.suggestions")} ${I.suggestions.map((x) => `<button class="link" data-sugg="${esc(x)}">${esc(x)}</button>`).join(" ")}</p>` : ""}
+      <label class="check"><input type="checkbox" id="storage-delete" checked> ${T("storage.delete_originals")}</label>
+      <p class="hint">${T("storage.delete_help")}</p>
+      <div class="row"><button class="secondary" id="storage-check">${T("storage.check")}</button>
+        <button id="storage-start" disabled>${T("storage.start")}</button>
+        <button class="secondary" id="storage-relink">${T("storage.relink")}</button></div>
+      <p class="hint">${T("storage.relink_help")}</p>
+      <div id="storage-check-out"></div>
+    </details>`}`;
+  storageUi.phase = null;
+  updateStorageMove(mv);
+  const det = $("#storage-change"); if (det) det.ontoggle = () => (storageUi.open = det.open);
+  const inp = $("#storage-target");
+  if (inp) inp.oninput = () => { storageUi.target = inp.value; storageUi.checked = null; $("#storage-start").disabled = true; $("#storage-check-out").innerHTML = ""; };
+  box.querySelectorAll("[data-sugg]").forEach((b) => (b.onclick = () => { inp.value = b.dataset.sugg; inp.oninput(); }));
+  const chk = $("#storage-check");
+  if (chk) chk.onclick = guard(async () => {
+    const r = await api("/api/storage/check", { method: "POST", body: { path: inp.value } });
+    storageUi.checked = r.ok ? r : null;
+    $("#storage-start").disabled = !r.ok;
+    $("#storage-check-out").innerHTML = storageCheckHtml(r);
+  });
+  const go = $("#storage-start");
+  if (go) go.onclick = guard(async () => {
+    const r = storageUi.checked; if (!r) return;
+    if (!confirm(T("storage.confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path }))) return;
+    await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#storage-delete").checked } });
+    storageUi.target = ""; storageUi.checked = null; await loadStorage();
+  });
+  const rl = $("#storage-relink");
+  if (rl) rl.onclick = guard(async () => {
+    const r = await api("/api/storage/check", { method: "POST", body: { path: inp.value, relink: true } });
+    if (!r.ok) { $("#storage-check-out").innerHTML = storageCheckHtml(r); return; }
+    if (!confirm(T("storage.relink_confirm", { path: r.path }))) return;
+    storageUi.info = await api("/api/storage/relink", { method: "POST", body: { path: r.path } });
+    storageUi.target = ""; renderStorage(); toast(T("storage.relinked", { path: r.path }));
+  });
+  const ga = $("#storage-gather");
+  if (ga) ga.onclick = guard(async () => {
+    const r = await api("/api/storage/check", { method: "POST", body: { path: d.path } });
+    if (!r.ok) { toast(r.problems.join(" "), 8000); return; }
+    if (!confirm(T("storage.gather_confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path }))) return;
+    await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#storage-gather-delete").checked } });
+    await loadStorage();
+  });
+}
+function storageCheckHtml(r) {
+  const lines = [];
+  for (const p of r.problems) lines.push(`<p class="bad">${ico("bad", 14)} ${esc(p)}</p>`);
+  if (r.ok) {
+    lines.push(`<p class="ok">${ico("ok", 14)} ${T("storage.check_ok", { files: r.files, gb: gbOf(r.bytes), free: r.free_bytes == null ? "–" : gbOf(r.free_bytes) })}</p>`);
+    if (r.outside_files) lines.push(`<p class="hint">${T("storage.check_outside", { n: r.outside_files, gb: gbOf(r.outside_bytes) })}</p>`);
+    if (r.already) lines.push(`<p class="hint">${T("storage.check_already", { n: r.already })}</p>`);
+  }
+  for (const w of r.warnings) lines.push(`<p class="hint">${ico("warn", 14)} ${esc(w)}</p>`);
+  return lines.join("");
+}
+// The progress of a move, from the status every second; when it ends, the card is drawn again (the folder changed)
+function updateStorageMove(mv) {
+  const el = $("#storage-progress");
+  if (!el) return;
+  const key = mv ? `${mv.phase}|${mv.active}` : "none";
+  if (storageUi.phase && storageUi.phase !== key && mv && !mv.active) {
+    storageUi.phase = key; loadStorage().catch(() => {}); return;
+  }
+  storageUi.phase = key;
+  if (!mv) { el.innerHTML = ""; return; }
+  const src = `<code>${esc(mv.src)}</code>`, dst = `<code>${esc(mv.dst)}</code>`;
+  if (mv.active) {
+    el.innerHTML = `<div class="storage-move">
+      <b><span class="spin"></span> ${mv.phase === "cleaning" ? T("storage.phase_cleaning") : mv.phase === "switching" ? T("storage.phase_switching") : T("storage.phase_copying")}</b>
+      <div class="hint">${mv.kind === "gather" ? `→ ${dst}` : `${src} → ${dst}`}</div>
+      <div class="bar big"><i class="move" style="width:${mv.pct}%"></i></div>
+      <div><b>${T("storage.progress", { pct: num(mv.pct, 1), files_done: mv.files_done, files_total: mv.files_total, done: gbOf(mv.bytes_done), total: gbOf(mv.bytes_total) })}</b></div>
+      ${mv.speed_mb_s != null && mv.phase === "copying" ? `<div class="hint">${T("storage.speed", { speed: num(mv.speed_mb_s, 1), eta: jobDur(mv.eta_s) })}</div>` : ""}
+      ${mv.current ? `<div class="hint">${T("storage.current", { name: esc(mv.current) })}</div>` : ""}
+      <p class="hint">${T("storage.paused_hint")}</p>
+      ${mv.phase === "copying" ? `<button class="secondary" id="storage-cancel">${T("storage.cancel")}</button>` : ""}
+    </div>`;
+    const c = $("#storage-cancel");
+    if (c) c.onclick = guard(async () => { if (confirm(T("storage.cancel_confirm"))) await api("/api/storage/move/cancel", { method: "POST" }); });
+    return;
+  }
+  let msg;
+  if (mv.phase === "done") {
+    msg = T(mv.kind === "relink" ? "storage.done_relink" : mv.kind === "gather" ? "storage.done_gather" : "storage.done", { files: mv.files_done, gb: gbOf(mv.bytes_total), path: dst });
+    if (mv.kept) msg += " " + T("storage.kept", { n: mv.kept, path: src });
+    if (mv.cleanup_incomplete) msg += " " + T("storage.cleanup_incomplete", { path: src });
+  } else if (mv.phase === "failed") msg = T("storage.failed", { error: esc(mv.error || "–"), path: src });
+  else if (mv.phase === "cancelled") msg = T("storage.cancelled", { path: src });
+  else msg = T("storage.interrupted", { path: src });
+  el.innerHTML = `<div class="${mv.phase === "done" ? "okbox" : "warnbox"}">${msg} <button class="link" id="storage-dismiss">${T("storage.dismiss")}</button></div>`;
+  $("#storage-dismiss").onclick = guard(async () => { storageUi.info = await api("/api/storage/move/dismiss", { method: "POST" }); renderStorage(); });
 }
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-mode]"); if (b) setMode(b.dataset.mode); });
 miniPlayer.init();

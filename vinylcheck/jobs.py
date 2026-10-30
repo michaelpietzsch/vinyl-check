@@ -71,6 +71,7 @@ class Worker:
 
     def __init__(self, cfg: Config, db: DB):
         self.cfg, self.db = cfg, db
+        self.storage_busy = lambda: False           # set by web.py: a move of the user-data folder runs
         self.q: queue.Queue = queue.Queue()
         self.current: dict | None = None
         self.completed = 0            # number of finished jobs (cache key for derived values)
@@ -244,8 +245,8 @@ class Worker:
 
     def cleanup(self, now: float | None = None) -> list[int]:
         """Delete original audio older than retention_days. Returns the ids of the affected recordings."""
-        if self.cfg.retention_days <= 0:
-            return []
+        if self.cfg.retention_days <= 0 or self.storage_busy():
+            return []                                  # nothing is deleted while the user-data folder moves
         cutoff = (now or time.time()) - self.cfg.retention_days * 86400
         busy = {self.current["id"]} if self.current and self.current["kind"] == "analyze" else set()
         done = []

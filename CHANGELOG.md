@@ -5,6 +5,32 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] – unreleased
+
+### Added
+
+- Storage on the System tab: the application folder (database, keys, caches) and the user-data folder (recordings
+  and masters) with their paths, drives, free space and what they hold.
+- Moving the user-data folder to another folder or drive from the interface, with progress (percent, files, GB,
+  speed, time left) in the System tab and in the header. Every file is copied through a temporary file and compared
+  with its original (SHA-256 of what was read and of the copy read back); only then does the station switch, in one
+  step: the stored paths are rewritten in one transaction and the new folder is used without a restart. The
+  originals are deleted afterwards if chosen, once no analysis runs. A cancelled, failed or interrupted move leaves
+  the station on the old folder; started again, it continues where it stopped.
+- Files the database refers to outside the user-data folder (left behind when `data_dir` was changed in the
+  configuration file) are listed and can be gathered into the folder in use, the same way; a move takes them along.
+- Relinking: point the station at a folder that already holds the data (a drive mounted under another name, a copy
+  made by hand) without copying.
+- A folder on a separate drive sets `require_mount` to that drive, so a missing drive stops recordings instead of
+  filling the system disk.
+
+### Changed
+
+- The folder chosen in the interface is kept in the database and takes precedence over `data_dir` (and
+  `require_mount`) in the configuration file.
+- While a move runs, recording and uploading a master are refused and the retention cleanup waits.
+- The free-space display in the header and the System tab names the folder it belongs to.
+
 ## [1.1.3] – 2026-10-28
 
 This release also contains the changes of 1.1.2 below, which was not published on its own.

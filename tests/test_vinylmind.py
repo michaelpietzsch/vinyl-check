@@ -1105,7 +1105,7 @@ def test_revoked_and_client_not_accepted(station, hub):
     vm.next_attempt = 0
     assert vm.run_round()["skipped"] == "client_not_accepted" and not [q for q in hub.requests[n:] if q[0] == "PUT"]
     assert station.get("/api/vinylmind/server").json()["client_accepted"] is False
-    hub.clients = ["vinyl-check/1.1.*"]                                   # accepted again after the hub's change
+    hub.clients = [f"vinyl-check/{vinylmind.__version__.rsplit('.', 1)[0]}.*"]   # accepted again after the hub's change
     vm.next_attempt = 0
     assert station.post("/api/vinylmind/sync").json()["result"]["contributions"]["sent"] == 2
     assert not station.get("/api/vinylmind").json()["client_rejected"]

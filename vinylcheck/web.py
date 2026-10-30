@@ -45,7 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
-from . import audio_settings, licenses, network, tls, vinylmind
+from . import audio_settings, licenses, network, storage, tls, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key
 from .jobs import MASTER_KINDS, Worker
@@ -437,6 +437,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     cfg = cfg or load()
     cfg.state_dir.mkdir(parents=True, exist_ok=True)
     db = DB(cfg.db_path)
+    storage.apply_saved(cfg, db)                       # user-data folder chosen under Settings → Storage
     defaults = {k: getattr(cfg, k) for k in SETTINGS}
     for k, raw in db.get_settings().items():           # stored settings apply from startup
         if k in SETTINGS:
@@ -461,6 +462,10 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return capture.open_source(audio_backend, device, rate, channels, fmt, **aud.source_kwargs(device))
 
     recorder = capture.Recorder(source_factory or default_factory)
+    # Moving the user-data folder (storage.py): no recording, master upload or retention cleanup while it runs
+    mover = storage.Mover(cfg, db, recording=lambda: recorder.active,
+                          analysing=lambda: bool(worker.status()["current"]), service=not desktop)
+    worker.storage_busy = lambda: mover.active
     # Discogs: the collection is cached in the state directory, synced at startup (in the background) and periodically.
     # Credentials, in this order: a personal access token saved under Settings → Discogs (settings row DISCOGS_ACCOUNT;
     # desktop users have no configuration file to edit), the one in the configuration file, an OAuth authorization.
@@ -821,6 +826,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     network.install(app, cfg, db, desktop)        # access check + /access, /api/network; inside the language middleware
     licenses.install(app)                         # /licenses: own license and third-party notices
     vinylmind.install(app, vm)                    # /api/vinylmind*: Settings → Vinyl-Mind
+    storage.install(app, cfg, db, mover)          # /api/storage*: Settings → Storage, moving the user-data folder
     if cfg.language != "auto" and not i18n.supported(cfg.language):
         raise ValueError(f"Unknown language {cfg.language!r}: use 'auto' or one of {', '.join(i18n.languages())}")
     app.add_middleware(LanguageMiddleware, default=cfg.language)
@@ -875,7 +881,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             rs["remaining_s"] = round(rs["expected_end_s"] - rs["frames"] / rs["rate"], 1)
         cal = (db.latest_calibration(prof["id"]) if prof else None) or db.latest_calibration()
         return {"version": __version__, "recorder": rs, "worker": worker.status(), "events": ui_events[-5:],
-                "storage": storage_status(cfg),
+                "storage": storage_status(cfg), "storage_move": mover.status(),
                 "calibration": {"id": cal["id"], "chain_db": cal["chain_db"], "created_at": cal["created_at"]}
                 if cal else None,
                 "fake_source": bool(cfg.fake_source), "discogs": dc.enabled, "discogs_collection": dc.status(),
@@ -1221,7 +1227,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     # ─── Master (engineer mode) ──────────────────────────────────────────────
     # The digital master per record side (e.g. the vinyl masters from the mastering studio as WAV). Stored in the data
     # directory as masters/<record>-<side>.<ext>; the retention period applies to recordings only, not to masters.
-    master_dir = cfg.data_dir / "masters"
+    def master_dir() -> Path:                        # follows a move of the user-data folder at run time
+        return cfg.data_dir / "masters"
     MASTER_MAX_BYTES = 3 * 1024 ** 3
     MASTER_FORMATS = {"WAV": "wav", "WAVEX": "wav", "FLAC": "flac", "AIFF": "aiff", "W64": "w64"}
 
@@ -1233,7 +1240,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if not m or not m.get("path"):
             return
         f = Path(m["path"]).resolve()
-        if master_dir.resolve() in f.parents and f.exists():
+        if master_dir().resolve() in f.parents and f.exists():
             f.unlink()
 
     @app.get("/api/records/{rid}/masters")
@@ -1257,10 +1264,12 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         length = int(request.headers.get("content-length") or 0)
         if length > MASTER_MAX_BYTES:
             raise HTTPException(413, i18n.msg("api.master_too_large"))
-        master_dir.mkdir(parents=True, exist_ok=True)
-        if length and shutil.disk_usage(master_dir).free - length < cfg.min_free_gb * 1e9:
+        if mover.active:
+            raise HTTPException(409, i18n.msg("storage.busy_master"))
+        master_dir().mkdir(parents=True, exist_ok=True)
+        if length and shutil.disk_usage(master_dir()).free - length < cfg.min_free_gb * 1e9:
             raise HTTPException(507, i18n.msg("api.master_no_space", gb=length / 1e9))
-        tmp = master_dir / f".upload-{rid}-{side}-{int(time.time() * 1000)}"
+        tmp = master_dir() / f".upload-{rid}-{side}-{int(time.time() * 1000)}"
         size = 0
         try:
             with open(tmp, "wb") as f:
@@ -1278,7 +1287,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                 raise HTTPException(415, i18n.msg("api.master_format", format=info.format))
             if info.duration < 30:
                 raise HTTPException(422, i18n.msg("api.master_too_short", s=info.duration))
-            final = master_dir / f"{rid}-{side}.{ext}"
+            final = master_dir() / f"{rid}-{side}.{ext}"
             old = db.master(rid, side)
             tmp.replace(final)
             if old and Path(old["path"]).resolve() != final.resolve():
@@ -1783,6 +1792,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             raise HTTPException(422, i18n.msg("api.record_required"))
         if s.record_id is not None and not db.record(s.record_id):
             raise HTTPException(404, i18n.msg("api.record_not_found"))
+        if mover.active:
+            raise HTTPException(409, i18n.msg("storage.busy_recording"))
         st = storage_status(cfg)
         if not st["ok"]:
             raise HTTPException(409, st["reason"])
