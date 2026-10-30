@@ -246,12 +246,15 @@ function renderStatus(s) {
   const w = s.worker.current;
   const job = w ? T(w.kind === "analyze" ? "shell.pill_job_analyze" : "shell.pill_job_compare", { id: w.id }) : "";
   pills.push(w ? `<button class="pill warn as-link" data-go="jobs" title="${esc(T("shell.show_jobs"))}"><span class="spin"></span>${job}${s.worker.queued ? ` · ${T("shell.pill_job_queued", { n: s.worker.queued })}` : ""} ▾</button>` : `<button class="pill as-link" data-go="jobs" title="${esc(T("shell.show_jobs"))}">${T("shell.pill_idle")} ▾</button>`);
+  const up = s.update;
+  if (up?.available) pills.push(`<a class="pill update" href="${esc(up.url)}" target="_blank" rel="noopener" title="${esc(T("updates.pill_title", { current: up.current }))}">${ico("info", 14)} ${T("updates.pill", { version: esc(up.latest) })}</a>`);
   const mv = s.storage_move;
   if (mv?.active) pills.push(`<a class="pill warn" href="#jobs" data-storage-pill title="${esc(mv.dst)}"><span class="spin"></span>${T("storage.pill", { pct: num(mv.pct, 0) })}</a>`);
   if (s.fake_source) pills.push(`<span class="pill warn">${T("shell.pill_test_mode")}</span>`);
   $("#pills").innerHTML = pills.join("");
   const sp = $("#pills [data-storage-pill]"); if (sp) sp.onclick = (e) => { e.preventDefault(); setMode("jobs"); };
   updateStorageMove(mv);
+  if (state.mode === "system") renderUpdates(up);
 
   const r = s.recorder;
   document.body.classList.toggle("recording", !!r.active && r.mode === "record");
@@ -1941,6 +1944,9 @@ async function loadSystem() {
       ${["clip_grace_s", "clip_mention_samples", "clip_max_samples"].filter((k) => spec[k]).map((k) => field([k, spec[k]])).join("")}
       ${spec.engineer_mode ? `<h3>${T("settings.engineer")}</h3>${field(["engineer_mode", spec.engineer_mode])}` : ""}
       ${spec.learn_enabled ? `<h3>${T("settings.learning")}</h3>${field(["learn_enabled", spec.learn_enabled])}${spec.learn_grade ? field(["learn_grade", spec.learn_grade]) : ""}<div id="learn-box"><p class="empty">${T("settings.loading")}</p></div>` : ""}
+      <h3 id="settings-updates">${T("updates.title")}</h3>
+      ${spec.update_check ? field(["update_check", spec.update_check]) : ""}
+      <div id="update-box"></div>
       <h3>${T("settings.display")}</h3>
       <div class="sfield"><label for="set-lang">${T("settings.language")}</label>
         <select id="set-lang">${Object.entries(I18N.languages).map(([k, n]) => `<option value="${esc(k)}" ${k === I18N.lang ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>
@@ -1970,6 +1976,7 @@ async function loadSystem() {
     <p class="hint">${T("about.summary")} <a href="/licenses" target="_blank" rel="noopener">${T("about.licenses")}</a></p>`;
   api("/api/targets").then((t) => renderTargets(t, t.active)).catch((e) => toast(e.message));
   loadStorage().catch((e) => toast(e.message));
+  updatesUi.key = null; renderUpdates(state.status?.update);
   if ($("#learn-box")) api("/api/learn").then(renderLearn).catch((e) => { $("#learn-box").innerHTML = `<p class="hint">${esc(e.message)}</p>`; });
   // Discogs: a personal access token entered here (kept on the server, which only ever sends back its last four
   // characters) takes precedence over the configuration file and applies at once; the OAuth connection of a Discogs
@@ -2632,6 +2639,7 @@ async function loadJobs() {
   // Rough progress: an analysis takes about a third of the recording's duration (at least 30 s)
   const share = cur?.duration_s && cur.kind === "analyze" ? Math.min(99, Math.round(cur.elapsed_s / Math.max(cur.duration_s * 0.35, 30) * 100)) : null;
   const svc = T("jobs.service_since", { version: s.service.version, date: s.service.started_at ? I18N.date(s.service.started_at) : "–" })
+    + (state.status?.update?.available ? T("updates.system_new", { version: esc(state.status.update.latest) }) : "")
     + (s.service.second_opinion ? T("jobs.second_opinion_on") : T("jobs.without_pytorch"));
   $("#jobs").innerHTML = `
     <h2>${ico("clock")} ${T("jobs.title")}</h2>
@@ -2662,6 +2670,25 @@ function drawCpuHist(c) {
   g.fillStyle = css("--muted"); g.font = "11px system-ui"; for (const p of [50, 100]) g.fillText(p + " %", 2, y(p) - 2);
   g.strokeStyle = css("--accent"); g.lineWidth = 1.5; g.beginPath();
   jobsHist.forEach((p, i) => (i ? g.lineTo(x(p.t), y(p.v)) : g.moveTo(x(p.t), y(p.v)))); g.stroke();
+}
+// ─── Updates: is there a newer version (Settings → Updates; the note in the header comes with the status) ──────
+const updatesUi = { key: null };
+function renderUpdates(u) {
+  const box = $("#update-box");
+  if (!box || !u) return;
+  const key = JSON.stringify(u);
+  if (key === updatesUi.key) return;                       // the status comes every second; draw only on a change
+  updatesUi.key = key;
+  const when = u.checked_at ? T("updates.checked", { date: I18N.date(u.checked_at) }) : T("updates.never");
+  let line;
+  if (!u.enabled) line = T("updates.off");
+  else if (u.available) line = `<b>${T("updates.available", { version: esc(u.latest), current: esc(u.current) })}</b>
+    <a href="${esc(u.url)}" target="_blank" rel="noopener">${T("updates.release_link")}</a><br>${T(state.status?.desktop ? "updates.how_desktop" : "updates.how_service")}`;
+  else if (u.latest) line = T("updates.current_ok", { current: esc(u.current) });
+  else line = "";
+  box.innerHTML = `<p class="hint">${line} ${when}${u.error ? ` ${T("updates.error", { error: esc(u.error) })}` : ""}</p>
+    <div class="row"><button type="button" class="secondary" id="btn-update-check">${T("updates.check_now")}</button></div>`;
+  $("#btn-update-check").onclick = guard(async () => { updatesUi.key = null; renderUpdates(await api("/api/updates/check", { method: "POST" })); });
 }
 // ─── Storage: status on the System tab; choosing and moving the user-data folder under Settings → Storage ──────
 // Both are drawn from GET /api/storage when their page opens and after each change; while a move runs only the
@@ -2757,7 +2784,13 @@ function renderStorageSettings() {
     <div class="row"><button type="button" class="secondary" id="st-check">${T("storage.check")}</button>
       <button type="button" id="st-start" disabled>${T("storage.start")}</button>
       <button type="button" class="secondary" id="st-relink">${T("storage.relink")}</button></div>
-    <p class="hint">${T("storage.relink_help")}</p>`}`;
+    <p class="hint">${T("storage.relink_help")}</p>
+    <h4>${T("storage.names_title")}</h4>
+    <p class="hint">${T("storage.names_intro", { example: "<code>00042_Pink-Floyd_The-Wall_A_before.wav</code>" })}</p>
+    ${I.names.pending ? `<p>${T("storage.names_pending", { n: I.names.pending })}</p>
+      <ul class="hint">${I.names.examples.map((e) => `<li><code>${esc(e.old)}</code> → <code>${esc(e.new)}</code></li>`).join("")}</ul>
+      <div class="row"><button type="button" class="secondary" id="st-rename">${T("storage.rename", { n: I.names.pending })}</button></div>`
+      : `<p class="hint">${ico("ok", 14)} ${T("storage.names_ok")}</p>`}`}`;
   updateStorageMove(mv, true);
   if (busy) return;
   const pick = $("#st-pick"), inp = $("#st-custom"), out = $("#st-check-out");
@@ -2794,6 +2827,14 @@ function renderStorageSettings() {
     if (!confirm(T("storage.relink_confirm", { path: r.path }))) return;
     storageUi.info = await api("/api/storage/relink", { method: "POST", body: { path: r.path } });
     storageUi.pick = storageUi.custom = ""; toast(T("storage.relinked", { path: r.path })); renderStorageSettings(); renderStorageStatus();
+  });
+  const rn = $("#st-rename");
+  if (rn) rn.onclick = guard(async () => {
+    if (!confirm(T("storage.rename_confirm", { n: I.names.pending }))) return;
+    const r = await api("/api/storage/rename", { method: "POST" });
+    storageUi.info = r;
+    toast(T("storage.renamed", { n: r.result.renamed }) + (r.result.kept ? " " + T("storage.rename_kept", { n: r.result.kept }) : ""), 6000);
+    renderStorageSettings(); renderStorageStatus();
   });
   const ga = $("#st-gather");
   if (ga) ga.onclick = guard(async () => {

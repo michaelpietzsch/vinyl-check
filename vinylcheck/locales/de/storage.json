@@ -27,5 +27,6 @@
   "outside_missing": {
     "one": "{n} Datei außerhalb des Nutzdaten-Ordners, auf die die Datenbank verweist, ist nicht auffindbar und bleibt, wie sie ist.",
     "other": "{n} Dateien außerhalb des Nutzdaten-Ordners, auf die die Datenbank verweist, sind nicht auffindbar und bleiben, wie sie sind."
-  }
+  },
+  "rename_analysing": "Es läuft eine Analyse: die Dateien umbenennen, sobald sie fertig ist."
 }

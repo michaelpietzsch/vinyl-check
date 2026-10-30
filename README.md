@@ -95,7 +95,11 @@ spot, re-analyse with a different sensitivity and compare recordings later.
 - The System tab shows where the database and the recordings are, on which drive and how much space is left. Under
   *Settings → Storage* the user-data folder (recordings and masters) moves to another folder or drive, chosen from
   the drives vinyl-check finds: every copy is checked against its original before the station switches, with
-  progress in percent.
+  progress in percent. Recordings are named readably, e.g. `00042_Pink-Floyd_The-Wall_A_before.wav`.
+
+**Updates**
+- A note in the header and under *Settings → Updates* when a new version is out, with a link to what is new and the
+  downloads. Once a day the station asks GitHub, sending nothing but its version; the check can be switched off.
 
 **Multilingual interface**
 - English and German: English by default, German or another language can be chosen in the settings. Most languages can be added without
@@ -291,6 +295,7 @@ Linux (XDG). The most important keys:
 | `wasapi_exclusive`, `asio` | `true`, `"auto"` | Windows: WASAPI exclusive mode; ASIO drivers where installed, `false` = WASAPI only ([setup guide](docs/setup-guide.md#windows-wasapi-and-asio)) |
 | `require_mount` | `""` | refuse to record unless this mount point is present (protects an SD card) |
 | `retention_days` | `30` | delete original audio after this many days; measurements are kept |
+| `update_check` | `true` | once a day ask GitHub for the latest release and show a note when a newer version is out (only the version number is sent); also a switch under *Settings → Updates* |
 | `discogs_token`, `discogs_username` | — | Discogs access via personal token; a token entered under *Settings → Discogs* takes precedence |
 | `discogs_consumer_key`, `discogs_consumer_secret` | — | Discogs access via OAuth app ("Connect with Discogs" in the settings) |
 | `vinyl_mind_url` | `"https://api.vinylcheck.net"` | Vinyl-Mind server that *Settings → Vinyl-Mind* offers and *Reset to default* restores ([Vinyl-Mind on the station](docs/vinyl-mind.md)) |
@@ -339,6 +344,10 @@ the conventions of the chosen language. To add a language, see [docs/translating
 
 ## Roadmap
 
+- **Updates from the interface** (planned for 1.3). 1.2 shows when a new version is out; installing it will differ
+  per platform: a service (Raspberry Pi, Linux) fetches the release wheel, checks its checksum and provenance
+  attestation and restarts once idle, as `deploy.sh` does today; the macOS and Windows apps download the installer,
+  check it the same way and start it, which works without warnings only once the apps are signed.
 - **Linux desktop app** (AppImage) next to the macOS and Windows apps, and signed apps on both systems.
 - **Vinyl-Mind**: stations learn together. Each turntable profile trains its model locally, with the measured
   profile as the zero point so that setups become comparable; only model weights and counts are shared,

@@ -5,6 +5,7 @@ import shutil
 import threading
 import time
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -285,3 +286,68 @@ def test_drive_of_a_folder(tmp_path):
     d = storage.drive(tmp_path)
     assert d["mount"] and isinstance(d["system"], bool) and "model" in d
     assert storage._linux_drive("not-a-device") == {}
+
+
+def test_recording_names_are_readable_and_safe():
+    rec = {"id": 43, "side": "B", "kind": "after_wet", "copy_label": "Exemplar 2"}
+    assert storage.recording_name(rec, {"artist": "Die Ärzte", "title": "Jazz ist anders (Ökö-Edition)"}) \
+        == "00043_Die-Aerzte_Jazz-ist-anders-Oekoe-Edition_Exemplar-2_B_after_wet.wav"
+    assert storage.recording_name({"id": 2, "side": "1", "kind": "alignment", "setup_id": 1}, None,
+                                  {"name": "Dual DTJ 301.1 USB"}) == "00002_Dual-DTJ-301-1-USB_J1_1_alignment.wav"
+    assert storage.recording_name({"id": 6, "side": "A/", "kind": "before"}, {"artist": "", "title": "../.."}) \
+        == "00006_A_before.wav"
+    assert storage.slug("Björk – Homogénic / ß") == "Bjoerk-Homogenic-ss" and len(storage.slug("x" * 99)) == 40
+
+
+def test_rename_brings_old_files_to_the_scheme(station, tmp_path):
+    cfg, db, rid = station
+    (cfg.rec_dir / "00009-taken.wav").write_bytes(b"x")
+    mover = storage.Mover(cfg, db)
+    todo = storage.renames(cfg, db)
+    assert [new.name for _, _, new in todo] == ["00001_Artist_Title_A_before.wav", "00002_Artist_Title_B_before.wav"]
+    blocker = cfg.rec_dir / "00002_Artist_Title_B_before.wav"                  # the new name is taken
+    blocker.write_bytes(b"other")
+    assert mover.rename() == {"renamed": 1, "kept": 1}
+    paths = sorted(storage.referenced(db))
+    assert str(cfg.rec_dir / "00001_Artist_Title_A_before.wav") in paths
+    assert str(cfg.rec_dir / "00002-B-before.wav") in paths                    # kept its name, still found
+    assert (cfg.rec_dir / "00001_Artist_Title_A_before.wav").stat().st_size == 3000
+    assert storage.info(cfg, db, mover)["names"]["pending"] == 1
+    busy = storage.Mover(cfg, db, analysing=lambda: True)
+    with pytest.raises(storage.MoveRefused):
+        busy.rename()
+
+
+def test_rename_undoes_the_renames_when_the_database_fails(station, monkeypatch):
+    cfg, db, _ = station
+    before = sorted(p.name for p in cfg.rec_dir.iterdir())
+
+    class Broken:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def execute(self, sql, *a):
+            if sql.startswith("UPDATE recordings"):
+                raise RuntimeError("disk full")
+            return self.conn.execute(sql, *a)
+    monkeypatch.setattr(db, "conn", Broken(db.conn))
+    with pytest.raises(RuntimeError):
+        storage.Mover(cfg, db).rename()
+    assert sorted(p.name for p in cfg.rec_dir.iterdir()) == before
+
+
+def test_new_recordings_get_the_readable_name(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    wav = tmp_path / "side.wav"
+    sf.write(wav, np.zeros((48000 * 2, 2), dtype="float32"), 48000, subtype="PCM_16")
+    cfg = replace(Config(), data_dir=tmp_path / "data", state_dir=tmp_path / "state", min_free_gb=0.0,
+                  fake_source=str(wav), fake_speed=200.0)
+    with TestClient(create_app(cfg)) as c:
+        rid = c.post("/api/records", json={"artist": "Pink Floyd", "title": "The Wall"}).json()["id"]
+        r = c.post("/api/recordings/start", json={"record_id": rid, "side": "A", "kind": "before"})
+        assert r.status_code == 200, r.text
+        rec_id = r.json()["recording_id"] if "recording_id" in r.json() else r.json()["id"]
+        c.post("/api/recordings/stop")
+        path = c.app.state.db.recording(rec_id)["path"]
+        assert Path(path).name == f"{rec_id:05d}_Pink-Floyd_The-Wall_A_before.wav"

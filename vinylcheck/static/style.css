@@ -438,4 +438,6 @@ canvas.ap-sg { display: block; width: 100%; height: 170px; border-radius: 4px; }
 .storage-move { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: .6rem 0; }
 #storage-settings select, #storage-settings #st-custom { width: 100%; max-width: 52rem; }
 #storage-settings #st-custom { font-family: var(--mono); }
+#storage-settings h4 { font-size: .9rem; margin: 1.1rem 0 .3rem; }
 .okbox { border-left: 3px solid var(--ok); padding: .35rem .6rem; background: color-mix(in srgb, var(--ok) 10%, transparent); margin: .4rem 0; font-size: .9rem; }
+.pill.update { color: var(--accent); border-color: currentColor; text-decoration: none; }

@@ -83,5 +83,28 @@
   "tag_previous": "earlier folder",
   "tag_config": "configuration file",
   "tag_system": "system drive",
-  "tag_unmounted": "not mounted"
+  "tag_unmounted": "not mounted",
+  "names_title": "File names",
+  "names_intro": "Recordings are named after what they are: number, artist and title of the record (and the copy), side and kind, e.g. {example}. Turntable measurements carry the profile name instead.",
+  "names_pending": {
+    "one": "{n} older recording is still named the old way, for example:",
+    "other": "{n} older recordings are still named the old way, for example:"
+  },
+  "names_ok": "All recordings in the user-data folder follow this scheme.",
+  "rename": {
+    "one": "Rename {n} file",
+    "other": "Rename {n} files"
+  },
+  "rename_confirm": {
+    "one": "Rename {n} file in the user-data folder? Measurements stay attached; nothing is copied.",
+    "other": "Rename {n} files in the user-data folder? Measurements stay attached; nothing is copied."
+  },
+  "renamed": {
+    "one": "{n} file renamed.",
+    "other": "{n} files renamed."
+  },
+  "rename_kept": {
+    "one": "{n} file kept its name (the new name was taken, or the file could not be renamed).",
+    "other": "{n} files kept their names (the new name was taken, or the file could not be renamed)."
+  }
 }

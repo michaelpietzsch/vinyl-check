@@ -16,3 +16,9 @@ def _local_test_client_init(self, app, base_url="http://127.0.0.1", **kwargs):
 
 
 starlette.testclient.TestClient.__init__ = _local_test_client_init
+
+# Looking for a new version asks GitHub a minute after the start; tests never wait that long on purpose, but a slow
+# machine might: they ask only where they say so (tests/test_updates.py fakes the answer)
+from vinylcheck import updates  # noqa: E402
+
+updates.FIRST_AFTER_S = 10 ** 9

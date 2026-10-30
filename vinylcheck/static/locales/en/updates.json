@@ -1,0 +1,16 @@
+{
+  "title": "Updates",
+  "pill": "Version {version} available",
+  "pill_title": "Running {current}. Open the release page: what is new, and the downloads.",
+  "available": "Version {version} is available (running {current}).",
+  "release_link": "What is new, and the download",
+  "how_desktop": "Download the new app from the release page and install it over the old one; recordings, measurements and settings stay.",
+  "how_service": "On a Raspberry Pi or another service, update the way it was installed (for example with deploy.sh); recordings, measurements and settings stay.",
+  "current_ok": "vinyl-check {current} is the latest version.",
+  "checked": "Last looked: {date}.",
+  "never": "Not looked yet.",
+  "error": "Looking failed: {error}",
+  "off": "Off: vinyl-check does not look for new versions.",
+  "check_now": "Look now",
+  "system_new": " · {version} available"
+}

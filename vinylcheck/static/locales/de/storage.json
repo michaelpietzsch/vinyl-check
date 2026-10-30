@@ -83,5 +83,28 @@
   "tag_previous": "bisheriger Ordner",
   "tag_config": "aus der Konfigurationsdatei",
   "tag_system": "Systemlaufwerk",
-  "tag_unmounted": "nicht eingehängt"
+  "tag_unmounted": "nicht eingehängt",
+  "names_title": "Dateinamen",
+  "names_intro": "Aufnahmen heißen nach dem, was sie sind: Nummer, Interpret und Titel der Platte (und das Exemplar), Seite und Art, z. B. {example}. Plattenspieler-Messungen tragen stattdessen den Profilnamen.",
+  "names_pending": {
+    "one": "{n} ältere Aufnahme heißt noch nach dem alten Schema, zum Beispiel:",
+    "other": "{n} ältere Aufnahmen heißen noch nach dem alten Schema, zum Beispiel:"
+  },
+  "names_ok": "Alle Aufnahmen im Nutzdaten-Ordner folgen diesem Schema.",
+  "rename": {
+    "one": "{n} Datei umbenennen",
+    "other": "{n} Dateien umbenennen"
+  },
+  "rename_confirm": {
+    "one": "{n} Datei im Nutzdaten-Ordner umbenennen? Die Messungen bleiben zugeordnet; es wird nichts kopiert.",
+    "other": "{n} Dateien im Nutzdaten-Ordner umbenennen? Die Messungen bleiben zugeordnet; es wird nichts kopiert."
+  },
+  "renamed": {
+    "one": "{n} Datei umbenannt.",
+    "other": "{n} Dateien umbenannt."
+  },
+  "rename_kept": {
+    "one": "{n} Datei behielt ihren Namen (der neue Name war vergeben oder die Datei ließ sich nicht umbenennen).",
+    "other": "{n} Dateien behielten ihren Namen (der neue Name war vergeben oder die Datei ließ sich nicht umbenennen)."
+  }
 }

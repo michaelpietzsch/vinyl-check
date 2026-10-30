@@ -76,5 +76,7 @@
   "tech.events": "Ereignisse",
   "tech.recording": "Aufnahme",
   "calibration_run": "Einmessung {name}",
-  "record_weight": "Plattengewicht: {weight}"
+  "record_weight": "Plattengewicht: {weight}",
+  "setting.update_check.label": "Nach neuen Versionen suchen",
+  "setting.update_check.help": "Einmal am Tag bei GitHub nach dem neuesten Release von vinyl-check fragen und einen Hinweis zeigen, wenn eine neuere Version da ist. Gesendet wird nur die Versionsnummer."
 }

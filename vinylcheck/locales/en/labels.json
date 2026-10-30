@@ -76,5 +76,7 @@
   "tech.events": "Events",
   "tech.recording": "Recording",
   "calibration_run": "Calibration {name}",
-  "record_weight": "Record weight: {weight}"
+  "record_weight": "Record weight: {weight}",
+  "setting.update_check.label": "Look for new versions",
+  "setting.update_check.help": "Once a day, ask GitHub for the latest release of vinyl-check and show a note when a newer version is out. Only the version number is sent."
 }

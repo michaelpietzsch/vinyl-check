@@ -298,6 +298,8 @@ In short:
 | *Engineer* | engineer mode (master comparison, test pressing approval) |
 | *Learning* | learn from master comparisons and judgements (default on), compute the grade from the estimate (default off), the state of the model per kind with its cross-validation, *Relearn now* |
 | *Display* | colour scheme (light, dark or system) and interface language; both are stored in this browser |
+| *Storage* | the user-data folder (recordings, masters) and the application folder (database); move the user-data folder to another folder or drive, gather files left outside it, relink, rename recordings to the readable scheme |
+| *Updates* | look for new versions once a day (default on; only the version number is sent to GitHub), when it last looked, *Look now* |
 | *Discogs connection* | personal access token and user name (save, test, remove), connect or disconnect a Discogs app, sync the collection now |
 | *Targets* | target presets for the turntable check: edit, copy, reset, set active |
 | *Vinyl-Mind* | learning together with other stations: *Contribute* and *Use the global model* (both off), server, *Connect with Vinyl-Mind* (or an invitation code), status, *Reconnect*, *Disconnect*, *What is sent*, export and import of package files |
@@ -315,6 +317,45 @@ peak level of the left and right input, or why it did not work. Play a record du
 *Save* stores all values shown; they apply from the next recording or level check. While a recording or level
 check runs, the section cannot be changed. The device of the active turntable profile takes precedence over the
 device chosen here. *Back to the configuration file* removes the values saved here.
+
+**Storage.** vinyl-check keeps two folders apart. The *application folder* holds the database with every
+measurement, judgement and setting, plus keys and caches; it belongs to the installation and stays where it is. The
+*user-data folder* holds the large files, the recordings and the masters, and can live on another drive.
+
+*Move to* offers a folder named `vinyl-check` on every drive it finds (on Linux below `/mnt`, `/media` and `/srv`;
+on macOS under `/Volumes`; on Windows D: to Z:), earlier folders that still hold recordings, the folder of the
+configuration file and one on the system drive, each with the kind and model of the drive and its free space.
+Drives listed in `/etc/fstab` but not mounted are shown and cannot be chosen. Only *Other folder (enter the path)*
+asks for a path. Choosing a folder checks it at once: free space (the recordings plus the minimum free space), write
+access, and files of the same name already there.
+
+*Start moving* copies every recording and master through a temporary file and compares each copy with its original
+(SHA-256 of what was read and of the copy read back). Only when all copies are checked does the station switch: the
+stored paths are rewritten in one step and the new folder is used at once, without a restart. If chosen, the
+originals are deleted afterwards, once no analysis reads them. The progress (percent, files, GB, speed, time left)
+shows in the settings, on the *System* page and in the header. While a move runs, no recording can start and no
+master can be uploaded. *Cancel*, a failure or a restart of the service leave the station on the old folder;
+starting again continues where it stopped, checking instead of copying what is already there.
+
+Files the database refers to outside the user-data folder (left behind when `data_dir` was changed in the
+configuration file) are listed with *Gather into the user-data folder*, which copies and checks them the same way.
+*Relink* points the station at a folder that already holds the data, for example a drive mounted under another name,
+without copying. A folder on a separate drive is also required for recording from then on: while the drive is not
+mounted, the station does not record, so nothing lands on the system disk by mistake. The folder chosen here is
+kept in the database and takes precedence over `data_dir` in the configuration file.
+
+New recordings are named after what they are: number, artist and title of the record (and the copy), side and kind,
+for example `00042_Pink-Floyd_The-Wall_A_before.wav`; turntable measurements carry the profile name instead. Umlauts
+are written out and other characters become `-`, so the names work on every file system and network share. *Rename
+files* brings older recordings to this scheme; the measurements stay attached. Renaming waits until no recording or
+analysis runs; later changes to artist or title do not rename by themselves, so run it again after editing.
+
+**Updates.** Once a day vinyl-check asks GitHub for its latest release. When that is newer than the version
+running, the header shows *Version x.y.z available*, which opens the release page with what is new and the
+downloads; the *System* page and *Settings → Updates* say the same. The desktop apps are updated by installing the
+new app over the old one, a service the way it was installed; recordings, measurements and settings stay. Only the
+version number is sent (and GitHub sees the address the request comes from); the switch under *Settings → Updates*,
+or `update_check = false` in the configuration file, turns it off. Installing updates from the interface is planned.
 
 **Language.** The interface starts in English, or in the language set with `language` in the configuration file
 (`"auto"` follows the browser). Choosing another language under *Settings → Display* stores it in a cookie, so API
@@ -389,6 +430,10 @@ is contributed meanwhile), or could not be reached.
 The *System* page lists the running job (with a rough progress estimate), the queue and the last 30 finished jobs
 with their duration, plus CPU (total and per core), load, memory, the service's own memory, CPU temperature,
 uptime and storage. The analysis pill in the header opens the same list.
+
+*Storage* on the same page shows the user-data folder and the application folder with their paths, drives (kind and
+model where known, and which one is the system drive), free space and what they hold, files still outside the
+user-data folder, and the progress of a move. It only shows; changes are made under *Settings → Storage*.
 
 Heavy work (analysis, alignment evaluation, comparisons, spectrograms) runs one job at a time in a separate
 low-priority process, so the interface and an ongoing recording stay responsive. If that process runs out of memory,

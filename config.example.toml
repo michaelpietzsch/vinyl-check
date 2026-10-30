@@ -34,6 +34,7 @@ sample_format = "S16_LE"
 max_record_minutes = 45
 min_free_gb = 2.0
 retention_days = 30                     # delete original audio after this many days (measurements stay), 0 = never
+update_check = true                     # once a day ask GitHub for the latest release; only the version is sent
 discogs_sync_minutes = 15               # sync the collection this often; a search without hits syncs at once
 
 # Discogs (optional): either a personal access token plus user name (Discogs → Settings → Developers; easier to

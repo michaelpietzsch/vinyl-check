@@ -45,7 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
-from . import audio_settings, licenses, network, storage, tls, vinylmind
+from . import audio_settings, licenses, network, storage, tls, updates, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key
 from .jobs import MASTER_KINDS, Worker
@@ -404,6 +404,7 @@ SETTINGS = {
     "engineer_mode": {"type": bool, **_setting_text("engineer_mode")},
     "learn_enabled": {"type": bool, **_setting_text("learn_enabled")},
     "learn_grade": {"type": bool, **_setting_text("learn_grade")},
+    "update_check": {"type": bool, **_setting_text("update_check")},
 }
 
 
@@ -467,6 +468,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                           analysing=lambda: bool(worker.status()["current"]), service=not desktop,
                           config_dir=config_data_dir)
     worker.storage_busy = lambda: mover.active
+    checker = updates.Checker(cfg, db)
     # Discogs: the collection is cached in the state directory, synced at startup (in the background) and periodically.
     # Credentials, in this order: a personal access token saved under Settings → Discogs (settings row DISCOGS_ACCOUNT;
     # desktop users have no configuration file to edit), the one in the configuration file, an OAuth authorization.
@@ -814,7 +816,9 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             threading.Thread(target=_restart_loop, daemon=True, name="vinylcheck-restart").start()
         threading.Thread(target=_learn_loop, daemon=True, name="vinylcheck-learning").start()
         vm.start()
+        checker.start()
         yield
+        checker.stop()
         vm.stop()
         worker.close()
         if recorder.active:
@@ -828,6 +832,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     licenses.install(app)                         # /licenses: own license and third-party notices
     vinylmind.install(app, vm)                    # /api/vinylmind*: Settings → Vinyl-Mind
     storage.install(app, cfg, db, mover)          # /api/storage*: Settings → Storage, moving the user-data folder
+    updates.install(app, checker)                 # /api/updates*: is there a newer version
     if cfg.language != "auto" and not i18n.supported(cfg.language):
         raise ValueError(f"Unknown language {cfg.language!r}: use 'auto' or one of {', '.join(i18n.languages())}")
     app.add_middleware(LanguageMiddleware, default=cfg.language)
@@ -840,7 +845,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return LocalizedJSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
     app.state.restart = restart_cfg
     app.state.cfg, app.state.db, app.state.worker, app.state.recorder = cfg, db, worker, recorder
-    app.state.mover = mover
+    app.state.mover, app.state.updates = mover, checker
     audio_settings.install(app, aud, recorder, config_file=str(config_file()[0]), active_profile=db.active_profile)
 
     def pick_device(requested: str | None) -> str:
@@ -883,7 +888,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             rs["remaining_s"] = round(rs["expected_end_s"] - rs["frames"] / rs["rate"], 1)
         cal = (db.latest_calibration(prof["id"]) if prof else None) or db.latest_calibration()
         return {"version": __version__, "recorder": rs, "worker": worker.status(), "events": ui_events[-5:],
-                "storage": storage_status(cfg), "storage_move": mover.status(),
+                "storage": storage_status(cfg), "storage_move": mover.status(), "update": checker.status(), "desktop": desktop,
                 "calibration": {"id": cal["id"], "chain_db": cal["chain_db"], "created_at": cal["created_at"]}
                 if cal else None,
                 "fake_source": bool(cfg.fake_source), "discogs": dc.enabled, "discogs_collection": dc.status(),
@@ -1823,8 +1828,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                                   status="recording")
         if "findings" in s.model_fields_set and s.record_id is not None:      # findings belong to the copy and side
             db.set_copy_findings(s.record_id, s.copy_label, s.side, _clean_findings(s.findings))
-        prefix = f"J{s.setup_id}-" if s.setup_id else ""
-        path = cfg.rec_dir / f"{rec_id:05d}-{prefix}{re.sub(r'[^A-Za-z0-9]', '', s.side) or 'A'}-{s.kind}.wav"
+        path = cfg.rec_dir / storage.recording_name(db.recording(rec_id), db.record(s.record_id) if s.record_id else None,
+                                                    prof if not s.record_id else None)
 
         def done(state: dict):
             fields = {"duration_s": state.get("duration_s"), "clip_samples": state.get("clip_samples", 0),

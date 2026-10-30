@@ -61,6 +61,7 @@ class Config:
     engineer_mode: bool = False        # engineer mode: measure recordings against the master of their side
     learn_enabled: bool = True         # learn from master comparisons and verdicts, show estimated real clicks
     learn_grade: bool = False          # … and compute the grade from the estimate (once verified on more records)
+    update_check: bool = True          # once a day ask GitHub for the latest release and show a note (updates.py)
     # Feature version of the learning model (learning.FEATURE_VERSIONS): "1" relative to each recording's music
     # reference; "2" (experimental) also relative to the recording's turntable profile. Vinyl-Mind contributions and
     # global models always carry the version in use, and versions are never mixed.

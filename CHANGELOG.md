@@ -22,10 +22,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the station on the old folder; started again, it continues where it stopped.
 - Files the database refers to outside the user-data folder (left behind when `data_dir` was changed in the
   configuration file) are listed and can be gathered into the folder in use, the same way; a move takes them along.
+- Readable file names for new recordings: number, artist and title (and the copy), side and kind, e.g.
+  `00042_Pink-Floyd_The-Wall_A_before.wav`; turntable measurements carry the profile name. Umlauts are written out,
+  other characters become `-`. *Settings → Storage → Rename files* brings older recordings to the scheme (renames,
+  then rewrites the stored paths in one transaction; undone if that fails).
 - Relinking: point the station at a folder that already holds the data (a drive mounted under another name, a copy
   made by hand) without copying.
 - A folder on a separate drive sets `require_mount` to that drive, so a missing drive stops recordings instead of
   filling the system disk.
+
+- A note when a new version is out: once a day the station asks GitHub for the latest release (sending only its
+  version) and shows *Version x.y.z available* in the header, on the System page and under *Settings → Updates*,
+  with a link to the release page. Switch: *Settings → Updates* or `update_check` in the configuration file.
 
 ### Changed
 

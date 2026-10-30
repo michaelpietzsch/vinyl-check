@@ -22,6 +22,11 @@ Files the database refers to outside the user-data folder (an earlier folder, le
 in the configuration file) move along: they land in `recordings/` or `masters/` of the target and their rows are
 rewritten one by one. Moving to the folder in use gathers only those.
 
+Recordings are named readably: their number, then artist and title (and the copy) of the record, or the turntable
+profile for a turntable measurement, then side and kind, e.g. `00042_Pink-Floyd_The-Wall_A_before.wav`. Renaming
+brings older files to this scheme: files are renamed, then their stored paths are rewritten in one transaction (the
+renames are undone if that fails).
+
 Relinking points the station at a folder that already holds the data (a disk mounted under another name, a copy made
 by hand): every file the database refers to must be there with the same size; then it switches the same way, without
 copying.
@@ -39,10 +44,12 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 from . import i18n
@@ -298,6 +305,51 @@ def targets(cfg, db, *, service: bool = True, config_dir: Path | None = None) ->
     return out[:16]
 
 
+# ─── File names ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+_GERMAN = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
+
+
+def slug(text: str, limit: int = 40) -> str:
+    """A part of a file name that works on every file system and network share: ASCII letters and digits, the rest
+    becomes "-" (umlauts are written out, accents dropped)."""
+    t = unicodedata.normalize("NFKD", (text or "").translate(_GERMAN)).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^A-Za-z0-9]+", "-", t).strip("-")[:limit].strip("-")
+
+
+def recording_name(rec: dict, record: dict | None = None, profile: dict | None = None) -> str:
+    """The file name of a recording: number, then artist, title and copy of the record (or the turntable profile and
+    run for a turntable measurement), side and kind, e.g. 00042_Pink-Floyd_The-Wall_A_before.wav."""
+    parts = [f"{rec['id']:05d}"]
+    if record:
+        parts += [slug(record.get("artist", "")), slug(record.get("title", "")), slug(rec.get("copy_label") or "", 24)]
+    else:
+        parts += [slug(profile["name"]) if profile else "", f"J{rec['setup_id']}" if rec.get("setup_id") else ""]
+    parts += [re.sub(r"[^A-Za-z0-9]", "", rec.get("side") or "")[:8] or "A",
+              re.sub(r"[^A-Za-z0-9_]", "", rec.get("kind") or "")[:24]]
+    return "_".join(p for p in parts if p) + ".wav"
+
+
+def renames(cfg, db) -> list[tuple[int, Path, Path]]:
+    """Recordings in the user-data folder whose file name differs from recording_name: (id, path, new path)."""
+    root, out = _abs(cfg.data_dir), []
+    records, profiles = {}, {}
+    for r in db.q("SELECT id, record_id, setup_id, profile_id, side, kind, copy_label, path FROM recordings "
+                  "WHERE path IS NOT NULL AND audio_deleted_at IS NULL ORDER BY id"):
+        p = _abs(r["path"])
+        if not _inside(p, root) or not p.is_file():
+            continue
+        rid, pid = r["record_id"], r["profile_id"]
+        if rid and rid not in records:
+            records[rid] = db.record(rid)
+        if not rid and pid and pid not in profiles:
+            profiles[pid] = db.profile(pid)
+        new = p.with_name(recording_name(r, records.get(rid) if rid else None, profiles.get(pid) if pid else None))
+        if new != p:
+            out.append((r["id"], p, new))
+    return out
+
+
 # ─── Checking a target ───────────────────────────────────────────────────────────────────────────────────────────
 
 def check(cfg, db, target: str, *, relink: bool = False, service: bool = True) -> dict:
@@ -506,8 +558,12 @@ class Mover:
             self._thread = threading.Thread(target=self._run, args=(src, dst), daemon=True,
                                             name="vinylcheck-storage")
             self._thread.start()
-            log.info("Moving the user-data folder from %s to %s (%d files, %.1f GB)", src, dst, chk["files"],
-                     chk["bytes"] / 1e9)
+            if chk["gather"]:
+                log.info("Gathering %d files (%.1f GB) from outside into the user-data folder %s", chk["files"],
+                         chk["bytes"] / 1e9, dst)
+            else:
+                log.info("Moving the user-data folder from %s to %s (%d files, %.1f GB)", src, dst, chk["files"],
+                         chk["bytes"] / 1e9)
             return self.status()
 
     def cancel(self) -> dict | None:
@@ -539,6 +595,49 @@ class Mover:
             self._save(force=True)
             log.info("User-data folder relinked from %s to %s", src, dst)
             return self.status()
+
+    def rename(self) -> dict:
+        """Give the recordings of the user-data folder the current file names: rename the files, then rewrite their
+        paths in one transaction; a file whose new name is taken, or that cannot be renamed, keeps its name."""
+        with self._lock:
+            if self.active:
+                raise MoveRefused(i18n.msg("storage.busy"))
+            if self.recording():
+                raise MoveRefused(i18n.msg("storage.recording"))
+            if self.analysing():
+                raise MoveRefused(i18n.msg("storage.rename_analysing"))
+            done, kept = [], 0
+            try:
+                for rid, old, new in renames(self.cfg, self.db):
+                    if new.exists():
+                        kept += 1
+                        continue
+                    try:
+                        os.rename(old, new)
+                    except OSError as e:
+                        kept += 1
+                        log.warning("Cannot rename %s: %s", old, e)
+                        continue
+                    done.append((rid, old, new))
+                with self.db.lock:
+                    c = self.db.conn
+                    c.execute("BEGIN")
+                    try:
+                        for rid, _, new in done:
+                            c.execute("UPDATE recordings SET path = ? WHERE id = ?", (str(new), rid))
+                        c.execute("COMMIT")
+                    except BaseException:
+                        c.execute("ROLLBACK")
+                        raise
+            except BaseException:
+                for _, old, new in reversed(done):                     # back to the names the database knows
+                    try:
+                        os.rename(new, old)
+                    except OSError as e:
+                        log.error("Cannot rename %s back to %s: %s", new, old, e)
+                raise
+            log.info("Renamed %d recordings to the current file names (%d kept their name)", len(done), kept)
+            return {"renamed": len(done), "kept": kept}
 
     # ─── The work ────────────────────────────────────────────────────────────────────────────────────────────────
     def _switch(self, src: Path, dst: Path, mount: str, moved: list[dict] = ()) -> None:
@@ -673,11 +772,13 @@ def info(cfg, db, mover: Mover) -> dict:
                                  "recordings": sum(1 for o in found if o["table"] == "recordings"),
                                  "masters": sum(1 for o in found if o["table"] == "masters")}},
             "targets": targets(cfg, db, service=mover.service, config_dir=mover.config_dir),
+            "names": {"pending": len(todo := renames(cfg, db)),
+                      "examples": [{"old": old.name, "new": new.name} for _, old, new in todo[:3]]},
             "service": mover.service, "move": mover.status()}
 
 
 def install(app, cfg, db, mover: Mover) -> None:
-    """Routes: GET /api/storage, POST /api/storage/check, /move, /move/cancel, /move/dismiss, /relink."""
+    """Routes: GET /api/storage, POST /api/storage/check, /move, /move/cancel, /move/dismiss, /relink, /rename."""
     from fastapi import HTTPException
 
     def path_of(body: dict | None) -> str:
@@ -709,6 +810,14 @@ def install(app, cfg, db, mover: Mover) -> None:
     def storage_move_dismiss():
         mover.dismiss()
         return info(cfg, db, mover)
+
+    @app.post("/api/storage/rename")
+    def storage_rename():
+        try:
+            result = mover.rename()
+        except MoveRefused as e:
+            raise HTTPException(409, e.message) from e
+        return info(cfg, db, mover) | {"result": result}
 
     @app.post("/api/storage/relink")
     def storage_relink(body: dict | None = None):

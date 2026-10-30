@@ -27,5 +27,6 @@
   "outside_missing": {
     "one": "{n} file the database refers to outside the user-data folder cannot be found and stays as it is.",
     "other": "{n} files the database refers to outside the user-data folder cannot be found and stay as they are."
-  }
+  },
+  "rename_analysing": "An analysis is running: rename the files once it is done."
 }
