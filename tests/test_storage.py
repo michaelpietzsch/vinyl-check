@@ -349,7 +349,9 @@ def test_new_recordings_get_the_readable_name(tmp_path):
         rid = c.post("/api/records", json={"artist": "Pink Floyd", "title": "The Wall"}).json()["id"]
         r = c.post("/api/recordings/start", json={"record_id": rid, "side": "A", "kind": "before"})
         assert r.status_code == 200, r.text
-        rec_id = r.json()["recording_id"] if "recording_id" in r.json() else r.json()["id"]
+        rec_id = r.json()["recording_id"]
+        meta = c.get("/api/status").json()["recorder"]["meta"]       # every window can follow it to its record
+        assert meta["record_id"] == rid and meta["kind"] == "before"
         c.post("/api/recordings/stop")
         path = c.app.state.db.recording(rec_id)["path"]
         assert Path(path).name == f"{rec_id:05d}_Pink-Floyd_The-Wall_A_before.wav"

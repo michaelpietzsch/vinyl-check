@@ -266,6 +266,15 @@ function renderStatus(s) {
   tj.disabled = !!isCheck; tj.title = isCheck ? T("shell.tab_turntable_locked") : T("shell.tab_turntable_title");
   tp.disabled = !!isJust; tp.title = isJust ? T("shell.tab_record_locked") : T("shell.tab_record_title");
   $("#btn-monitor").disabled = $("#btn-calibrate").disabled = !!r.active;
+  // A recording, started here or elsewhere (another window, another device), shows on its own page once: a record
+  // check on the record check with its record, a turntable measurement on the turntable check. The settings stay
+  // where they are, so nothing typed there is lost.
+  if (r.active && (isCheck || isJust) && r.started !== state.followed) {
+    state.followed = r.started;
+    const want = isCheck ? "record" : "alignment", rid = r.meta?.record_id;
+    if (state.mode !== want && state.mode !== "system") setMode(want);
+    if (isCheck && rid && state.mode === "record" && state.record?.id !== rid) openRecord(rid).catch(() => {});
+  }
   document.querySelectorAll(".btn-rec").forEach((b) => (b.disabled = !!r.active || !st.ok || !!s.storage_move?.active));
   $("#rec-label").textContent = r.active ? (r.mode === "record" ? T("shell.rec_label_recording", { kind: KIND[r.meta?.kind] || "" }) : T("shell.rec_label_monitor")) : T("shell.rec_ready");
   $("#rec-time").textContent = fmtTime(r.active ? r.elapsed_s : 0);

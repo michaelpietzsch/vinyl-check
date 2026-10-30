@@ -34,6 +34,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   version) and shows *Version x.y.z available* in the header, on the System page and under *Settings → Updates*,
   with a link to the release page. Switch: *Settings → Updates* or `update_check` in the configuration file.
 
+### Fixed
+
+- A recording started in another window or on another device showed in the turntable check's live view when that
+  page was open. Every open window now follows a recording to its page once: a record check to the record check
+  with its record, a turntable measurement to the turntable check (the settings stay where they are).
+
 ### Changed
 
 - The folder chosen in the interface is kept in the database and takes precedence over `data_dir` (and

@@ -1860,6 +1860,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                     push_event("end_groove", i18n.msg("api.event_end_groove"), rec_id)
 
             res = _start(lambda dev: path, {"recording_id": rec_id, "kind": s.kind, "setup_id": s.setup_id,
+                                            "record_id": s.record_id,
                                             "profile_id": prof["id"] if prof else None,
                                             "side_length_source": side_src,
                                             "side_length_source_label": SIDE_SOURCE_LABEL.get(side_src)}, s.device,
