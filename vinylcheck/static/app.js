@@ -1807,7 +1807,7 @@ async function loadStation() {
   if (!recsAll.length) next.push(`<li>${ico("disc", 16)} ${T("station.next_add_record")} <button class="secondary" data-go="record">${T("station.go_record_check")}</button></li>`);
   const lastRec = last[0];
   const prof = st.profile;
-  if (!prof) next.unshift(`<li>${ico("tonearm", 16)} ${T("station.next_measure_turntable")} <button class="secondary" data-go="alignment">${T("station.go_turntable_check")}</button></li>`);
+  if (!prof) next.unshift(`<li>${ico("tonearm", 16)} ${T("station.next_measure_turntable")} <button class="secondary" data-tour-start>${T("station.start_tour")}</button></li>`);
   else if (!prof.accepted) next.unshift(`<li>${ico("tonearm", 16)} ${T("station.next_not_measured", { name: esc(prof.name) })} <button class="secondary" data-go="alignment">${T("station.continue_measuring")}</button></li>`);
   if (lastRec && lastRec.record_id) next.push(`<li>${ico("disc", 16)} ${T("station.next_continue_record", { name: esc(names[lastRec.record_id] || T("station.record")) })} <button class="secondary" data-open-rec="${lastRec.record_id}">${T("station.open_record")}</button></li>`);
   if (lastRec && lastRec.setup_id) next.push(`<li>${ico("sliders", 16)} ${T("station.next_continue_run", { name: esc(sNames[lastRec.setup_id] || T("station.run")) })} <button class="secondary" data-open-setup="${lastRec.setup_id}">${T("station.open_run")}</button></li>`);
@@ -1839,6 +1839,7 @@ async function loadStation() {
     ${next.length ? `<h3>${T("station.next_steps")}</h3><ul class="next">${next.join("")}</ul>` : ""}`;
   const go = (m) => setMode(m);
   document.querySelectorAll("#station [data-go]").forEach((b) => (b.onclick = () => go(b.dataset.go)));
+  document.querySelectorAll("#station [data-tour-start]").forEach((b) => (b.onclick = guard(startTour)));
   document.querySelectorAll("#station [data-open-rec]").forEach((b) => (b.onclick = () => { go("record"); openRecord(+b.dataset.openRec).catch((e) => toast(e.message)); }));
   document.querySelectorAll("#station [data-open-setup]").forEach((b) => (b.onclick = () => { go("alignment"); openSetup(+b.dataset.openSetup).catch((e) => toast(e.message)); }));
   const gc = $("#go-cal"); if (gc) gc.onclick = () => $("#btn-calibrate").click();
@@ -3156,13 +3157,15 @@ async function loadProfiles() {
 $("#profiles").addEventListener("click", guard(async (e) => {
   const li = e.target.closest("li[data-pid]"); if (!li) return;
   state.profileId = +li.dataset.pid; state.setup = null; state.setupSel.clear(); $("#view").classList.add("hidden");
+  if (state.tour && state.tour.profileId !== state.profileId) state.tour = null;
   await loadSetups(); await openProfile(state.profileId);
 }));
-$("#btn-new-profile").onclick = () => { state.setup = null; renderProfileForm(null); };
+$("#btn-new-profile").onclick = () => { state.setup = null; state.tour = null; renderProfileForm(null); };
+$("#btn-tour").onclick = guard(() => startTour());
 
 async function openProfile(id) { state.profile = await api(`/api/profiles/${id}`); renderProfile(); }
 async function refreshProfile() {
-  if (!state.profileId || state.setup) return;
+  if (!state.profileId || state.setup || $("#profile-form") || tourScreen()) return;     // keep forms being filled in
   try { state.profile = await api(`/api/profiles/${state.profileId}`); renderProfile(); loadProfiles(); } catch (_) {}
 }
 
@@ -3173,15 +3176,17 @@ const deviceLabel = (d) => d.hostapi
   ? `${esc(d.name)} (${T("audio.device_detail", { hostapi: esc(d.hostapi), n: d.channels, rate: num(d.default_rate / 1000, 1) })})`
   : `${esc(d.name)} (${esc(deviceId(d))})`;
 
-function renderProfileForm(p) {
+function renderProfileForm(p, opts = {}) {
   const v = (k) => esc(p?.[k] ?? "");
   // Vinyl-Mind chain class: empty = guessed from device and cartridge (the guess is shown), else what the user chose
   const chainOpts = (part, values) => [["", p?.chain_guess ? T("profiles.chain_auto_value", { value: T(`vinylmind.${part}_${p.chain_guess[part]}`) }) : T("profiles.chain_auto")],
     ...values.map((x) => [x, T(`vinylmind.${part}_${x}`)])]
     .map(([x, label]) => `<option value="${x}" ${(p?.[`chain_${part}`] || "") === x ? "selected" : ""}>${label}</option>`).join("");
   $("#setup-detail").innerHTML = `
+    ${tourBar()}
     <h2>${ico("tonearm")} ${p ? T("profiles.edit_title") : T("profiles.add_title")}</h2>
     <p class="hint">${T("profiles.form_hint")}</p>
+    ${opts.tour ? basicsHtml() : ""}
     <form id="profile-form" class="setup-form">
       <div class="wide"><label for="pf-name">${T("profiles.name")}</label><input id="pf-name" name="name" required value="${v("name")}" placeholder="${T("profiles.name_placeholder")}"></div>
       <div><label for="pf-cart">${T("profiles.cartridge")}</label><input id="pf-cart" name="cartridge" value="${v("cartridge")}" placeholder="${T("profiles.cartridge_placeholder")}"></div>
@@ -3194,6 +3199,8 @@ function renderProfileForm(p) {
       <div class="wide hint">${T("profiles.chain_hint")}</div>
       <div class="wide"><label><input type="checkbox" id="pf-fixed" ${p?.fixed_gain ? "checked" : ""}> ${T("profiles.fixed_gain")}</label>
         <div class="hint">${T("profiles.fixed_gain_hint")}</div></div>
+      <div class="wide"><label for="pf-trec">${T("profiles.test_record")}</label><select id="pf-trec" name="test_record"><option value="">${T("profiles.device_searching")}</option></select>
+        <div class="hint">${T("profiles.test_record_hint")}</div></div>
       <div class="wide"><label for="pf-map">${T("profiles.targets")}</label><select id="pf-map" name="target_map"><option value="">${T("profiles.targets_default")}</option></select>
         <div class="hint">${T("profiles.targets_hint")}</div></div>
       <div class="wide"><label for="pf-notes">${T("profiles.notes")}</label><input id="pf-notes" name="notes" value="${v("notes")}"></div>
@@ -3204,6 +3211,12 @@ function renderProfileForm(p) {
     sel.innerHTML = `<option value="">${T("profiles.targets_default_named", { name: esc(t.maps.find((m) => m.id === t.active)?.name || t.active) })}</option>`
       + t.maps.map((m) => `<option value="${esc(m.id)}" ${p?.target_map === m.id ? "selected" : ""}>${esc(m.name)}</option>`).join("");
   }).catch(() => {});
+  loadTestRecords().then((tr) => {
+    const sel = $("#pf-trec"); if (!sel) return;
+    const cur = opts.testRecord || p?.test_record || tr.default;
+    sel.innerHTML = tr.records.filter((r) => r.support !== "none" && r.sides.length)
+      .map((r) => `<option value="${esc(r.id)}" ${r.id === cur ? "selected" : ""}>${esc(trecName(r))} · ${TR_SUPPORT[r.support]}</option>`).join("");
+  }).catch(() => {});
   api("/api/devices").then((devs) => {
     const sel = $("#pf-dev"); if (!sel) return;
     const cur = p?.device || "";
@@ -3211,7 +3224,7 @@ function renderProfileForm(p) {
     if (cur && !devs.some((d) => deviceId(d) === cur)) opts.unshift(`<option value="${esc(cur)}" selected>${T("profiles.device_not_connected", { device: esc(cur) })}</option>`);
     sel.innerHTML = opts.join("") || `<option value="">${T("profiles.no_device")}</option>`;
   }).catch(() => {});
-  $("#pf-cancel").onclick = () => (p ? renderProfile() : ($("#setup-detail").innerHTML = `<p class="empty">${T("profiles.select_or_add")}</p>`));
+  $("#pf-cancel").onclick = () => (opts.tour ? tourGo("record") : p ? renderProfile() : ($("#setup-detail").innerHTML = `<p class="empty">${T("profiles.select_or_add")}</p>`));
   $("#profile-form").onsubmit = guard(async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target), body = {};
@@ -3219,25 +3232,28 @@ function renderProfileForm(p) {
     if (p && body.target_map === "") body.target_map = null;
     body.fixed_gain = $("#pf-fixed").checked;
     const out = p ? await api(`/api/profiles/${p.id}`, { method: "PATCH", body }) : await api("/api/profiles", { method: "POST", body });
-    state.profileId = out.id; state.profile = out; toast(p ? T("profiles.saved") : T("profiles.added")); await loadSetups(); renderProfile();
+    state.profileId = out.id; state.profile = out; toast(p ? T("profiles.saved") : T("profiles.added"));
+    if (opts.tour && state.tour) Object.assign(state.tour, { step: "measure", profileId: out.id });
+    await loadSetups(); renderProfile();
   });
 }
 
-const STEPS = [
-  ["profile", T("profiles.step_profile")], ["calibration", T("profiles.step_calibration")], ["side1", T("profiles.step_side1")],
-  ["side2", T("profiles.step_side2")], ["accept", T("profiles.step_accept")]];
+// Wizard steps: the sides to record come from the profile's test record (older servers: sides 1 and 2)
+const stepsOf = (pr) => [["profile", T("profiles.step_profile")], ["calibration", T("profiles.step_calibration")],
+  ...(pr.sides || ["1", "2"]).map((k) => ["side" + k, T("profiles.step_side", { n: k })]), ["accept", T("profiles.step_accept")]];
 function stepState(pr, key) {
-  const order = STEPS.map((x) => x[0]), cur = pr.next === "done" ? 99 : order.indexOf(pr.next), i = order.indexOf(key);
+  const order = stepsOf(pr).map((x) => x[0]), cur = pr.next === "done" ? 99 : order.indexOf(pr.next), i = order.indexOf(key);
   const rec = pr[key];
-  if (key === "side1" || key === "side2") {
+  if (key.startsWith("side")) {
     if (rec?.status === "error") return "bad";
     if (rec && rec.status !== "analyzed") return "run";
   }
   return i < cur ? "ok" : i === cur ? "cur" : "todo";
 }
 function renderProfile() {
-  const p = state.profile; if (!p) return;
-  const pr = p.progress, st = state.status, busy = !!st?.recorder?.active, mine = st?.recorder?.meta?.profile_id === p.id;
+  const p = state.profile; if (!p || tourScreen()) return;
+  const pr = p.progress, st = state.status, busy = !!st?.recorder?.active, mine = busy && st?.recorder?.meta?.profile_id === p.id;
+  const steps = stepsOf(pr), trec = p.test_record_info, rd = p.readiness;
   const dis = busy || !st?.storage?.ok ? "disabled" : "";
   const b = p.baseline, sum = b?.summary || {};
   const stepRow = ([key, label], i) => {
@@ -3251,19 +3267,21 @@ function renderProfile() {
     <h3>${T("profiles.cal_title")}</h3>
     <p>${T("profiles.cal_text")}</p>
     <button class="btn-rec" data-wiz="calibration" ${dis}>${ico("calibrate")} ${T("profiles.cal_start")}</button>`;
-  else if (pr.next === "side1" || pr.next === "side2") {
-    const n = pr.next === "side1" ? 1 : 2;
+  else if (pr.next.startsWith("side")) {
+    const n = pr.next.slice(4), step = steps.findIndex((x) => x[0] === pr.next) + 1;
     action = `
-    <h3>${T("profiles.side_title", { step: n + 2, n })}</h3>
-    <p>${T("profiles.side_put", { n })} ${n === 1 ? T("profiles.side1_content") : T("profiles.side2_content")}
+    <h3>${T("profiles.side_title", { step, n })}</h3>
+    <p>${T("profiles.side_put", { record: esc(trecName(trec)), n })} ${sideContent(trec, n)}
       ${T("profiles.side_go")}</p>
     ${recInfo(pr.next)}
     <button class="btn-rec" data-wiz="${pr.next}" ${dis}>${ico("rec")} ${T("profiles.side_record", { n })}</button>`;
   } else if (pr.next === "accept") action = `
-    <h3>${T("profiles.accept_title")}</h3>
+    <h3>${T("profiles.accept_title", { step: steps.length })}</h3>
     <p>${T("profiles.accept_text")}</p>
-    <div class="row"><button class="btn-rec" data-wiz="accept" ${busy ? "disabled" : ""}>${ico("ok")} ${T("profiles.step_accept")}</button>
-      <button class="secondary" data-wiz="side1" ${dis}>${T("profiles.redo_side", { n: 1 })}</button><button class="secondary" data-wiz="side2" ${dis}>${T("profiles.redo_side", { n: 2 })}</button></div>
+    ${rd ? readinessHtml(rd, dis) : ""}
+    <div class="row">${rd?.verdict === "incomplete" ? "" : `<button class="btn-rec" data-wiz="accept" ${busy ? "disabled" : ""}>${ico("ok")} ${VERDICT_OPEN.has(rd?.verdict) ? T("tour.accept_anyway") : T("profiles.step_accept")}</button>`}
+      ${(pr.sides || ["1", "2"]).map((k) => `<button class="secondary" data-wiz="side${esc(k)}" ${dis}>${T("profiles.redo_side", { n: k })}</button>`).join("")}</div>
+    <h3>${T("tour.all_findings")}</h3>
     <div id="wiz-results"></div>`;
   const trims = p.accepted_at ? `
     <h3>${T("profiles.trims_title")}</h3>
@@ -3277,17 +3295,19 @@ function renderProfile() {
     </tbody></table>
     ${b?.results?.length ? `<h3>${T("profiles.baseline_findings")}</h3>${resultsTable(b.results.map((r) => ({ ...r, text: "" })))}` : ""}` : "";
   $("#setup-detail").innerHTML = `
+    ${tourBar()}
     <div class="row" style="justify-content:space-between;align-items:start">
       <div><h2 style="margin:0">${ico("tonearm")} ${esc(p.name)}</h2>
-        <div class="hint">${T("profiles.summary", { cartridge: esc(p.cartridge || T("profiles.no_cartridge")), force: fmtG(p.tracking_force_g), anti: esc(p.antiskating || "–"), weight: esc(p.weight || "–") })}<br>${T("profiles.targets_used", { name: esc(p.targets_used?.name || T("profiles.targets_standard")) })}${p.targets_used?.own ? "" : T("profiles.targets_global")}</div></div>
+        <div class="hint">${T("profiles.summary", { cartridge: esc(p.cartridge || T("profiles.no_cartridge")), force: fmtG(p.tracking_force_g), anti: esc(p.antiskating || "–"), weight: esc(p.weight || "–") })}<br>${T("profiles.targets_used", { name: esc(p.targets_used?.name || T("profiles.targets_standard")) })}${p.targets_used?.own ? "" : T("profiles.targets_global")}${trec ? ` · ${T("profiles.test_record_used", { name: esc(trecName(trec)) })}` : ""}</div></div>
       <div class="row" style="flex:0 0 auto">${p.active ? `<span class="st ok">${ico("ok", 14)} ${T("profiles.active")}</span>` : `<button data-wiz="activate" ${busy ? "disabled" : ""}>${T("profiles.use")}</button>`}
         <button class="secondary" data-wiz="edit">${T("profiles.edit")}</button><button class="link" data-wiz="delete">${T("profiles.delete")}</button></div>
     </div>
     ${p.connected ? "" : `<div class="warnbox">${ico("offline", 16)} ${T("profiles.device_missing", { device: esc(p.device) })}</div>`}
     <h3>${T("profiles.measurement")} ${pr.next === "done" ? `<span class="st ok">${ico("ok", 14)} ${T("profiles.done_on", { date: dateStr(p.accepted_at) })}</span>` : pr.remeasure ? `<span class="st warn">${T("profiles.remeasure_running")}</span>` : ""}</h3>
-    <ol class="steps">${STEPS.map(stepRow).join("")}</ol>
+    <ol class="steps">${steps.map(stepRow).join("")}</ol>
     ${mine ? `<div class="go">${ico("tonearm", 24)} <b>GO</b>: ${st.recorder.meta?.kind === "calibration" ? T("profiles.go_calibration") : T("profiles.go_side")}</div>` : ""}
     ${action}
+    ${pr.next === "done" && rd ? readinessHtml(rd, dis, { done: true }) : ""}
     ${pr.next === "done" ? `<div class="row"><button class="secondary" data-wiz="remeasure" ${dis}>${ico("sliders", 18)} ${T("profiles.remeasure")}</button><button class="secondary" data-wiz="calibration" ${dis}>${ico("calibrate", 18)} ${T("profiles.recalibrate")}</button></div>` : ""}
     ${trims}`;
   if (pr.next === "accept" && pr.run_id) api(`/api/setups/${pr.run_id}`).then((s) => { const el = $("#wiz-results"); if (el) el.innerHTML = resultsTable(s.results); }).catch(() => {});
@@ -3306,14 +3326,246 @@ $("#setup-detail").addEventListener("click", guard(async (e) => {
     await api("/api/recordings/start", { method: "POST", body: { kind: "calibration", side: "-", profile_id: p.id, max_s: 25 } });
     toast(T("profiles.toast_calibrating")); return refreshProfile();
   }
-  if (w === "side1" || w === "side2" || w === "remeasure") {
+  if (w.startsWith("side") || w === "remeasure") {
     const { id } = await api(`/api/profiles/${p.id}/run${w === "remeasure" ? "?new=true" : ""}`, { method: "POST" });
     if (w === "remeasure") { await loadSetups(); return refreshProfile(); }
-    await api("/api/recordings/start", { method: "POST", body: { kind: "alignment", setup_id: id, side: w === "side1" ? "1" : "2", profile_id: p.id } });
+    askNotify();
+    await api("/api/recordings/start", { method: "POST", body: { kind: "alignment", setup_id: id, side: w.slice(4), profile_id: p.id } });
     toast(T("profiles.toast_go")); await loadSetups(); return refreshProfile();
   }
-  if (w === "accept") { state.profile = await api(`/api/profiles/${p.id}/accept`, { method: "POST", body: {} }); toast(T("profiles.toast_accepted")); renderProfile(); return loadProfiles(); }
+  if (w === "accept") {
+    if (VERDICT_OPEN.has(p.readiness?.verdict) && !confirm(T("tour.accept_anyway_confirm"))) return;
+    const verdict = p.readiness?.verdict;
+    state.profile = await api(`/api/profiles/${p.id}/accept`, { method: "POST", body: {} }); toast(T("profiles.toast_accepted"));
+    loadProfiles(); loadOnboarding({ quiet: true });
+    if (state.tour) { Object.assign(state.tour, { step: "finish", verdict }); return renderTour(); }
+    return renderProfile();
+  }
 }));
+// ─── Guided first alignment (tour) and test records ─────────────────────────────────────────
+// A new station offers the tour once (welcome dialog): choose the test record, create the turntable profile, then the
+// profile wizard measures as usual; after the last side a verdict says whether the turntable is good enough to measure
+// records and what is worth adjusting, each point with a guide. Every screen can be left; ending the tour or "Don't
+// ask again" is stored on the station (/api/onboarding), the button under the turntable list starts it again.
+// Screens of their own: record (choose), custom (describe another record), norecord, form (profile), finish.
+const TR_SUPPORT = { verified: T("testrecords.support_verified"), partial: T("testrecords.support_partial"), none: T("testrecords.support_none") };
+const TR_SUPPORT_HINT = { verified: T("testrecords.support_verified_hint"), partial: T("testrecords.support_partial_hint"), none: T("testrecords.support_none_hint") };
+const TR_SUPPORT_ST = { verified: "ok", partial: "warn", none: "bad" };
+const TR_CHECK = { reference: T("testrecords.check_reference"), azimuth: T("testrecords.check_azimuth"), phase: T("testrecords.check_phase"),
+  speed: T("testrecords.check_speed"), tracking: T("testrecords.check_tracking"), response: T("testrecords.check_response"),
+  resonance: T("testrecords.check_resonance"), vta: T("testrecords.check_vta"), silent: T("testrecords.check_silent") };
+// What a band must be like for the analysis to recognise it (the form for another test record)
+const TR_BAND = { reference: T("testrecords.band_reference"), azimuth: T("testrecords.band_azimuth"), phase: T("testrecords.band_phase"),
+  speed: T("testrecords.band_speed"), tracking: T("testrecords.band_tracking"), response: T("testrecords.band_response"),
+  resonance: T("testrecords.band_resonance"), vta: T("testrecords.band_vta"), silent: T("testrecords.band_silent") };
+const TOUR_SCREENS = new Set(["record", "custom", "norecord", "form", "finish"]);
+const tourScreen = () => !!state.tour && TOUR_SCREENS.has(state.tour.step);
+const trecName = (r) => (!r ? "" : r.catalog && r.catalog !== r.name ? `${r.name} (${r.catalog})` : r.name);
+const rpmLabel = (rpm) => (rpm >= 44 ? "45 rpm" : "33⅓ rpm");
+async function loadTestRecords() { state.testrecords = await api("/api/testrecords"); return state.testrecords; }
+
+// What to expect on a side of the profile's test record
+function sideContent(r, n) {
+  const checks = r?.layout?.[n];
+  if (checks) return checks.length ? T("profiles.side_contains", { list: checks.map((c) => TR_CHECK[c]).join(", ") }) : "";
+  return r ? T("profiles.side_any_order") : "";
+}
+
+// A guide: why, steps (s1, s2, … as many as the catalog has) and how to check the result
+function guideHtml(id) {
+  const steps = [];
+  for (let i = 1; I18N.has(`guides.${id}.s${i}`); i++) steps.push(`<li>${T(`guides.${id}.s${i}`)}</li>`);
+  return `<p>${T(`guides.${id}.why`)}</p><ol>${steps.join("")}</ol><p class="hint">${ico("ok", 14)} ${T(`guides.${id}.check`)}</p>`;
+}
+const guideBox = (id) => `<details class="guide"><summary>${T("tour.guide", { title: T(`guides.${id}.title`) })}</summary>${guideHtml(id)}</details>`;
+const basicsHtml = () => `<div class="tour-basics"><h3>${T("tour.basics_title")}</h3><p class="hint">${T("tour.basics_text")}</p>
+  ${(state.onboarding?.basics || ["level_platter", "overhang", "tracking_force", "antiskating"]).map(guideBox).join("")}</div>`;
+
+// The verdict on a run (onboarding.readiness): good enough to measure records, or what to adjust first
+const VERDICT = { ready: T("tour.verdict_ready"), ready_notes: T("tour.verdict_ready_notes"), adjust: T("tour.verdict_adjust"),
+  remeasure: T("tour.verdict_remeasure"), incomplete: T("tour.verdict_incomplete") };
+const VERDICT_TEXT = { ready: T("tour.verdict_ready_text"), ready_notes: T("tour.verdict_ready_notes_text"), adjust: T("tour.verdict_adjust_text"),
+  remeasure: T("tour.verdict_remeasure_text"), incomplete: T("tour.verdict_incomplete_text") };
+// The same verdict on a turntable already accepted: what to do now is re-align, not accept
+const VERDICT_DONE = { ready: T("tour.done_ready_text"), ready_notes: T("tour.done_ready_notes_text"), adjust: T("tour.done_adjust_text"),
+  remeasure: T("tour.done_remeasure_text"), incomplete: T("tour.done_incomplete_text") };
+const VERDICT_OPEN = new Set(["adjust", "remeasure"]);                  // accepting asks first
+function readinessHtml(rd, dis, { done = false } = {}) {
+  const why = rd.verdict !== "incomplete" ? "" : !rd.calibrated ? T("tour.incomplete_calibration")
+    : rd.record_has_reference === false ? T("tour.incomplete_record_reference") : T("tour.incomplete_reference");
+  const item = (x) => `<li><div><span class="st ${x.status}">${STLABEL[x.status] || x.status}</span> <b>${esc(x.label)}</b> ${fmtVal(x.value, x.unit)}${x.target ? ` <small class="hint">${T("tour.target", { target: esc(x.target) })}</small>` : ""}</div>
+    ${x.text ? `<div class="hint">${esc(x.text)}</div>` : ""}${x.guide ? guideBox(x.guide) : ""}
+    ${x.side && !done ? `<button class="link" data-wiz="side${esc(x.side)}" ${dis}>${ico("rec", 14)} ${T("tour.redo_after", { n: esc(x.side) })}</button>` : ""}</li>`;
+  const list = (title, xs, hint = "") => (xs.length ? `<h4>${title}</h4>${hint ? `<p class="hint">${hint}</p>` : ""}<ul class="rd-list">${xs.join("")}</ul>` : "");
+  return `<div class="readiness">
+    ${done ? `<h3>${T("tour.state_title")}</h3>` : ""}
+    <div class="${rd.verdict.startsWith("ready") ? "okbox" : "warnbox"}"><b>${VERDICT[rd.verdict]}</b><br>${done ? VERDICT_DONE[rd.verdict] : VERDICT_TEXT[rd.verdict]}${why ? " " + why : ""}</div>
+    ${list(T("tour.list_adjust"), rd.items.filter((x) => x.status === "bad" && x.level !== "info").map(item))}
+    ${list(T("tour.list_better"), rd.items.filter((x) => x.status !== "bad" && x.level !== "info").map(item))}
+    ${list(T("tour.list_notes"), rd.items.filter((x) => x.level === "info").map(item), T("tour.list_notes_hint"))}
+    ${list(T("tour.list_missing"), rd.missing.map((m) => `<li>${esc(m.label)}${m.side ? ` · ${T("tour.on_side", { n: esc(m.side) })}` : ""}</li>`), done ? T("tour.missing_hint_done") : T("tour.missing_hint"))}
+    ${done ? "" : list(T("tour.list_not_covered"), rd.not_covered.map((c) => `<li><b>${TR_CHECK[c.check]}</b>${c.guide ? guideBox(c.guide) : ""}</li>`), T("tour.not_covered_hint"))}
+  </div>`;
+}
+
+// The bar on every tour screen: where we are, and a way out
+function tourBar() {
+  if (!state.tour) return "";
+  const order = ["record", "form", "measure", "finish"], labels = [T("tour.step_record"), T("tour.step_profile"), T("tour.step_measure"), T("tour.step_finish")];
+  const cur = order.indexOf(["custom", "norecord"].includes(state.tour.step) ? "record" : state.tour.step);
+  return `<div class="tour-bar"><b>${ico("testrecord", 18)} ${T("tour.title")}</b>
+    <ol class="tour-steps">${labels.map((l, i) => `<li class="${i < cur ? "ok" : i === cur ? "cur" : ""}">${i < cur ? ico("ok", 14) : ""} ${l}</li>`).join("")}</ol>
+    ${state.tour.step === "finish" ? "" : `<button class="link" data-tour-end>${T("tour.end")}</button>`}</div>`;
+}
+
+function recordChooserHtml(tr) {
+  const card = (r) => `<li class="trec">
+    <div class="grow"><div><b>${esc(trecName(r))}</b> <span class="st ${TR_SUPPORT_ST[r.support]}" title="${esc(TR_SUPPORT_HINT[r.support])}">${TR_SUPPORT[r.support]}</span>${r.id === tr.default ? ` <span class="st info">${T("testrecords.recommended")}</span>` : ""}</div>
+      <small class="hint">${esc([r.maker, rpmLabel(r.rpm), r.sides.length ? T("testrecords.sides_measured", { list: r.sides.join(", ") }) : "", r.ref_cms ? T("testrecords.ref_cms", { v: r.ref_cms }) : ""].filter(Boolean).join(" · "))}</small>
+      ${r.checks.length ? `<div class="trec-checks">${r.checks.map((c) => `<span class="tag">${TR_CHECK[c]}</span>`).join("")}</div>` : ""}
+      ${r.note ? `<div class="hint">${esc(r.note)}</div>` : ""}
+      ${r.support !== "none" && !r.reference ? `<div class="warnbox">${T("testrecords.no_reference_hint")}</div>` : ""}</div>
+    <div class="trec-actions">${r.support === "none" || !r.sides.length ? `<button class="secondary" data-tour-go="norecord">${T("testrecords.pick_none")}</button>` : `<button ${r.id === tr.default ? "" : `class="secondary"`} data-tour-pick="${esc(r.id)}">${T("testrecords.pick")}</button>`}
+      ${r.custom ? `<button class="link" data-tour-edit="${esc(r.id)}">${T("testrecords.edit")}</button><button class="link" data-tour-del="${esc(r.id)}">${T("testrecords.delete")}</button>` : ""}
+      ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${T("testrecords.where")}</a>` : ""}</div></li>`;
+  const other = (title, text, step, label) => `<li class="trec other"><div class="grow"><b>${title}</b><div class="hint">${text}</div></div>
+    <div class="trec-actions"><button class="secondary" data-tour-go="${step}">${label}</button></div></li>`;
+  return `<h2>${ico("testrecord")} ${T("tour.record_title")}</h2>
+    <p>${T("tour.record_text")}</p>
+    <ul class="trec-list">${(tr?.records || []).map(card).join("")}
+      ${other(T("tour.other_title"), T("tour.other_text"), "custom", T("tour.other_button"))}
+      ${other(T("tour.none_title"), T("tour.none_text"), "norecord", T("tour.none_button"))}</ul>`;
+}
+
+function customFormHtml(tr, rid) {
+  const r = rid ? tr.records.find((x) => x.id === rid) : null, is45 = r?.rpm >= 44;
+  return `<h2>${ico("testrecord")} ${r ? T("tour.custom_edit_title") : T("tour.custom_title")}</h2>
+    <p>${T("tour.custom_text")}</p>
+    <form id="trec-form" class="setup-form">
+      <div class="wide"><label for="tr-name">${T("tour.custom_name")}</label><input id="tr-name" name="name" required maxlength="80" value="${esc(r?.name || "")}" placeholder="${T("tour.custom_name_placeholder")}"></div>
+      <div><label for="tr-maker">${T("tour.custom_maker")}</label><input id="tr-maker" name="maker" maxlength="80" value="${esc(r?.maker || "")}"></div>
+      <div class="two"><div><label for="tr-rpm">${T("tour.custom_rpm")}</label><select id="tr-rpm" name="rpm"><option value="33">33⅓</option><option value="45" ${is45 ? "selected" : ""}>45</option></select></div>
+        <div><label for="tr-sides">${T("tour.custom_sides")}</label><select id="tr-sides" name="sides"><option value="2">2</option><option value="1" ${r?.sides.length === 1 ? "selected" : ""}>1</option></select></div></div>
+      <fieldset class="wide trec-bands"><legend>${T("tour.custom_bands")}</legend>
+        ${tr.checks.map((c) => `<label><input type="checkbox" name="checks" value="${esc(c)}" ${r?.checks.includes(c) ? "checked" : ""}> <span><b>${TR_CHECK[c]}</b><br><small class="hint">${TR_BAND[c]}</small></span></label>`).join("")}
+      </fieldset>
+      <div class="wide"><label for="tr-note">${T("tour.custom_note")}</label><input id="tr-note" name="note" maxlength="500" value="${esc(r?.custom ? r.note || "" : "")}"></div>
+      <div class="wide hint">${T("tour.custom_hint")}</div>
+      <div class="wide row"><button type="button" class="secondary" data-tour-go="record">${T("tour.back")}</button><button type="submit">${ico("ok", 18)} ${T("tour.custom_save")}</button></div>
+    </form>`;
+}
+
+function noRecordHtml(tr) {
+  const rec = tr?.records.find((r) => r.id === tr.default);
+  return `<h2>${ico("testrecord")} ${T("tour.none_title")}</h2>
+    <p>${T("tour.none_why")}</p>
+    <h3>${T("tour.none_recommend_title")}</h3>
+    <p>${T("tour.none_recommend", { name: esc(trecName(rec)) })}${rec?.url ? ` <a href="${esc(rec.url)}" target="_blank" rel="noopener">${T("testrecords.where")}</a>` : ""}</p>
+    <p class="hint">${T("tour.none_others")}</p>
+    <h3>${T("tour.none_without_title")}</h3>
+    <p>${T("tour.none_without")}</p>
+    ${basicsHtml()}
+    <div class="row"><button class="secondary" data-tour-go="record">${T("tour.back")}</button><button data-tour-without>${T("tour.none_continue")}</button></div>`;
+}
+
+function finishHtml() {
+  const open = VERDICT_OPEN.has(state.tour.verdict), p = state.profile;
+  return `<h2>${ico("ok")} ${open ? T("tour.finish_title_open") : T("tour.finish_title")}</h2>
+    <p>${open ? T("tour.finish_text_open") : T("tour.finish_text", { name: esc(p?.name || "") })}</p>
+    <p>${T("tour.finish_next")}</p>
+    <div class="row"><button class="secondary" data-tour-profile>${T("tour.finish_profile")}</button><button data-tour-records>${ico("disc", 18)} ${T("tour.finish_records")}</button></div>`;
+}
+
+async function renderTour() {
+  const t = state.tour; if (!t) return;
+  if (t.step === "measure") { state.profileId = t.profileId; return openProfile(t.profileId); }
+  if (t.step === "form") return renderProfileForm(null, { tour: true, testRecord: t.record });
+  const tr = state.testrecords || await loadTestRecords();
+  const el = $("#setup-detail");
+  el.innerHTML = tourBar() + (t.step === "custom" ? customFormHtml(tr, t.edit) : t.step === "norecord" ? noRecordHtml(tr)
+    : t.step === "finish" ? finishHtml() : recordChooserHtml(tr));
+  if (t.step === "custom") $("#trec-form").onsubmit = guard(async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = { name: fd.get("name"), maker: fd.get("maker"), rpm: +fd.get("rpm"), sides: +fd.get("sides"), checks: fd.getAll("checks"), note: fd.get("note") };
+    const out = await api(t.edit ? `/api/testrecords/${encodeURIComponent(t.edit)}` : "/api/testrecords", { method: t.edit ? "PUT" : "POST", body });
+    await loadTestRecords();
+    toast(out.checks.includes("reference") ? T("tour.custom_saved") : T("tour.custom_saved_no_reference"), 8000);
+    return tourGo("form", { record: out.id, edit: null });
+  });
+  el.scrollIntoView({ block: "start" });
+}
+const tourGo = (step, extra = {}) => { state.tour = { ...(state.tour || {}), step, ...extra }; return renderTour(); };
+
+// Start (or continue) the tour: a turntable half way through its measurement goes on where it stopped
+async function startTour() {
+  if (!state.onboarding) await loadOnboarding({ quiet: true });
+  const pend = state.onboarding?.pending;
+  state.setup = null; $("#view").classList.add("hidden");
+  state.tour = pend ? { step: "measure", profileId: pend.id } : { step: "record" };
+  if (pend) state.profileId = pend.id;
+  if (state.mode !== "alignment") setMode("alignment");
+  return renderTour();
+}
+async function endTour() {
+  state.tour = null;
+  if (!state.onboarding?.accepted) state.onboarding = await api("/api/onboarding", { method: "POST", body: { state: "skipped" } }).catch(() => state.onboarding);
+  toast(T("tour.ended"), 8000);
+}
+$("#setup-detail").addEventListener("click", guard(async (e) => {
+  const b = e.target.closest("[data-tour-go],[data-tour-pick],[data-tour-edit],[data-tour-del],[data-tour-end],[data-tour-without],[data-tour-profile],[data-tour-records]");
+  if (!b || !state.tour) return;
+  const d = b.dataset;
+  if (d.tourGo) return tourGo(d.tourGo, { edit: null });
+  if (d.tourPick) return tourGo("form", { record: d.tourPick });
+  if (d.tourEdit) return tourGo("custom", { edit: d.tourEdit });
+  if (d.tourDel) {
+    const r = state.testrecords?.records.find((x) => x.id === d.tourDel);
+    if (!confirm(T("tour.custom_confirm_delete", { name: r?.name || d.tourDel }))) return;
+    state.testrecords = await api(`/api/testrecords/${encodeURIComponent(d.tourDel)}`, { method: "DELETE" });
+    return renderTour();
+  }
+  if (d.tourEnd !== undefined) {
+    const prof = state.tour.step === "measure" && state.profile;
+    await endTour();
+    return prof ? renderProfile() : ($("#setup-detail").innerHTML = `<p class="empty">${T("profiles.select_or_add")}</p>`);
+  }
+  if (d.tourWithout !== undefined) { await endTour(); return setMode("station"); }
+  state.tour = null;
+  if (d.tourRecords !== undefined) return setMode("record");
+  return renderProfile();                                                     // data-tour-profile
+}));
+
+// The welcome on a new station: offered until a turntable is accepted, "Later" for this browser session
+async function loadOnboarding({ quiet = false } = {}) {
+  try { state.onboarding = await api("/api/onboarding"); } catch (_) { return; }
+  let later = false;
+  try { later = sessionStorage.getItem("vc-tour-later") === "1"; } catch (_) {}
+  if (!quiet && state.onboarding.offer && !later) showWelcome();
+}
+function showWelcome() {
+  const o = state.onboarding, d = $("#welcome");
+  if (d.open) return;
+  d.innerHTML = `
+    <h2 id="welcome-title">${ico("testrecord")} ${T("tour.welcome_title")}</h2>
+    <p>${o.pending ? T("tour.welcome_pending", { name: esc(o.pending.name) }) : T("tour.welcome_text")}</p>
+    <ol class="tour-outline"><li>${T("tour.outline_record")}</li><li>${T("tour.outline_profile")}</li><li>${T("tour.outline_measure")}</li><li>${T("tour.outline_verdict")}</li></ol>
+    <p class="hint">${T("tour.welcome_time")}</p>
+    <div class="row dialog-actions"><button class="link" data-welcome="never">${T("tour.never")}</button><span class="grow"></span>
+      <button class="secondary" data-welcome="later">${T("tour.later")}</button><button data-welcome="start" autofocus>${o.pending ? T("tour.continue") : T("tour.start")}</button></div>`;
+  d.showModal();
+}
+const tourLater = () => { try { sessionStorage.setItem("vc-tour-later", "1"); } catch (_) {} };
+$("#welcome").addEventListener("cancel", tourLater);                         // Esc = later
+$("#welcome").addEventListener("click", guard(async (e) => {
+  const b = e.target.closest("[data-welcome]"); if (!b) return;
+  const d = $("#welcome"), w = b.dataset.welcome;
+  d.close();
+  if (w === "later") return tourLater();
+  if (w === "never") { state.onboarding = await api("/api/onboarding", { method: "POST", body: { state: "skipped" } }); return toast(T("tour.ended"), 8000); }
+  return startTour();
+}));
+
 async function refreshSetup() {
   if (!state.setup || state.mode !== "alignment") return;
   try { state.setup = await api(`/api/setups/${state.setup.id}`); renderSetup(); loadSetups(); } catch (_) {}
@@ -3810,5 +4062,6 @@ function startApp() {
   connect();
   loadRecords().catch((e) => toast(e.message));
   setMode(initialMode());
+  loadOnboarding();
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startApp); else startApp();

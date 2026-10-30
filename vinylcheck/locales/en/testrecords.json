@@ -1,0 +1,20 @@
+{
+  "note.aapt1": "The reference: vinyl-check was built and checked with this record, so every finding is available.",
+  "note.unitra_wt2": "Two LPs. Closest to the AAPT 1 among the records sold today; the anti-skating ramp goes up to +10 dB. Side A (sweeps) is not needed.",
+  "note.clearaudio_smart": "Side B (tracking and resonance in steps) is not recognised yet. The bands on side A are short (about 10 s).",
+  "note.clearaudio_trackability": "The tracking bands come in steps, not as a ramp, and are not recognised yet. Side B starts with an endless silent groove and is not part of the guided measurement.",
+  "note.ortofon": "Only the 1 kHz tones on one channel at a time are recognised (azimuth); the sweeps run on one channel only and the tracking bands come in steps.",
+  "note.elipson": "Its 1 kHz tone on both channels is at −20 dB, so it is no reference; the spot tones on side B are not needed.",
+  "note.hifinews": "The bands sit between locked grooves, tracking comes in 300 Hz steps and the resonance bands are made for listening: vinyl-check cannot measure it as a side.",
+  "note.cardas": "Made for demagnetising and burning in; parts are cut at a different speed: vinyl-check cannot measure it.",
+  "name_required": "Enter a name for the test record.",
+  "name_too_long": "The name may have at most {n} characters.",
+  "rpm_invalid": "The speed must be 33⅓ or 45 rpm.",
+  "sides_invalid": "A test record has 1 or 2 sides with test bands.",
+  "check_unknown": "Unknown kind of band. Allowed: {allowed}.",
+  "builtin_readonly": "The test records that come with vinyl-check cannot be changed.",
+  "not_found": "Test record not found.",
+  "not_usable": "vinyl-check cannot measure with “{name}”. Choose another test record.",
+  "in_use": "This test record is used by: {names}. Choose another test record there first.",
+  "no_reference": "{name} has no 1 kHz tone on both channels at a reference level, so it cannot set this turntable's reference. Measure with a test record that has one (for example the AAPT 1)."
+}

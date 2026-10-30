@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     accepted_at REAL,
     vm_id TEXT,
     chain_source TEXT, chain_cartridge TEXT,
+    test_record TEXT,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -317,7 +318,8 @@ class DB:
         for col in ("wizard_setup_id INTEGER", "target_map TEXT",                     # 0.4.x: profile columns
                     "floor_clicks_per_min REAL", "floor_ticks_per_min REAL", "sensitivity REAL",    # 0.6.0: floor
                     "fixed_gain INTEGER NOT NULL DEFAULT 0",                                        # 0.7.0: fixed gain
-                    "vm_id TEXT", "chain_source TEXT", "chain_cartridge TEXT"):                     # 1.1.0: Vinyl-Mind
+                    "vm_id TEXT", "chain_source TEXT", "chain_cartridge TEXT",                      # 1.1.0: Vinyl-Mind
+                    "test_record TEXT"):                                                            # 1.3.0: test record
             if col.split()[0] not in pcols:
                 self.conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
         if "sensitivity" not in rcols:                                                 # 0.6.0: per-recording override
@@ -376,7 +378,7 @@ class DB:
     PROFILE_FIELDS = ("name", "cartridge", "device", "tracking_force_g", "antiskating", "weight", "notes",
                       "target_map", "calibration_id", "baseline_setup_id", "wizard_setup_id", "ref_dbfs", "chain_db", "speed_pct", "baseline",
                       "floor_clicks_per_min", "floor_ticks_per_min", "sensitivity", "fixed_gain", "accepted_at",
-                      "chain_source", "chain_cartridge")
+                      "chain_source", "chain_cartridge", "test_record")
 
     def profiles(self) -> list[dict]:
         return self.q("""SELECT p.*, (SELECT COUNT(*) FROM setups s WHERE s.profile_id = p.id) AS setups,
@@ -397,8 +399,9 @@ class DB:
     def update_profile(self, pid: int, **fields) -> None:
         text = ("name", "cartridge", "device", "antiskating", "weight", "notes")
         sets = {k: ("" if v is None and k in text else v) for k, v in fields.items() if k in self.PROFILE_FIELDS}
-        if sets.get("target_map") == "":
-            sets["target_map"] = None
+        for k in ("target_map", "test_record"):
+            if sets.get(k) == "":
+                sets[k] = None
         if sets:
             self.x(f"UPDATE profiles SET {', '.join(f'{k} = ?' for k in sets)} WHERE id = ?", (*sets.values(), pid))
 

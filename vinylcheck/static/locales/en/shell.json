@@ -128,10 +128,12 @@
   "doc_op_events": "<b>Events</b>: a column header sorts, “the 200/1000 strongest” loads more.",
   "doc_op_sensitivity": "<b>Sensitivity</b> 0.3 to 0.7 per profile and per recording; 0.5 is the calibrated point. A change re-analyzes.",
   "doc_op_fixed_gain": "<b>Fixed level</b> (profile): USB turntables without a level control get no gain hints.",
+  "doc_op_tour": "<b>Guided first alignment</b> (Turntable check, below the list of turntables): choose your test record, set up and measure the turntable. The verdict says whether it is ready to measure records, with a guide for every point worth adjusting.",
   "doc_op_system": "<b>System</b> (tab): running and queued analyses, CPU, memory, temperature. The pill at the top right opens the same list.",
   "doc_limits_head": "Limits",
   "doc_limits_p": "The grade limits are not calibrated; anchor points by ear are being collected. The noise depends on the chain. The deck baseline is only valid as long as the test record was clean during setup. In pink noise and dense cymbal passages every detector is blind or noisy; the audit is the way to measure that.",
   "version_title": "Version, licenses and service details",
   "offline": "No connection to the station. Is it restarting? Try again in a moment.",
-  "offline_write": "No answer from the station: the change may have arrived all the same. Reload the page and check before you try again."
+  "offline_write": "No answer from the station: the change may have arrived all the same. Reload the page and check before you try again.",
+  "guided_alignment": "Guided first alignment"
 }

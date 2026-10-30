@@ -5,6 +5,40 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Guided first alignment.** A new station (no turntable accepted yet) offers it once in a welcome dialog: *Start*,
+  *Later*, *Don't ask again*; *Guided first alignment* under the turntable list starts it at any time, and it can be
+  ended at every step. It leads through the turntable assistant and adds the choice of the test record before it and
+  a verdict after it.
+- **Test-record catalogue**: the AAPT 1 (verified), Unitra WT-2, Clearaudio smart test vinyl and Trackability,
+  Ortofon, Elipson (partly recognised), Hi-Fi News and Cardas (not measurable), each with what vinyl-check measures
+  with it and on which sides. *Another test record* takes the key data of a record not in the list (name, publisher,
+  speed, sides, kinds of bands). A turntable profile stores its test record; the assistant records only the sides
+  with bands, in the record's order.
+- **Verdict before accepting**: *Ready to measure records*, *Good enough* (with points that could be better),
+  *Please adjust these points first*, *Please record a side again* (a band that matters was not found) or *Not
+  complete yet*. Must figures (input level, anti-skating, tracking headroom, speed) weigh more than should figures
+  (balance, crosstalk and azimuth, wow & flutter, resonance, VTA); frequency response, rumble and the like are notes.
+  The verdict stays on the turntable's page after accepting.
+- **Guides** for 15 adjustments (platter level, protractor, tracking force, anti-skating, VTA, azimuth, recording
+  level, speed, wow & flutter, balance, resonance, cartridge loading, RIAA, rumble and hum, stylus care): why, steps,
+  how to check, next to each finding and before the first measurement.
+- API: `GET/POST /api/testrecords`, `PUT/DELETE /api/testrecords/{id}`, `GET/POST /api/onboarding`; profiles take
+  `test_record` and return `test_record_info`, `progress.sides` and `readiness`.
+
+### Changed
+
+- A test record without a 1 kHz tone on both channels at a reference level cannot set a turntable's reference:
+  accepting is refused.
+
+### Fixed
+
+- The turntable assistant no longer shows *GO* after a recording of its profile has ended.
+- A form being filled in on the turntable page is no longer redrawn when an analysis finishes.
+
 ## [1.2.0] – 2026-10-30
 
 ### Added

@@ -328,7 +328,8 @@ use it from elsewhere, forward the port over SSH or use a VPN.
 
 ## Turntable alignment basics
 
-Work in this order. Each step depends on the ones before it.
+Work in this order. Each step depends on the ones before it. The interface has a step-by-step guide for each
+of them: in the guided first alignment and next to every finding the verdict lists.
 
 | Step | What it is | Tool | What vinyl-check measures |
 |---|---|---|---|
@@ -362,31 +363,89 @@ Work in this order. Each step depends on the ones before it.
 
 ### Test record
 
-vinyl-check is built around the band layout of the **Analogue Productions AAPT 1** test record (two sides: a 1 kHz
-reference, left-only and right-only tones, sweeps, a 100 Hz tone, an SMPTE two-tone, 3150 Hz for speed, a 315 Hz
-anti-skating ramp, pink noise, a vertical resonance sweep and a silent groove).
+vinyl-check finds the bands of a test record **by their signal**, not by their position or by time marks. Pauses,
+spoken announcements and the order of the bands do not matter, but a band must be of a kind the analysis knows: a
+1 kHz reference tone on both channels, 1 kHz on one channel only, 3150 Hz, a 250–400 Hz tone whose level rises
+continuously, sweeps, an SMPTE two-tone (60 Hz + 4 kHz), a silent groove of 30 seconds or more. The turntable wizard
+knows these records:
 
-The analysis finds the bands **by their signal**, not by their position or by time marks. Pauses, spoken
-announcements and the order of the bands do not matter. Test records with comparable bands (for example a 1 kHz
-reference, 1 kHz on one channel only, or 3150 Hz) may be recognised in part. Bands that cannot be assigned are
-listed as such. Only the AAPT 1 has been verified, and support for further test records is on the roadmap.
+| Test record | Publisher | What vinyl-check measures with it | Support |
+|---|---|---|---|
+| The Ultimate Analogue Test LP (AAPT 1) | Analogue Productions | everything: reference and balance, crosstalk (azimuth), frequency response, VTA, speed and wow & flutter (side 1); anti-skating and tracking, phase, arm resonance, silent groove (side 2) | verified |
+| Turntable Test Vinyl Record, Laboratory Edition (WT-2) | Unitra | reference, crosstalk, speed (side C); anti-skating ramp up to +10 dB, frequency response, phase (side D); silent groove (side B) | partly recognised |
+| smart test vinyl (LP 83070) | Clearaudio | speed, crosstalk, reference, phase (side A) | partly recognised |
+| Trackability Test Record (LPT 83063) | Clearaudio | reference and crosstalk (side A); the tracking bands come in steps and are not recognised yet | partly recognised |
+| Test Record | Ortofon | crosstalk (azimuth) only | partly recognised, cannot be accepted alone |
+| Ultimate Technical Record | Elipson | crosstalk, frequency response, speed | partly recognised, cannot be accepted alone |
+| Analogue Test LP | Hi-Fi News | nothing: the bands sit between locked grooves, tracking comes in 300 Hz steps | not measurable |
+| Frequency Sweep & Burn-In Record | Cardas | nothing: made for burn-in, parts cut at another speed | not measurable |
+
+*Verified* means the band layout was checked on real recordings of the record, on different turntables. *Partly
+recognised* means its bands are of the kinds the analysis knows, taken from the publisher's track list, but no
+recording of that record has been checked yet. The wizard records only the sides with such bands, in the order of
+the table.
+
+**Reference tone.** A turntable is accepted with the level of the 1 kHz tone on both channels: it sets the pop
+threshold of every recording made with the profile. The Ortofon record has 1 kHz only on one channel at a time, and
+the Elipson record's tone is at −20 dB, so with these two the findings help adjusting, but the turntable cannot be
+accepted. Reference levels also differ between records (the AAPT 1 and the Unitra WT-2: 7 cm/s; the Clearaudio smart
+test vinyl: 8 cm/s, about 1 dB louder). The reference stays the one of the record a profile was accepted with:
+after changing the test record, measure again.
+
+**Another test record.** *Another test record* (in the guided alignment) takes its key data: name, publisher, speed,
+the number of sides with test bands, and which kinds of bands the sleeve lists, each with what the band must be like
+to be recognised. vinyl-check then records its sides and reports what it finds. Without a 1 kHz reference tone on
+both channels, it cannot be accepted.
+
+**No test record.** Records can still be checked: vinyl-check then uses standard values (reference −20 dBFS, nominal
+speed). Set up the turntable by the maker's figures, measure the chain noise once with *Calibration (stylus up)* and
+check the level on a loud record. The AAPT 1 is the record to get: every finding is available with it.
 
 ### Turntable profile (first alignment)
 
-Open *Turntable check* and choose *Add turntable*. The assistant has five steps, and you can leave and resume it at
+A new station offers a **guided first alignment** the first time it is opened, and until a turntable has been
+accepted: *Start*, *Later* (asks again in the next browser session) or *Don't ask again*. *Guided first alignment*
+under the turntable list starts it at any time, and *End the guide* leaves it at every step. It leads through the
+assistant below and adds two things: choosing the test record first, with guides for the basic set-up before the
+first measurement (level, protractor, tracking force, anti-skating), and the verdict at the end.
+
+Open *Turntable check* and choose *Add turntable*. The assistant has these steps, and you can leave and resume it at
 any time:
 
 1. **Create the profile.** Enter a name, the cartridge, the capture device, tracking force, anti-skating, record
-   weight, whether the level is fixed, and the target preset.
+   weight, whether the level is fixed, the test record and the target preset.
 2. **Calibrate the chain.** Switch the turntable on, let the platter spin and **keep the stylus raised**.
    vinyl-check records 25 seconds and stops by itself. This measures the noise of the electronics.
-3. **Test record, side 1.** Start the recording and lower the stylus at the beginning of the side when *GO*
-   appears. The recording stops in the run-out groove and the analysis runs automatically (about 1–2 minutes).
-   Side 1 holds the reference tone, crosstalk (azimuth), frequency response, VTA and wow & flutter.
-4. **Test record, side 2.** Side 2 holds the anti-skating ramp, pink noise, the resonance sweep and the silent
-   groove.
-5. **Review and accept.** If something is flagged (anti-skating, azimuth, speed), fix it first and record the
-   affected side again. Then accept.
+3. **Test record, side by side.** For each side of the test record that has bands (on the AAPT 1: side 1, then
+   side 2), start the recording and lower the stylus at the beginning of the side when *GO* appears. The recording
+   stops in the run-out groove and the analysis runs automatically (about 1–2 minutes). The step names what the side
+   holds; on the AAPT 1, side 1 holds the reference tone, crosstalk (azimuth), frequency response, VTA and
+   wow & flutter, and side 2 the anti-skating ramp, pink noise, the resonance sweep and the silent groove.
+4. **Review and accept.** The verdict says whether the turntable is good enough to measure records (next section).
+   Adjust what it lists, record the affected side again, then accept.
+
+### The verdict: ready to measure records?
+
+After the last side, the wizard weighs the findings by what they mean for measuring records:
+
+| Weight | Figures | Why |
+|---|---|---|
+| must | input level, anti-skating and tracking headroom, speed | clipping and the pop threshold; a mistracking stylus distorts and crackles like a worn record; skip detection and pitch |
+| should | channel balance, crosstalk and azimuth, wow & flutter, arm resonance, VTA (intermodulation) | the sound and comparisons between turntables, not what the record check counts |
+| note | frequency response, bass (RIAA), rumble, phase, click floor | mostly the phono stage, the cartridge or the room |
+
+| Verdict | Meaning |
+|---|---|
+| *Ready to measure records* | every must and should figure is within its target |
+| *Good enough to measure records* | some figures could be better; each comes with a guide |
+| *Please adjust these points first* | a must or should figure is out of range |
+| *Please record a side again* | a band that matters was not found on a verified record (a stylus lowered late, a recording stopped early) |
+| *Not complete yet* | the chain noise is not measured, or there is no reference tone |
+
+Every figure that is not ok comes with a guide: why it matters, the steps at a turntable (without brand-specific
+details), and how to check the result with vinyl-check. Figures the test record has no bands for are listed with the
+guide for setting them by the maker's figures. You can always accept anyway; the open points and their guides stay
+on the turntable's page until the next measurement. With a fixed-level USB turntable the input level is only a note.
 
 From then on, every recording made with this profile uses its values:
 

@@ -130,7 +130,9 @@ note "operate at the station".
 | 14 | Banner | system status | connection lost, storage full, not calibrated, demo mode, analysis running, new version waiting |
 
 Layout types: dashboard (2), list (3, 7), detail (4, 8), analysis (5, 6, 9, 10), settings (11), dialog (13). There is
-one assistant, the five-step turntable profile, because alignment has a fixed order. The record check is linear
+one assistant, the turntable profile (profile, chain, the sides of the test record, accept), because alignment has
+a fixed order. On a new station the guided first alignment leads through it, with the choice of the test record
+before it and the verdict after it; its welcome is the only dialog that opens by itself. The record check is linear
 enough for the deck and the record page to lead it, with a *next up* line instead of a wizard.
 
 ## E. Core workflows

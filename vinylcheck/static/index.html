@@ -140,6 +140,7 @@
       <li data-i18n-html="shell.doc_op_events"></li>
       <li data-i18n-html="shell.doc_op_sensitivity"></li>
       <li data-i18n-html="shell.doc_op_fixed_gain"></li>
+      <li data-i18n-html="shell.doc_op_tour"></li>
       <li data-i18n-html="shell.doc_op_system"></li>
     </ul>
 
@@ -174,6 +175,7 @@
     <h2><svg class="i" width="20" height="20" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-tonearm"/></svg> <span data-i18n="shell.turntables_head">Turntables</span></h2>
     <ul id="profiles"></ul>
     <button id="btn-new-profile" class="secondary"><svg class="i" width="18" height="18" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-tonearm"/></svg> <span data-i18n="shell.add_turntable">Add turntable</span></button>
+    <button id="btn-tour" class="link"><svg class="i" width="16" height="16" aria-hidden="true"><use href="icons.svg?v=__VERSION__#i-testrecord"/></svg> <span data-i18n="shell.guided_alignment">Guided first alignment</span></button>
     <h3 id="runs-head" data-i18n="shell.runs_head">Alignment runs</h3>
     <p class="hint" data-i18n="shell.runs_hint">One run = one setting of the turntable, measured with both sides of the test record.</p>
     <form id="new-setup">
@@ -200,6 +202,7 @@
 
 <section class="card hidden" id="view"></section>
 
+<dialog id="welcome" class="dialog" aria-labelledby="welcome-title"></dialog>
 <div id="toast"></div>
 <div id="mini-player" class="hidden" role="status"><span class="mp-label"></span><span class="mp-time hint"></span><div class="mp-bar"><div class="mp-fill"></div></div><button class="link mp-again" title="play again" data-i18n-title="shell.play_again">↻</button><button class="link mp-stop" title="Stop" data-i18n-title="shell.stop">■</button></div>
 <div id="pop" class="pop hidden" role="tooltip"></div>

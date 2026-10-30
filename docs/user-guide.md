@@ -274,8 +274,18 @@ they use IBM Plex Sans, otherwise Helvetica.
 including what each finding means, is in the [setup guide](setup-guide.md#alignment-with-vinyl-check-and-a-test-record).
 In short:
 
-- **Add turntable** starts a five-step assistant: create the profile, calibrate the chain with the stylus raised,
-  record side 1 and side 2 of the test record, and review and accept. You can resume it at any time.
+- **Guided first alignment.** A new station offers it the first time it is opened (*Start*, *Later*, *Don't ask
+  again*); the button under the turntable list starts it at any time. Choose your test record from the list of
+  common ones (each with what vinyl-check measures with it), describe another one by its key data, or learn what to
+  do without one. Guides for the basic set-up come before the first measurement, the verdict after it. *End the
+  guide* leaves it at every step.
+- **Add turntable** starts the assistant: create the profile (with its test record), calibrate the chain with the
+  stylus raised, record the sides of the test record (on the AAPT 1: side 1 and side 2), and review and accept. You
+  can resume it at any time.
+- **The verdict** before accepting says whether the turntable is good enough to measure records: *Ready*, *Good
+  enough* (some figures could be better), *Please adjust these points first* or *Please record a side again*. Every
+  figure that is not ok comes with a guide (why, steps, how to check) and a button to record its side again. You can
+  accept anyway; the verdict stays on the turntable's page until the next measurement.
 - The **active profile** (shown in the header) applies to every new recording: capture device, chain noise,
   reference level, speed, click floor and sensitivity. Recordings from different turntables carry a note, because
   their clicks are only comparable within the same chain.

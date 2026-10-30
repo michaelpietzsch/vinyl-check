@@ -1,0 +1,20 @@
+{
+  "note.aapt1": "Der Bezug: vinyl-check wurde mit dieser Platte gebaut und geprüft, alle Befunde sind verfügbar.",
+  "note.unitra_wt2": "Zwei LPs. Unter den heute erhältlichen Platten am nächsten an der AAPT 1; die Antiskating-Rampe geht bis +10 dB. Seite A (Sweeps) wird nicht gebraucht.",
+  "note.clearaudio_smart": "Seite B (Abtastung und Resonanz in Stufen) wird noch nicht erkannt. Die Bänder auf Seite A sind kurz (etwa 10 s).",
+  "note.clearaudio_trackability": "Die Abtastbänder kommen in Stufen, nicht als Rampe, und werden noch nicht erkannt. Seite B beginnt mit einer endlosen stillen Rille und gehört nicht zur geführten Messung.",
+  "note.ortofon": "Erkannt werden nur die 1-kHz-Töne auf jeweils einem Kanal (Azimut); die Sweeps laufen nur auf einem Kanal, die Abtastbänder kommen in Stufen.",
+  "note.elipson": "Ihr 1-kHz-Ton auf beiden Kanälen liegt bei −20 dB und ist damit kein Bezug; die Einzeltöne auf Seite B werden nicht gebraucht.",
+  "note.hifinews": "Die Bänder liegen zwischen Endlosrillen, die Abtastung kommt in 300-Hz-Stufen und die Resonanzbänder sind zum Hören gemacht: vinyl-check kann sie nicht als Seite messen.",
+  "note.cardas": "Zum Entmagnetisieren und Einspielen gemacht; Teile sind mit anderer Drehzahl geschnitten: vinyl-check kann sie nicht messen.",
+  "name_required": "Bitte einen Namen für die Testplatte eingeben.",
+  "name_too_long": "Der Name darf höchstens {n} Zeichen haben.",
+  "rpm_invalid": "Die Drehzahl muss 33⅓ oder 45 U/min sein.",
+  "sides_invalid": "Eine Testplatte hat 1 oder 2 Seiten mit Messbändern.",
+  "check_unknown": "Unbekannte Art von Band. Erlaubt: {allowed}.",
+  "builtin_readonly": "Die Testplatten, die vinyl-check mitbringt, lassen sich nicht ändern.",
+  "not_found": "Testplatte nicht gefunden.",
+  "not_usable": "Mit „{name}“ kann vinyl-check nicht messen. Bitte eine andere Testplatte wählen.",
+  "in_use": "Diese Testplatte nutzt: {names}. Dort zuerst eine andere Testplatte wählen.",
+  "no_reference": "{name} hat keinen 1-kHz-Ton auf beiden Kanälen auf Bezugspegel und kann daher nicht den Bezug dieses Plattenspielers setzen. Mit einer Testplatte messen, die einen hat (zum Beispiel der AAPT 1)."
+}

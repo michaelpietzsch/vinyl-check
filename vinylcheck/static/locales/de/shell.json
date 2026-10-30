@@ -125,10 +125,12 @@
   "doc_op_events": "<b>Ereignisse</b>: Spaltenüberschrift sortiert, „die 200/1000 stärksten“ lädt nach.",
   "doc_op_sensitivity": "<b>Empfindlichkeit</b> 0,3 bis 0,7 je Profil und je Aufnahme; 0,5 ist der eingemessene Punkt. Eine Änderung rechnet neu.",
   "doc_op_fixed_gain": "<b>Pegel fest</b> (Profil): USB-Plattenspieler ohne Pegelsteller bekommen keine Gain-Hinweise.",
+  "doc_op_tour": "<b>Geführte Einmessung</b> (Plattenspieler-Check, unter der Liste der Plattenspieler): Testplatte wählen, Plattenspieler anlegen und einmessen. Das Ergebnis sagt, ob er bereit zum Messen von Platten ist, mit einer Anleitung zu jedem Punkt, den es sich einzustellen lohnt.",
   "doc_op_system": "<b>System</b> (Reiter): laufende und wartende Analysen, CPU, Speicher, Temperatur. Die Pille oben rechts klappt dieselbe Liste auf.",
   "doc_limits_head": "Grenzen",
   "doc_limits_p": "Die Notengrenzen sind nicht kalibriert; Ankerpunkte nach Gehör werden gesammelt. Das Rauschen hängt an der Kette. Der Laufwerksgrund gilt nur, solange die Testplatte beim Einmessen sauber war. Im rosa Rauschen und in dichten Becken-Passagen ist jeder Detektor blind oder laut; das Audit ist der Weg, das zu messen.",
   "version_title": "Version, Lizenzen und Details zum Dienst",
   "offline": "Keine Verbindung zur Station. Startet sie gerade neu? Gleich noch einmal versuchen.",
-  "offline_write": "Keine Antwort von der Station: Die Änderung ist vielleicht trotzdem angekommen. Seite neu laden und nachsehen, bevor du es noch einmal versuchst."
+  "offline_write": "Keine Antwort von der Station: Die Änderung ist vielleicht trotzdem angekommen. Seite neu laden und nachsehen, bevor du es noch einmal versuchst.",
+  "guided_alignment": "Geführte Einmessung"
 }

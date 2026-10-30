@@ -57,5 +57,6 @@
   "col_status": "Status",
   "side": "Seite {side}",
   "no_recordings": "Noch keine Aufnahme. Platte anlegen, Seite aufnehmen.",
-  "next_steps": "Weiter mit"
+  "next_steps": "Weiter mit",
+  "start_tour": "Geführte Einmessung starten"
 }

@@ -436,7 +436,9 @@ the signal**, because band lengths are printed on no sleeve:
    4 dB rise), two-tone, noise. Channel image: lateral (L = R), vertical (L = −R), left or right only (more than
    12 dB difference).
 6. **Assignment** by these features, not by position, following the band layout of the Analogue Productions
-   AAPT 1. Spoken announcements between bands end up as *not assigned*.
+   AAPT 1. Spoken announcements between bands end up as *not assigned*. Other test records are recognised as far as
+   their bands are of the same kinds (catalogue in `testrecords.py`, list in the
+   [setup guide](setup-guide.md#test-record)).
 
 ### Measurements
 
@@ -484,6 +486,30 @@ anti-skating judgement itself (break-up per channel) uses the analysis parameter
 DIN-B weighted and cannot be compared directly. The default target of −55 dB is strict for this method, so use a
 target preset that suits your drive.
 
+### Test records and the verdict
+
+Code: `testrecords.py`, `onboarding.py`
+
+The catalogue lists per test record the checks whose bands it has, per side, and how far that is known: *verified*
+(the AAPT 1, checked on recordings), *partly recognised* (band kinds from the publisher's track list) or *not
+measurable*. A record without a 1 kHz tone on both channels at a reference level cannot set a turntable's reference;
+accepting is refused. Records described by the user are kept in the settings with the kinds of bands ticked.
+
+Before a run is accepted, its findings (judged against the profile's targets) are weighed:
+
+- **must**: input level, anti-skating, tracking headroom, speed. These change what the record check counts
+  (clipping, the pop threshold, distortion from mistracking, skip detection).
+- **should**: balance, crosstalk in both directions and their difference, weighted wow & flutter, arm resonance,
+  intermodulation.
+- **note**: everything else (frequency response, 100 Hz against 1 kHz, rumble, mono cancellation, click floor). With
+  a fixed-level profile the input level is a note too.
+
+A *bad* must or should figure means *adjust*; a must figure the verified record should have yielded but did not means
+*record a side again*; any must or should figure at *check*, or a missing should figure, means *good enough*;
+otherwise *ready*. No chain noise or no reference tone means *not complete*, which cannot be accepted. Each figure
+that is not ok names a guide (the steps are texts of the web catalog `guides`); an antiskating finding with both
+channels breaking up together points to the tracking force instead.
+
 ## Known limitations
 
 - **Grade limits are starting values**, set from a limited number of records judged by ear. Calibrate them for your
@@ -496,5 +522,8 @@ target preset that suits your drive.
   is one reason noise is not part of the grade.
 - **Skips** in sample-exact loops one revolution long can be false alarms.
 - **Radius estimates** assume a 12" LP with even groove pitch.
-- **Alignment** currently covers the AAPT 1 band layout at 33⅓ rpm. Tracking distortion over the radius and lateral
-  resonance need further test records.
+- **Alignment** is verified for the AAPT 1 band layout at 33⅓ rpm. Other catalogued records are recognised by band
+  kind, not yet checked on recordings. Not recognised yet: tracking bands in steps, 300 and 333 Hz tracking tones,
+  sweeps on one channel, 3000 Hz speed tones, bands between locked grooves. The reference level is taken as it is,
+  without correcting for the reference velocity of a record (AAPT 1 and Unitra WT-2: 7 cm/s; Clearaudio smart test
+  vinyl: 8 cm/s). Tracking distortion over the radius and lateral resonance need further test records.

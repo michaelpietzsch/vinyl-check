@@ -57,5 +57,6 @@
   "col_status": "Status",
   "side": "side {side}",
   "no_recordings": "No recordings yet. Add a record, record a side.",
-  "next_steps": "Next steps"
+  "next_steps": "Next steps",
+  "start_tour": "Start guided alignment"
 }

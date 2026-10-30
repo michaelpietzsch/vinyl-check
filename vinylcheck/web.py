@@ -45,7 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
-from . import audio_settings, licenses, network, storage, tls, updates, vinylmind
+from . import audio_settings, licenses, network, onboarding, storage, testrecords, tls, updates, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key
 from .jobs import MASTER_KINDS, Worker
@@ -173,6 +173,7 @@ class ProfileIn(BaseModel):
     fixed_gain: bool = False               # level not adjustable on the device (USB turntable): no gain advice
     chain_source: str | None = None        # Vinyl-Mind chain class; null = guessed from device and cartridge
     chain_cartridge: str | None = None
+    test_record: str | None = None         # id from testrecords; null = the AAPT 1
 
 
 class ProfilePatch(BaseModel):
@@ -188,6 +189,7 @@ class ProfilePatch(BaseModel):
     notes: str | None = None
     chain_source: str | None = None
     chain_cartridge: str | None = None
+    test_record: str | None = None
 
 
 class MapIn(BaseModel):
@@ -833,6 +835,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     vinylmind.install(app, vm)                    # /api/vinylmind*: Settings → Vinyl-Mind
     storage.install(app, cfg, db, mover)          # /api/storage*: Settings → Storage, moving the user-data folder
     updates.install(app, checker)                 # /api/updates*: is there a newer version
+    testrecords.install(app, db)                  # /api/testrecords*: the test records the wizard knows
+    onboarding.install(app, db)                   # /api/onboarding: the tutorial of a new station
     if cfg.language != "auto" and not i18n.supported(cfg.language):
         raise ValueError(f"Unknown language {cfg.language!r}: use 'auto' or one of {', '.join(i18n.languages())}")
     app.add_middleware(LanguageMiddleware, default=cfg.language)
@@ -2399,18 +2403,21 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             r = sides.get(k)
             return None if not r else {"recording_id": r["id"], "status": r["status"], "error": r.get("error"),
                                        "created_at": r["created_at"]}
+        rec_sides = testrecords.of_profile(db, p)["sides"]          # the sides of its test record to record
         steps = {
             "profile": True,
             "calibration": {"recording_id": cal["id"], "chain_db": cal["chain_db"], "created_at": cal["created_at"]} if cal else None,
             "run_id": run["id"] if run else None,
-            "side1": side_state("1"), "side2": side_state("2"),
+            "sides": rec_sides, **{"side" + k: side_state(k) for k in rec_sides},
             "accepted": p.get("accepted_at"), "remeasure": remeasure,
         }
         if p.get("accepted_at") and not remeasure:
             nxt = "done"
+        elif not cal:
+            nxt = "calibration"
         else:
-            nxt = ("calibration" if not cal else "side1" if not (steps["side1"] and steps["side1"]["status"] == "analyzed")
-                   else "side2" if not (steps["side2"] and steps["side2"]["status"] == "analyzed") else "accept")
+            nxt = next(("side" + k for k in rec_sides
+                        if not (steps["side" + k] and steps["side" + k]["status"] == "analyzed")), "accept")
         return steps | {"next": nxt}
 
     def _profile_out(p: dict) -> dict:
@@ -2424,7 +2431,31 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         p["connected"] = (not p["device"]) or bool(cfg.fake_source) or p["device"] in {
             d["device"] for d in capture_devices()}
         p["chain"], p["chain_guess"] = vinylmind.chain_of(p), vinylmind.guess_chain(p)   # Vinyl-Mind chain class
+        p["test_record_info"] = testrecords.of_profile(db, p)
         return p
+
+    def _profile_readiness(p: dict) -> dict | None:
+        """Is the turntable good enough to measure records? From the wizard's run while it waits for acceptance,
+        else from the accepted reference (onboarding.readiness)."""
+        pr, rec = p["progress"], p["test_record_info"]
+        if pr["next"] == "accept" and pr.get("run_id"):
+            _, _, items = _setup_findings(pr["run_id"])
+            calibrated = bool(pr.get("calibration"))
+        elif pr["next"] == "done" and p.get("baseline"):
+            items, calibrated = p["baseline"].get("results") or [], p.get("chain_db") is not None
+        else:
+            return None
+        return onboarding.readiness(items, rec, calibrated=calibrated, fixed_gain=bool(p.get("fixed_gain")))
+
+    def _check_test_record(f: dict) -> None:
+        if f.get("test_record") == "":
+            f["test_record"] = None
+        if f.get("test_record"):
+            rec = testrecords.get(db, f["test_record"])
+            if not rec:
+                raise HTTPException(422, i18n.msg("testrecords.not_found"))
+            if not testrecords.usable(rec):
+                raise HTTPException(422, i18n.msg("testrecords.not_usable", name=rec["name"]))
 
     @app.get("/api/profiles")
     def profiles():
@@ -2436,6 +2467,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             raise HTTPException(422, i18n.msg("api.profile_name_required"))
         f = p.model_dump()
         _check_chain(f)
+        _check_test_record(f)
         pid = db.add_profile(**f)
         if not db.active_profile():
             db.activate_profile(pid)
@@ -2448,6 +2480,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             raise HTTPException(404, i18n.msg("api.profile_not_found"))
         out = _profile_out(p)
         out["setups"] = db.setups(pid)
+        out["readiness"] = _profile_readiness(out)
         return out
 
     @app.patch("/api/profiles/{pid}")
@@ -2458,6 +2491,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         f = p.model_dump(exclude_unset=True)
         _check_sensitivity(f.get("sensitivity"))
         _check_chain(f)
+        _check_test_record(f)
         db.update_profile(pid, **f)
         if {"chain_source", "chain_cartridge", "device", "cartridge"} & set(f):
             vm.note_retrained()                   # the chain class of its contribution may have changed
@@ -2489,7 +2523,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             return {"id": p["wizard_setup_id"]}
         if not new and not p.get("accepted_at") and p.get("baseline_setup_id") and db.setup(p["baseline_setup_id"]):
             return {"id": p["baseline_setup_id"]}
-        sid = db.add_setup(profile_id=pid, label=i18n.t("labels.calibration_run", name=p["name"]), test_record="AAPT 1",
+        sid = db.add_setup(profile_id=pid, label=i18n.t("labels.calibration_run", name=p["name"]),
+                           test_record=testrecords.label(testrecords.of_profile(db, p)),
                            tracking_force_g=p.get("tracking_force_g"), bias=p.get("antiskating") or "",
                            notes=i18n.t("labels.record_weight", weight=p["weight"]) if p.get("weight") else "")
         db.update_profile(pid, wizard_setup_id=sid)
@@ -2507,6 +2542,9 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         recs, summary, items = _setup_findings(sid)
         if summary.get("ref_level_dbfs") is None:
             raise HTTPException(409, i18n.msg("api.run_missing_reference"))
+        rec = testrecords.of_profile(db, p)
+        if not rec["reference"]:         # its 1 kHz tone (if any) is not at a reference level: no pop threshold from it
+            raise HTTPException(409, i18n.msg("testrecords.no_reference", name=testrecords.label(rec)))
         cal = db.latest_calibration(pid)
         base = {"setup_id": sid, "summary": summary,
                 "results": [{k: it.get(k) for k in ("key", "label", "value", "unit", "status", "target")}
@@ -2516,6 +2554,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                           calibration_id=cal["id"] if cal else None, baseline=json.dumps(base), accepted_at=time.time(),
                           floor_clicks_per_min=summary.get("floor_clicks_per_min"),
                           floor_ticks_per_min=summary.get("floor_ticks_per_min"))
+        if onboarding.state(db).get("state") != "skipped":
+            onboarding.set_state(db, "done")          # the first turntable is measured: the tutorial is over
         return get_profile(pid)
 
     @app.delete("/api/profiles/{pid}")

@@ -67,7 +67,10 @@ spot, re-analyse with a different sensitivity and compare recordings later.
 - Compare several copies of the same record and follow each side's history over time.
 
 **Turntable alignment with a test record**
-- Guided turntable profiles: noise calibration, both sides of the test record, review, accept.
+- A guided first alignment on a new station: choose your test record from a catalogue of common ones (or describe
+  your own), set up the turntable, measure, and get a verdict: ready to measure records, or which points to adjust
+  first, each with a step-by-step guide. Every step can be skipped.
+- Guided turntable profiles: noise calibration, the sides of the test record, review, accept.
 - Measures anti-skating and tracking reserve, channel balance, crosstalk and azimuth, arm/cartridge resonance,
   speed and wow & flutter, intermodulation (VTA), frequency response and rumble, each with a target value and advice.
 - Live meter for adjustments: distortion per channel while you turn the anti-skating dial.
@@ -155,8 +158,9 @@ sample_format = "S24_3LE"    # 24 bit if your interface supports it (Linux: arec
 VINYLCHECK_CONFIG=config.toml vinyl-check       # same as: python -m vinylcheck
 ```
 
-Then open <http://localhost:8080>. The interface walks you through the first steps: add your turntable, calibrate
-the chain, align it with a test record, then check your first record ([user guide](docs/user-guide.md)).
+Then open <http://localhost:8080>. A new station offers a guided first alignment: choose your test record, add your
+turntable, calibrate the chain and measure it, then check your first record ([user guide](docs/user-guide.md)).
+You can skip it and start it again later.
 
 ### Try it without a turntable
 
@@ -355,7 +359,9 @@ the conventions of the chosen language. To add a language, see [docs/translating
   that each station checks on its own data before using it ([architecture](docs/architecture.md)). The station
   side is in place (*Settings → Vinyl-Mind*, [Vinyl-Mind on the station](docs/vinyl-mind.md)), the hub is in alpha,
   and signing in with an account on the project's website is next.
-- **More test records**: band layouts beyond the Analogue Productions AAPT 1, 45 rpm alignment tones.
+- **More test records**: check the catalogued records on real recordings; recognise tracking bands in steps,
+  300/333 Hz tones, sweeps on one channel and 3000 Hz speed tones; correct the reference level for the reference
+  velocity of each record; 45 rpm alignment tones.
 - **Grade calibration** against a larger set of records with known condition.
 - **Wow per revolution without a reference**: tell from the recording alone whether a record wobbles (off-center
   hole, warp). The pitch drift of stable partials in the music is tracked and locked in on the rotation frequency
@@ -401,7 +407,8 @@ The click-detector weights in `vinylcheck/weights/` come from GrooveClean and ar
 - The grading scale follows the Goldmine standard as used by Discogs.
 - This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. "Discogs" is a
   trademark of Zink Media, LLC.
-- vinyl-check is not affiliated with Analogue Productions. The AAPT 1 test record is referenced for its documented
-  band layout.
+- vinyl-check is not affiliated with Analogue Productions or with any other publisher of the test records in its
+  catalogue (Unitra, Clearaudio, Ortofon, Elipson, Hi-Fi News, Cardas). The records are referenced for their
+  published band layouts; the names are trademarks of their owners.
 - ASIO is a trademark and software of Steinberg Media Technologies GmbH. The Windows app records from ASIO drivers
   through PortAudio's ASIO build, used under the Steinberg ASIO SDK Licensing Agreement.
