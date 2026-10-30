@@ -437,7 +437,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     cfg = cfg or load()
     cfg.state_dir.mkdir(parents=True, exist_ok=True)
     db = DB(cfg.db_path)
-    storage.apply_saved(cfg, db)                       # user-data folder chosen under Settings → Storage
+    config_data_dir = storage.apply_saved(cfg, db)                       # user-data folder chosen under Settings → Storage
     defaults = {k: getattr(cfg, k) for k in SETTINGS}
     for k, raw in db.get_settings().items():           # stored settings apply from startup
         if k in SETTINGS:
@@ -464,7 +464,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     recorder = capture.Recorder(source_factory or default_factory)
     # Moving the user-data folder (storage.py): no recording, master upload or retention cleanup while it runs
     mover = storage.Mover(cfg, db, recording=lambda: recorder.active,
-                          analysing=lambda: bool(worker.status()["current"]), service=not desktop)
+                          analysing=lambda: bool(worker.status()["current"]), service=not desktop,
+                          config_dir=config_data_dir)
     worker.storage_busy = lambda: mover.active
     # Discogs: the collection is cached in the state directory, synced at startup (in the background) and periodically.
     # Credentials, in this order: a personal access token saved under Settings → Discogs (settings row DISCOGS_ACCOUNT;
@@ -564,8 +565,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             if restart_cfg["requested"] or not restart_pending():
                 continue
             ws = worker.status()
-            if recorder.active or ws["current"] or ws["queued"]:
-                continue
+            if recorder.active or ws["current"] or ws["queued"] or mover.active:     # a move continues after a
+                continue                                                           # restart, but from its start
             if time.time() - restart_cfg["last_write"] < restart_cfg["quiet"]:
                 continue
             log.info("New code is staged and nothing is running: restarting the service")
@@ -839,6 +840,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return LocalizedJSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
     app.state.restart = restart_cfg
     app.state.cfg, app.state.db, app.state.worker, app.state.recorder = cfg, db, worker, recorder
+    app.state.mover = mover
     audio_settings.install(app, aud, recorder, config_file=str(config_file()[0]), active_profile=db.active_profile)
 
     def pick_device(requested: str | None) -> str:

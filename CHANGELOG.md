@@ -9,10 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Storage on the System tab: the application folder (database, keys, caches) and the user-data folder (recordings
-  and masters) with their paths, drives, free space and what they hold.
-- Moving the user-data folder to another folder or drive from the interface, with progress (percent, files, GB,
-  speed, time left) in the System tab and in the header. Every file is copied through a temporary file and compared
+- Storage on the System tab (status only): the application folder (database, keys, caches) and the user-data folder
+  (recordings and masters) with their paths, drives (kind and model where known), free space and what they hold.
+- *Settings → Storage*: moving the user-data folder to another folder or drive. A drop-down offers a folder on every
+  drive found, earlier folders, the folder of the configuration file and one on the system drive (drives listed in
+  `/etc/fstab` but not mounted are shown, not selectable); a path of one's own only after choosing "Other folder".
+  The choice is checked at once (space, write access, files of the same name). Progress (percent, files, GB,
+  speed, time left) shows in the settings, on the System tab and in the header. Every file is copied through a temporary file and compared
   with its original (SHA-256 of what was read and of the copy read back); only then does the station switch, in one
   step: the stored paths are rewritten in one transaction and the new folder is used without a restart. The
   originals are deleted afterwards if chosen, once no analysis runs. A cancelled, failed or interrupted move leaves
@@ -28,7 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The folder chosen in the interface is kept in the database and takes precedence over `data_dir` (and
   `require_mount`) in the configuration file.
-- While a move runs, recording and uploading a master are refused and the retention cleanup waits.
+- While a move runs, recording and uploading a master are refused, the retention cleanup waits, and a restart
+  staged by `deploy.sh` waits for the move to end (the deploy script also counts a move as busy).
 - The free-space display in the header and the System tab names the folder it belongs to.
 
 ## [1.1.3] – 2026-10-28

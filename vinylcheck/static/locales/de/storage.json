@@ -4,7 +4,6 @@
   "app_folder": "App-Ordner",
   "app_hint": "Datenbank mit allen Messungen, Urteilen und Einstellungen, Schlüssel und Zwischenspeicher. Er gehört zur Installation und bleibt, wo er ist.",
   "data_folder": "Nutzdaten-Ordner",
-  "data_hint": "Aufnahmen und Master: die großen Dateien. Sie können auf ein anderes Laufwerk umziehen.",
   "source_settings": "hier gewählt",
   "source_config": "aus der Konfigurationsdatei",
   "free": "{free} GB frei von {total} GB",
@@ -13,10 +12,8 @@
   "mounted": "eingehängt",
   "not_mounted": "nicht eingehängt: Die Station nimmt nicht auf",
   "missing": "Der Ordner ist nicht erreichbar (Laufwerk nicht eingehängt?). Messwerte und Noten bleiben sichtbar; Aufnehmen und Anhören gehen erst wieder, wenn er da ist.",
-  "change": "Nutzdaten-Ordner umziehen oder neu zuordnen",
-  "target": "Neuer Ordner",
-  "target_help": "Der vollständige Pfad. Auf einem zusätzlichen Laufwerk schlägt vinyl-check unten einen Ordner vor.",
-  "suggestions": "Vorschläge:",
+  "target": "Umziehen nach",
+  "target_help": "vinyl-check bietet auf jedem gefundenen Laufwerk einen Ordner an, dazu frühere Ordner und einen auf dem Systemlaufwerk. Die Auswahl wird sofort geprüft.",
   "check": "Prüfen",
   "check_ok": "{files} Dateien, {gb} GB werden kopiert; dort sind {free} GB frei.",
   "check_already": {
@@ -67,5 +64,24 @@
   "check_outside": {
     "one": "Davon {n} Datei ({gb} GB) von außerhalb des Nutzdaten-Ordners.",
     "other": "Davon {n} Dateien ({gb} GB) von außerhalb des Nutzdaten-Ordners."
-  }
+  },
+  "to_settings": "In den Einstellungen unter Speicher ändern",
+  "pick": "Ordner wählen …",
+  "custom": "Anderer Ordner (Pfad eingeben) …",
+  "custom_path": "Pfad",
+  "custom_help": "Der vollständige Pfad des Ordners; er wird angelegt, wenn es ihn noch nicht gibt. Danach auf Prüfen klicken.",
+  "pick_first": "Bitte zuerst einen Ordner wählen.",
+  "checking": "Wird geprüft …",
+  "free_short": "{free} GB frei",
+  "kind_sd": "SD-Karte",
+  "kind_nvme": "NVMe-SSD",
+  "kind_usb": "USB-Laufwerk",
+  "kind_disk": "Laufwerk",
+  "kind_volume": "Laufwerk",
+  "system_drive": "Systemlaufwerk",
+  "tag_current": "aktuell",
+  "tag_previous": "bisheriger Ordner",
+  "tag_config": "aus der Konfigurationsdatei",
+  "tag_system": "Systemlaufwerk",
+  "tag_unmounted": "nicht eingehängt"
 }

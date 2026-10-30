@@ -66,12 +66,15 @@ class _Cancelled(Exception):
 
 # ─── Folders and drives ──────────────────────────────────────────────────────────────────────────────────────────
 
-def apply_saved(cfg, db) -> None:
-    """At startup: the user-data folder chosen in the interface wins over the configuration file."""
+def apply_saved(cfg, db) -> Path:
+    """At startup: the user-data folder chosen in the interface wins over the configuration file. Returns the folder
+    of the configuration file (offered in the settings to go back to)."""
+    config_dir = cfg.data_dir
     saved = db.setting(S_DATA_DIR)
     if saved:
         object.__setattr__(cfg, "data_dir", Path(saved))                 # Config is frozen; one shared instance
         object.__setattr__(cfg, "require_mount", db.setting(S_REQUIRE_MOUNT) or "")
+    return config_dir
 
 
 def _abs(path) -> Path:
@@ -169,7 +172,8 @@ def outside(cfg, db) -> list[dict]:
         idx = max((i for i, part in enumerate(parts[:-1]) if part == table), default=None)
         rel = "/".join(parts[idx:]) if idx is not None else f"{table}/{src.name}"
         size = src.stat().st_size if src.is_file() else None
-        out.append({"table": table, "src": src, "rel": rel, "size": size})
+        folder = Path(*parts[:idx]) if idx else None             # the earlier user-data folder, where recognisable
+        out.append({"table": table, "src": src, "rel": rel, "size": size, "root": folder})
     return out
 
 
@@ -197,29 +201,101 @@ def plan(cfg, db, dst: Path) -> tuple[list[dict], int]:
     return items, missing
 
 
-def suggestions(cfg) -> list[str]:
-    """Folders to offer: vinyl-check on each extra drive (Linux /mnt, /media, /srv; macOS /Volumes; Windows D:–Z:)."""
-    roots: list[Path] = []
+def _mounts() -> list[tuple[str, str]]:
+    """(device, mount point) of every mounted file system (Linux)."""
+    try:
+        lines = Path("/proc/mounts").read_text().splitlines()
+    except OSError:
+        return []
+    return [(f[0], f[1].replace("\\040", " ")) for f in (line.split() for line in lines) if len(f) >= 2]
+
+
+def _linux_drive(device: str) -> dict:
+    """Kind ("sd", "nvme", "usb", "disk") and model of the drive a device node belongs to, from /sys."""
+    blk = Path("/sys/class/block") / Path(os.path.realpath(device)).name
+    if not device.startswith("/dev/") or not blk.exists():
+        return {}
+    blk = Path(os.path.realpath(blk))
+    if (blk / "partition").exists():
+        blk = blk.parent
+    model = ""
+    for f in ("device/model", "device/name"):
+        try:
+            model = (blk / f).read_text().strip()
+        except OSError:
+            continue
+        if model:
+            break
+    kind = ("sd" if blk.name.startswith("mmcblk") else "nvme" if blk.name.startswith("nvme")
+            else "usb" if "/usb" in str(blk) else "disk")
+    return {"kind": kind, "model": model}
+
+
+def drive(path: Path) -> dict:
+    """The drive a folder is on: mount point, whether it is the system drive, kind and model (as far as known)."""
+    m = mount_point(path)
+    out = {"mount": m, "system": drive_for_mount(path) == "", "kind": None, "model": ""}
+    if sys.platform.startswith("linux"):
+        dev = next((d for d, mp in reversed(_mounts()) if mp == m), "")
+        out |= _linux_drive(dev)
+    elif sys.platform == "darwin" and m.startswith("/Volumes/"):
+        out |= {"kind": "volume", "model": Path(m).name}
+    elif sys.platform == "win32":
+        out |= {"kind": "disk", "model": m.rstrip("\\")}
+    return out
+
+
+def _fstab_unmounted(mounted: set[str]) -> list[str]:
+    """Mount points of extra drives listed in /etc/fstab that are not mounted now."""
+    try:
+        lines = Path("/etc/fstab").read_text().splitlines()
+    except OSError:
+        return []
+    out = []
+    for f in (line.split() for line in lines):
+        if len(f) >= 3 and not f[0].startswith("#") and f[1].startswith(("/mnt/", "/media/", "/srv/")) \
+                and f[1] not in mounted:
+            out.append(f[1].replace("\\040", " "))
+    return out
+
+
+def targets(cfg, db, *, service: bool = True, config_dir: Path | None = None) -> list[dict]:
+    """The folders the settings offer in the drop-down, the one in use first: vinyl-check on each extra drive (Linux
+    /mnt, /media, /srv; macOS /Volumes; Windows D:–Z:), earlier folders the database still refers to, the folder of
+    the configuration file, one on the system drive, and drives in /etc/fstab that are not mounted (not available)."""
+    current = _abs(cfg.data_dir)
+    cands: list[tuple[Path, str]] = [(current, "current")]
+    unmounted: list[str] = []
     if sys.platform == "darwin":
         vols = Path("/Volumes")
         # the start volume is a link; hidden and com.apple.* volumes are Time Machine's
-        roots += sorted(p for p in vols.iterdir() if p.is_dir() and not p.is_symlink()
-                        and not p.name.startswith((".", "com.apple."))) if vols.is_dir() else []
+        roots = sorted(p for p in vols.iterdir() if os.path.ismount(p) and not p.is_symlink()
+                       and not p.name.startswith((".", "com.apple."))) if vols.is_dir() else []
     elif sys.platform == "win32":
-        roots += [Path(f"{c}:\\") for c in "DEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{c}:\\")]
+        roots = [Path(f"{c}:\\") for c in "DEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{c}:\\")]
     else:
-        try:
-            mounts = [line.split()[1].replace("\\040", " ") for line in Path("/proc/mounts").read_text().splitlines()]
-        except OSError:
-            mounts = []
-        roots += [Path(m) for m in mounts if m.startswith(("/mnt/", "/media/", "/srv/"))]
-    current = _abs(cfg.data_dir)
-    out: list[str] = []
-    for r in roots:
-        cand = r / "vinyl-check"
-        if cand != current and str(cand) not in out:
-            out.append(str(cand))
-    return out[:8]
+        mounts = [mp for _, mp in _mounts()]
+        roots = [Path(mp) for mp in mounts if mp.startswith(("/mnt/", "/media/", "/srv/"))]
+        unmounted = _fstab_unmounted(set(mounts))
+    cands += [(r / "vinyl-check", "drive") for r in roots]
+    cands += [(o["root"], "previous") for o in outside(cfg, db) if o["root"] and o["size"] is not None]
+    if config_dir is not None:
+        cands.append((_abs(config_dir), "config"))
+    cands.append((_abs(cfg.state_dir) / "data" if service else _abs(cfg.state_dir), "system"))
+    out, seen = [], set()
+    for path, kind in cands:
+        if path in seen:
+            continue
+        seen.add(path)
+        out.append({"path": str(path), "kind": kind, "current": path == current, "available": True,
+                    "exists": path.is_dir(), **disk(path), "drive": drive(path)})
+    for mp in unmounted:
+        path = Path(mp) / "vinyl-check"
+        if path not in seen:
+            out.append({"path": str(path), "kind": "unmounted", "current": False, "available": False,
+                        "exists": False, "total_gb": None, "free_gb": None,
+                        "drive": {"mount": mp, "system": False, "kind": None, "model": ""}})
+    return out[:16]
 
 
 # ─── Checking a target ───────────────────────────────────────────────────────────────────────────────────────────
@@ -358,8 +434,9 @@ class Mover:
     """One move (or relink) of the user-data folder at a time, in a background thread. `recording()` and `analysing()`
     tell whether the recorder and the analysis worker are busy."""
 
-    def __init__(self, cfg, db, *, recording=lambda: False, analysing=lambda: False, service: bool = True):
-        self.cfg, self.db = cfg, db
+    def __init__(self, cfg, db, *, recording=lambda: False, analysing=lambda: False, service: bool = True,
+                 config_dir: Path | None = None):
+        self.cfg, self.db, self.config_dir = cfg, db, config_dir
         self.recording, self.analysing, self.service = recording, analysing, service
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -585,16 +662,18 @@ def info(cfg, db, mover: Mover) -> dict:
     out = outside(cfg, db)
     found = [o for o in out if o["size"] is not None]
     folders = sorted({str(o["src"].parent) for o in found})
-    return {"app": {"path": str(_abs(cfg.state_dir)), **disk(cfg.state_dir), "mount": mount_point(cfg.state_dir)},
+    return {"app": {"path": str(_abs(cfg.state_dir)), **disk(cfg.state_dir), "mount": mount_point(cfg.state_dir),
+                    "drive": drive(cfg.state_dir)},
             "data": {"path": str(data), "source": "settings" if saved else "config", "exists": data.is_dir(),
-                     "require_mount": cfg.require_mount or None, "mount": mount_point(data),
+                     "require_mount": cfg.require_mount or None, "mount": mount_point(data), "drive": drive(data),
                      "mounted": os.path.ismount(cfg.require_mount) if cfg.require_mount else None,
                      **disk(data), "usage": usage(data),
                      "outside": {"files": len(found), "bytes": sum(o["size"] for o in found),
                                  "missing": len(out) - len(found), "folders": folders[:5],
                                  "recordings": sum(1 for o in found if o["table"] == "recordings"),
                                  "masters": sum(1 for o in found if o["table"] == "masters")}},
-            "suggestions": suggestions(cfg), "service": mover.service, "move": mover.status()}
+            "targets": targets(cfg, db, service=mover.service, config_dir=mover.config_dir),
+            "service": mover.service, "move": mover.status()}
 
 
 def install(app, cfg, db, mover: Mover) -> None:

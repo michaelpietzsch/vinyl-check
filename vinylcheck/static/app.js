@@ -251,7 +251,7 @@ function renderStatus(s) {
   if (s.fake_source) pills.push(`<span class="pill warn">${T("shell.pill_test_mode")}</span>`);
   $("#pills").innerHTML = pills.join("");
   const sp = $("#pills [data-storage-pill]"); if (sp) sp.onclick = (e) => { e.preventDefault(); setMode("jobs"); };
-  if (state.mode === "jobs") updateStorageMove(mv);
+  updateStorageMove(mv);
 
   const r = s.recorder;
   document.body.classList.toggle("recording", !!r.active && r.mode === "record");
@@ -1950,6 +1950,8 @@ async function loadSystem() {
         <div class="help">${T("settings.theme_help")}</div></div>
       <div class="row"><button type="submit">${ico("ok", 18)} ${T("settings.save")}</button></div>
     </form>
+    <h3 id="settings-storage">${ico("storage", 18)} ${T("storage.title")}</h3>
+    <div id="storage-settings" class="storage"><p class="empty">${T("settings.loading")}</p></div>
     <h3>${ico("cover", 18)} Discogs</h3>
     <div id="discogs-box"><p class="empty">${T("settings.loading")}</p></div>
     <h3>${ico("sliders", 18)} ${T("settings.targets")}</h3>
@@ -1967,6 +1969,7 @@ async function loadSystem() {
     </tbody></table>
     <p class="hint">${T("about.summary")} <a href="/licenses" target="_blank" rel="noopener">${T("about.licenses")}</a></p>`;
   api("/api/targets").then((t) => renderTargets(t, t.active)).catch((e) => toast(e.message));
+  loadStorage().catch((e) => toast(e.message));
   if ($("#learn-box")) api("/api/learn").then(renderLearn).catch((e) => { $("#learn-box").innerHTML = `<p class="hint">${esc(e.message)}</p>`; });
   // Discogs: a personal access token entered here (kept on the server, which only ever sends back its last four
   // characters) takes precedence over the configuration file and applies at once; the OAuth connection of a Discogs
@@ -2660,103 +2663,144 @@ function drawCpuHist(c) {
   g.strokeStyle = css("--accent"); g.lineWidth = 1.5; g.beginPath();
   jobsHist.forEach((p, i) => (i ? g.lineTo(x(p.t), y(p.v)) : g.moveTo(x(p.t), y(p.v)))); g.stroke();
 }
-// ─── Storage (System tab): the application folder, the user-data folder, moving it with progress ──────────────
-// The card is drawn when the tab opens and after each change; while a move runs only its progress is redrawn
-// (from the status, every second), so the form keeps what was typed.
-const storageUi = { info: null, target: "", open: false, phase: null, checked: null };
+// ─── Storage: status on the System tab; choosing and moving the user-data folder under Settings → Storage ──────
+// Both are drawn from GET /api/storage when their page opens and after each change; while a move runs only the
+// progress is redrawn (from the status, every second), so a choice in the settings stays as it is.
+const storageUi = { info: null, pick: "", custom: "", checked: null, phase: null };
 const gbOf = (b) => num((b || 0) / 1e9, 1);
 async function loadStorage() {
   storageUi.info = await api("/api/storage");
-  if (state.mode === "jobs") renderStorage();
+  renderStorageStatus(); renderStorageSettings();
 }
 function storageDisk(x) {
   if (x.total_gb == null) return { pct: 0, cls: "ok", text: "–" };
   const pct = Math.round(100 * (1 - x.free_gb / x.total_gb));
   return { pct, cls: pct > 95 ? "bad" : pct > 85 ? "warn" : "ok", text: T("storage.free", { free: num(x.free_gb, 1), total: num(x.total_gb, 1) }) };
 }
-function renderStorage() {
+function driveKind(k) {
+  return k === "sd" ? T("storage.kind_sd") : k === "nvme" ? T("storage.kind_nvme") : k === "usb" ? T("storage.kind_usb")
+    : k === "volume" ? T("storage.kind_volume") : k === "disk" ? T("storage.kind_disk") : "";
+}
+function driveName(dr) {
+  if (!dr) return "";
+  return [driveKind(dr.kind), dr.model, dr.system ? T("storage.system_drive") : ""].filter(Boolean).join(" · ");
+}
+function targetTag(kind) {
+  return kind === "current" ? T("storage.tag_current") : kind === "previous" ? T("storage.tag_previous")
+    : kind === "config" ? T("storage.tag_config") : kind === "system" ? T("storage.tag_system")
+    : kind === "unmounted" ? T("storage.tag_unmounted") : "";
+}
+function storageFolderCard(label, x, extra) {
+  const dk = storageDisk(x), dn = driveName(x.drive);
+  return `<div class="stat wide"><span>${label}</span>
+    <b class="path"><code>${esc(x.path)}</code></b>
+    <div class="bar"><i class="${dk.cls}" style="width:${dk.pct}%"></i></div>
+    <span>${dk.text}</span>
+    <span>${T("storage.drive", { mount: `<code>${esc(x.drive?.mount || x.mount)}</code>` })}${dn ? ` · ${esc(dn)}` : ""}</span>
+    ${extra}</div>`;
+}
+// System tab: where everything is, read-only
+function renderStorageStatus() {
   const box = $("#storage-box"), I = storageUi.info;
   if (!box || !I) return;
-  const d = I.data, a = I.app, o = d.outside, u = d.usage, mv = state.status?.storage_move ?? I.move;
-  const dd = storageDisk(d), ad = storageDisk(a);
-  const drive = d.require_mount
-    ? `${T("storage.drive", { mount: `<code>${esc(d.require_mount)}</code>` })}: <span class="${d.mounted ? "ok" : "bad"}">${T(d.mounted ? "storage.mounted" : "storage.not_mounted")}</span>`
-    : T("storage.drive", { mount: `<code>${esc(d.mount)}</code>` });
-  const busy = !!mv?.active;
+  const d = I.data, o = d.outside, u = d.usage;
   box.innerHTML = `
     <h2>${ico("storage")} ${T("storage.title")}</h2>
-    <p class="hint">${T("storage.intro")}</p>
     <div class="cards">
-      <div class="stat wide"><span>${T("storage.data_folder")} · ${T(d.source === "settings" ? "storage.source_settings" : "storage.source_config")}</span>
-        <b class="path"><code>${esc(d.path)}</code></b>
-        <div class="bar"><i class="${dd.cls}" style="width:${dd.pct}%"></i></div>
-        <span>${dd.text} · ${drive}</span>
-        <span>${T("storage.usage", { rec: u.recordings.files, rec_gb: gbOf(u.recordings.bytes), mas: u.masters.files, mas_gb: gbOf(u.masters.bytes) })}</span>
-        <span>${T("storage.data_hint")}</span></div>
-      <div class="stat wide"><span>${T("storage.app_folder")}</span>
-        <b class="path"><code>${esc(a.path)}</code></b>
-        <div class="bar"><i class="${ad.cls}" style="width:${ad.pct}%"></i></div>
-        <span>${ad.text} · ${T("storage.drive", { mount: `<code>${esc(a.mount)}</code>` })}</span>
-        <span>${T("storage.app_hint")}</span></div>
+      ${storageFolderCard(T("storage.data_folder"), d, `
+        <span>${T(d.source === "settings" ? "storage.source_settings" : "storage.source_config")}${d.require_mount ? ` · <span class="${d.mounted ? "ok" : "bad"}">${T(d.mounted ? "storage.mounted" : "storage.not_mounted")}</span>` : ""}</span>
+        <span>${T("storage.usage", { rec: u.recordings.files, rec_gb: gbOf(u.recordings.bytes), mas: u.masters.files, mas_gb: gbOf(u.masters.bytes) })}</span>`)}
+      ${storageFolderCard(T("storage.app_folder"), I.app, `<span>${T("storage.app_hint")}</span>`)}
     </div>
     ${d.exists ? "" : `<div class="warnbox">${T("storage.missing")}</div>`}
-    ${o.files && !busy ? `<div class="warnbox">
-        <p>${T("storage.outside_info", { n: o.files, gb: gbOf(o.bytes), rec: o.recordings, mas: o.masters })}</p>
-        <p>${o.folders.map((f) => `<code>${esc(f)}</code>`).join(", ")}</p>
-        <p class="hint">${T("storage.outside_hint")}</p>
-        <label class="check"><input type="checkbox" id="storage-gather-delete" checked> ${T("storage.delete_originals")}</label>
-        <div class="row"><button id="storage-gather">${ico("storage", 16)} ${T("storage.gather")}</button></div>
-      </div>` : ""}
+    ${o.files ? `<p class="hint">${ico("warn", 14)} ${T("storage.outside_info", { n: o.files, gb: gbOf(o.bytes), rec: o.recordings, mas: o.masters })} ${o.folders.map((f) => `<code>${esc(f)}</code>`).join(", ")}</p>` : ""}
     ${o.missing ? `<p class="hint">${T("storage.outside_missing", { n: o.missing })}</p>` : ""}
-    <div id="storage-progress"></div>
-    ${busy ? "" : `<details id="storage-change"${storageUi.open ? " open" : ""}><summary>${T("storage.change")}</summary>
-      <label class="storage-target">${T("storage.target")}
-        <input id="storage-target" list="storage-sugg" spellcheck="false" autocomplete="off" value="${esc(storageUi.target)}" placeholder="${esc(I.suggestions[0] || "")}"></label>
-      <datalist id="storage-sugg">${I.suggestions.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>
-      <p class="hint">${T("storage.target_help")}</p>
-      ${I.suggestions.length ? `<p class="hint">${T("storage.suggestions")} ${I.suggestions.map((x) => `<button class="link" data-sugg="${esc(x)}">${esc(x)}</button>`).join(" ")}</p>` : ""}
-      <label class="check"><input type="checkbox" id="storage-delete" checked> ${T("storage.delete_originals")}</label>
-      <p class="hint">${T("storage.delete_help")}</p>
-      <div class="row"><button class="secondary" id="storage-check">${T("storage.check")}</button>
-        <button id="storage-start" disabled>${T("storage.start")}</button>
-        <button class="secondary" id="storage-relink">${T("storage.relink")}</button></div>
-      <p class="hint">${T("storage.relink_help")}</p>
-      <div id="storage-check-out"></div>
-    </details>`}`;
-  storageUi.phase = null;
-  updateStorageMove(mv);
-  const det = $("#storage-change"); if (det) det.ontoggle = () => (storageUi.open = det.open);
-  const inp = $("#storage-target");
-  if (inp) inp.oninput = () => { storageUi.target = inp.value; storageUi.checked = null; $("#storage-start").disabled = true; $("#storage-check-out").innerHTML = ""; };
-  box.querySelectorAll("[data-sugg]").forEach((b) => (b.onclick = () => { inp.value = b.dataset.sugg; inp.oninput(); }));
-  const chk = $("#storage-check");
-  if (chk) chk.onclick = guard(async () => {
-    const r = await api("/api/storage/check", { method: "POST", body: { path: inp.value } });
+    <div class="storage-progress"></div>
+    <div class="row"><button class="secondary" data-go="system" data-go-to="settings-storage">${ico("nut", 16)} ${T("storage.to_settings")}</button></div>`;
+  updateStorageMove(state.status?.storage_move ?? I.move, true);
+}
+// Settings → Storage: offer the folders found; a path of one's own only after choosing "other folder"
+function renderStorageSettings() {
+  const box = $("#storage-settings"), I = storageUi.info;
+  if (!box || !I) return;
+  const d = I.data, o = d.outside, mv = state.status?.storage_move ?? I.move, busy = !!mv?.active;
+  const opts = I.targets.map((t) => {
+    const free = t.free_gb == null ? "" : ` · ${T("storage.free_short", { free: num(t.free_gb, 1) })}`;
+    const dn = driveName(t.drive), tag = targetTag(t.kind);
+    const text = `${t.path} — ${dn || t.drive.mount}${free}${tag ? ` (${tag})` : ""}`;
+    return `<option value="${esc(t.path)}"${t.current || !t.available ? " disabled" : ""}${storageUi.pick === t.path ? " selected" : ""}>${esc(text)}</option>`;
+  }).join("");
+  const custom = storageUi.pick === "__custom";
+  box.innerHTML = `
+    <p class="hint">${T("storage.intro")}</p>
+    <table class="kv"><tbody>
+      <tr><th scope="row">${T("storage.data_folder")}</th><td class="mono">${esc(d.path)}</td></tr>
+      <tr><th scope="row">${T("storage.app_folder")}</th><td class="mono">${esc(I.app.path)}</td></tr>
+    </tbody></table>
+    <div class="storage-progress" data-edit="1"></div>
+    ${busy ? "" : `
+    ${o.files ? `<div class="warnbox">
+        <p>${T("storage.outside_info", { n: o.files, gb: gbOf(o.bytes), rec: o.recordings, mas: o.masters })} ${o.folders.map((f) => `<code>${esc(f)}</code>`).join(", ")}</p>
+        <p class="hint">${T("storage.outside_hint")}</p>
+        <label class="check"><input type="checkbox" id="st-gather-delete" checked> ${T("storage.delete_originals")}</label>
+        <div class="row"><button type="button" id="st-gather">${ico("storage", 16)} ${T("storage.gather")}</button></div>
+      </div>` : ""}
+    <div class="sfield"><label for="st-pick">${T("storage.target")}</label>
+      <select id="st-pick"><option value="">${T("storage.pick")}</option>${opts}<option value="__custom"${custom ? " selected" : ""}>${T("storage.custom")}</option></select>
+      <div class="help">${T("storage.target_help")}</div></div>
+    <div class="sfield${custom ? "" : " hidden"}" id="st-custom-field"><label for="st-custom">${T("storage.custom_path")}</label>
+      <input id="st-custom" spellcheck="false" autocomplete="off" value="${esc(storageUi.custom)}">
+      <div class="help">${T("storage.custom_help")}</div></div>
+    <div id="st-check-out"></div>
+    <label class="check"><input type="checkbox" id="st-delete" checked> ${T("storage.delete_originals")}</label>
+    <p class="hint">${T("storage.delete_help")}</p>
+    <div class="row"><button type="button" class="secondary" id="st-check">${T("storage.check")}</button>
+      <button type="button" id="st-start" disabled>${T("storage.start")}</button>
+      <button type="button" class="secondary" id="st-relink">${T("storage.relink")}</button></div>
+    <p class="hint">${T("storage.relink_help")}</p>`}`;
+  updateStorageMove(mv, true);
+  if (busy) return;
+  const pick = $("#st-pick"), inp = $("#st-custom"), out = $("#st-check-out");
+  const target = () => (pick.value === "__custom" ? inp.value.trim() : pick.value);
+  const reset = () => { storageUi.checked = null; $("#st-start").disabled = true; out.innerHTML = ""; };
+  const runCheck = async () => {
+    reset();
+    if (!target()) return;
+    out.innerHTML = `<p class="hint"><span class="spin"></span> ${T("storage.checking")}</p>`;
+    const r = await api("/api/storage/check", { method: "POST", body: { path: target() } });
     storageUi.checked = r.ok ? r : null;
-    $("#storage-start").disabled = !r.ok;
-    $("#storage-check-out").innerHTML = storageCheckHtml(r);
+    $("#st-start").disabled = !r.ok;
+    out.innerHTML = storageCheckHtml(r);
+  };
+  pick.onchange = guard(async () => {
+    storageUi.pick = pick.value;
+    $("#st-custom-field").classList.toggle("hidden", pick.value !== "__custom");
+    if (pick.value === "__custom") { reset(); inp.focus(); return; }
+    await runCheck();
   });
-  const go = $("#storage-start");
-  if (go) go.onclick = guard(async () => {
+  inp.oninput = () => { storageUi.custom = inp.value; reset(); };
+  inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); guard(runCheck)(); } };
+  $("#st-check").onclick = guard(runCheck);
+  $("#st-start").onclick = guard(async () => {
     const r = storageUi.checked; if (!r) return;
     if (!confirm(T("storage.confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path }))) return;
-    await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#storage-delete").checked } });
-    storageUi.target = ""; storageUi.checked = null; await loadStorage();
+    await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#st-delete").checked } });
+    storageUi.pick = storageUi.custom = ""; storageUi.checked = null; await loadStorage();
   });
-  const rl = $("#storage-relink");
-  if (rl) rl.onclick = guard(async () => {
-    const r = await api("/api/storage/check", { method: "POST", body: { path: inp.value, relink: true } });
-    if (!r.ok) { $("#storage-check-out").innerHTML = storageCheckHtml(r); return; }
+  $("#st-relink").onclick = guard(async () => {
+    if (!target()) { out.innerHTML = `<p class="bad">${ico("bad", 14)} ${T("storage.pick_first")}</p>`; return; }
+    const r = await api("/api/storage/check", { method: "POST", body: { path: target(), relink: true } });
+    if (!r.ok) { out.innerHTML = storageCheckHtml(r); return; }
     if (!confirm(T("storage.relink_confirm", { path: r.path }))) return;
     storageUi.info = await api("/api/storage/relink", { method: "POST", body: { path: r.path } });
-    storageUi.target = ""; renderStorage(); toast(T("storage.relinked", { path: r.path }));
+    storageUi.pick = storageUi.custom = ""; toast(T("storage.relinked", { path: r.path })); renderStorageSettings(); renderStorageStatus();
   });
-  const ga = $("#storage-gather");
+  const ga = $("#st-gather");
   if (ga) ga.onclick = guard(async () => {
     const r = await api("/api/storage/check", { method: "POST", body: { path: d.path } });
     if (!r.ok) { toast(r.problems.join(" "), 8000); return; }
     if (!confirm(T("storage.gather_confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path }))) return;
-    await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#storage-gather-delete").checked } });
+    await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#st-gather-delete").checked } });
     await loadStorage();
   });
 }
@@ -2771,19 +2815,11 @@ function storageCheckHtml(r) {
   for (const w of r.warnings) lines.push(`<p class="hint">${ico("warn", 14)} ${esc(w)}</p>`);
   return lines.join("");
 }
-// The progress of a move, from the status every second; when it ends, the card is drawn again (the folder changed)
-function updateStorageMove(mv) {
-  const el = $("#storage-progress");
-  if (!el) return;
-  const key = mv ? `${mv.phase}|${mv.active}` : "none";
-  if (storageUi.phase && storageUi.phase !== key && mv && !mv.active) {
-    storageUi.phase = key; loadStorage().catch(() => {}); return;
-  }
-  storageUi.phase = key;
-  if (!mv) { el.innerHTML = ""; return; }
+function storageMoveHtml(mv, edit) {
+  if (!mv) return "";
   const src = `<code>${esc(mv.src)}</code>`, dst = `<code>${esc(mv.dst)}</code>`;
   if (mv.active) {
-    el.innerHTML = `<div class="storage-move">
+    return `<div class="storage-move">
       <b><span class="spin"></span> ${mv.phase === "cleaning" ? T("storage.phase_cleaning") : mv.phase === "switching" ? T("storage.phase_switching") : T("storage.phase_copying")}</b>
       <div class="hint">${mv.kind === "gather" ? `→ ${dst}` : `${src} → ${dst}`}</div>
       <div class="bar big"><i class="move" style="width:${mv.pct}%"></i></div>
@@ -2791,11 +2827,8 @@ function updateStorageMove(mv) {
       ${mv.speed_mb_s != null && mv.phase === "copying" ? `<div class="hint">${T("storage.speed", { speed: num(mv.speed_mb_s, 1), eta: jobDur(mv.eta_s) })}</div>` : ""}
       ${mv.current ? `<div class="hint">${T("storage.current", { name: esc(mv.current) })}</div>` : ""}
       <p class="hint">${T("storage.paused_hint")}</p>
-      ${mv.phase === "copying" ? `<button class="secondary" id="storage-cancel">${T("storage.cancel")}</button>` : ""}
+      ${edit && mv.phase === "copying" ? `<button type="button" class="secondary" data-storage-cancel>${T("storage.cancel")}</button>` : ""}
     </div>`;
-    const c = $("#storage-cancel");
-    if (c) c.onclick = guard(async () => { if (confirm(T("storage.cancel_confirm"))) await api("/api/storage/move/cancel", { method: "POST" }); });
-    return;
   }
   let msg;
   if (mv.phase === "done") {
@@ -2805,8 +2838,22 @@ function updateStorageMove(mv) {
   } else if (mv.phase === "failed") msg = T("storage.failed", { error: esc(mv.error || "–"), path: src });
   else if (mv.phase === "cancelled") msg = T("storage.cancelled", { path: src });
   else msg = T("storage.interrupted", { path: src });
-  el.innerHTML = `<div class="${mv.phase === "done" ? "okbox" : "warnbox"}">${msg} <button class="link" id="storage-dismiss">${T("storage.dismiss")}</button></div>`;
-  $("#storage-dismiss").onclick = guard(async () => { storageUi.info = await api("/api/storage/move/dismiss", { method: "POST" }); renderStorage(); });
+  return `<div class="${mv.phase === "done" ? "okbox" : "warnbox"}">${msg}${edit ? ` <button type="button" class="link" data-storage-dismiss>${T("storage.dismiss")}</button>` : ""}</div>`;
+}
+// The progress of a move, from the status every second; when a move starts or ends both views are drawn again
+function updateStorageMove(mv, drawn = false) {
+  const key = mv ? `${mv.phase}|${!!mv.active}` : "none";
+  const flipped = storageUi.phase != null && storageUi.phase.split("|")[1] !== key.split("|")[1] && mv;
+  storageUi.phase = key;
+  if (flipped && !drawn) { loadStorage().catch(() => {}); return; }
+  document.querySelectorAll(".storage-progress").forEach((el) => {
+    const edit = !!el.dataset.edit;
+    el.innerHTML = storageMoveHtml(mv, edit);
+    const c = el.querySelector("[data-storage-cancel]");
+    if (c) c.onclick = guard(async () => { if (confirm(T("storage.cancel_confirm"))) await api("/api/storage/move/cancel", { method: "POST" }); });
+    const x = el.querySelector("[data-storage-dismiss]");
+    if (x) x.onclick = guard(async () => { storageUi.info = await api("/api/storage/move/dismiss", { method: "POST" }); renderStorageStatus(); renderStorageSettings(); });
+  });
 }
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-mode]"); if (b) setMode(b.dataset.mode); });
 miniPlayer.init();

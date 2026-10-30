@@ -436,7 +436,6 @@ canvas.ap-sg { display: block; width: 100%; height: 170px; border-radius: 4px; }
 .storage .bar i.move { background: var(--accent); }
 .storage .bar.big { height: 20px; margin: .45rem 0; }
 .storage-move { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: .6rem 0; }
-.storage .storage-target { display: block; margin: .6rem 0 .2rem; }
-.storage .storage-target input { display: block; width: 100%; max-width: 40rem; font-family: var(--mono); }
-.storage details summary { cursor: pointer; font-weight: 600; margin: .4rem 0; }
+#storage-settings select, #storage-settings #st-custom { width: 100%; max-width: 52rem; }
+#storage-settings #st-custom { font-family: var(--mono); }
 .okbox { border-left: 3px solid var(--ok); padding: .35rem .6rem; background: color-mix(in srgb, var(--ok) 10%, transparent); margin: .4rem 0; font-size: .9rem; }

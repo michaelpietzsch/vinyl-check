@@ -81,7 +81,8 @@ busy_state() {
   "${SSH[@]}" "curl -fsS -m 5 localhost:8080/api/status 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin); w = d[\"worker\"]
-print(int(bool(d[\"recorder\"][\"active\"]) or bool(w[\"current\"]) or w[\"queued\"] > 0), int(\"restart_pending\" in d))' 2>/dev/null || echo '0 0'"
+mv = d.get(\"storage_move\") or {}
+print(int(bool(d[\"recorder\"][\"active\"]) or bool(w[\"current\"]) or w[\"queued\"] > 0 or bool(mv.get(\"active\"))), int(\"restart_pending\" in d))' 2>/dev/null || echo '0 0'"
 }
 read -r BUSY KNOWS_MARKER <<< "$(busy_state)"
 if [ "$BUSY" = "1" ] && [ $NOW -eq 0 ] && [ "$KNOWS_MARKER" = "0" ]; then

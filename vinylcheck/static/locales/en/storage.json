@@ -4,7 +4,6 @@
   "app_folder": "Application folder",
   "app_hint": "Database with all measurements, judgments and settings, keys and caches. It belongs to the installation and stays where it is.",
   "data_folder": "User-data folder",
-  "data_hint": "Recordings and masters: the large files. They can move to another drive.",
   "source_settings": "chosen here",
   "source_config": "from the configuration file",
   "free": "{free} GB free of {total} GB",
@@ -13,10 +12,8 @@
   "mounted": "mounted",
   "not_mounted": "not mounted: the station does not record",
   "missing": "The folder cannot be reached (drive not mounted?). Measurements and grades stay visible; recording and listening do not work until it is back.",
-  "change": "Move or relink the user-data folder",
-  "target": "New folder",
-  "target_help": "The full path. On an extra drive, vinyl-check suggests a folder below.",
-  "suggestions": "Suggestions:",
+  "target": "Move to",
+  "target_help": "vinyl-check offers a folder on every drive it finds, earlier folders and one on the system drive. Choosing one checks it at once.",
   "check": "Check",
   "check_ok": "{files} files, {gb} GB will be copied; {free} GB are free there.",
   "check_already": {
@@ -67,5 +64,24 @@
   "check_outside": {
     "one": "Including {n} file ({gb} GB) from outside the user-data folder.",
     "other": "Including {n} files ({gb} GB) from outside the user-data folder."
-  }
+  },
+  "to_settings": "Change under Settings → Storage",
+  "pick": "Choose a folder …",
+  "custom": "Other folder (enter the path) …",
+  "custom_path": "Path",
+  "custom_help": "The full path of the folder; it is created if it does not exist yet. Then press Check.",
+  "pick_first": "Choose a folder first.",
+  "checking": "Checking …",
+  "free_short": "{free} GB free",
+  "kind_sd": "SD card",
+  "kind_nvme": "NVMe SSD",
+  "kind_usb": "USB drive",
+  "kind_disk": "Drive",
+  "kind_volume": "Volume",
+  "system_drive": "system drive",
+  "tag_current": "in use",
+  "tag_previous": "earlier folder",
+  "tag_config": "configuration file",
+  "tag_system": "system drive",
+  "tag_unmounted": "not mounted"
 }

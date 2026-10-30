@@ -243,6 +243,7 @@ def test_api_and_the_guards_while_moving(tmp_path, monkeypatch):
         info = c.get("/api/storage").json()
         assert info["data"]["path"] == str(cfg.data_dir) and info["data"]["source"] == "config"
         assert info["app"]["path"] == str(cfg.state_dir) and info["move"] is None
+        assert info["targets"][0]["current"] and info["data"]["drive"]["mount"]
         r = c.post("/api/storage/check", json={"path": "nope"}).json()
         assert not r["ok"] and r["problems"] == [i18n.render(i18n.msg("storage.not_absolute"), "en")]
         target = str(tmp_path / "ext" / "vinyl-check")
@@ -262,3 +263,25 @@ def test_api_and_the_guards_while_moving(tmp_path, monkeypatch):
         assert info["data"]["path"] == target and info["data"]["source"] == "settings"
         assert info["move"]["phase"] == "done" and info["data"]["usage"]["recordings"]["files"] == 1
         assert c.post("/api/storage/move/dismiss").json()["move"] is None
+
+
+def test_targets_offer_drives_earlier_folders_and_the_system_drive(station, tmp_path):
+    """The drop-down in the settings: the folder in use first (not selectable), then what was found."""
+    cfg, db, _ = station
+    old = cfg.data_dir
+    object.__setattr__(cfg, "data_dir", tmp_path / "ssd")              # changed in the configuration file
+    t = storage.targets(cfg, db, service=True, config_dir=tmp_path / "from-config")
+    kinds = {x["kind"]: x for x in t}
+    assert t[0]["kind"] == "current" and t[0]["current"] and t[0]["path"] == str(tmp_path / "ssd")
+    assert kinds["previous"]["path"] == str(old)                       # where the old recordings still are
+    assert kinds["config"]["path"] == str(tmp_path / "from-config")
+    assert kinds["system"]["path"] == str(cfg.state_dir / "data")      # a service keeps its data apart
+    assert storage.targets(cfg, db, service=False)[-1]["path"] == str(cfg.state_dir)
+    assert all({"free_gb", "total_gb", "drive", "available"} <= x.keys() for x in t)
+    assert len({x["path"] for x in t}) == len(t)
+
+
+def test_drive_of_a_folder(tmp_path):
+    d = storage.drive(tmp_path)
+    assert d["mount"] and isinstance(d["system"], bool) and "model" in d
+    assert storage._linux_drive("not-a-device") == {}

@@ -92,9 +92,10 @@ spot, re-analyse with a different sensitivity and compare recordings later.
   estimate how many detections are real. Each estimate is validated by cross-validation per recording.
 
 **Storage**
-- The System tab shows where the database and the recordings are, on which drive and how much space is left. The
-  user-data folder (recordings and masters) can move to another folder or drive from the interface: every copy is
-  checked against its original before the station switches, with progress in percent.
+- The System tab shows where the database and the recordings are, on which drive and how much space is left. Under
+  *Settings → Storage* the user-data folder (recordings and masters) moves to another folder or drive, chosen from
+  the drives vinyl-check finds: every copy is checked against its original before the station switches, with
+  progress in percent.
 
 **Multilingual interface**
 - English and German: English by default, German or another language can be chosen in the settings. Most languages can be added without
@@ -296,7 +297,7 @@ Linux (XDG). The most important keys:
 | `vinyl_mind_invite_url` | `""` | for a server without accounts: where its operator hands out invitation codes; *Where do I get a code?* links there |
 | `feature_version` | `"1"` | features of the learning model; `"2"` (experimental) takes the turntable profile as the zero point ([measurement](docs/measurement.md#learning)) |
 
-The user-data folder can also be chosen in the interface under *System → Storage*: moving it there copies and
+The user-data folder can also be chosen in the interface under *Settings → Storage*: moving it there copies and
 checks the recordings and masters, rewrites their stored paths and then uses the new folder without a restart. That
 choice is kept in the database and takes precedence over `data_dir` and `require_mount` in the file. A service can
 only move to a folder it may write to; on a Raspberry Pi, create it once with
