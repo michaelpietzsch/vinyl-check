@@ -575,6 +575,7 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
     metrics = {
         "duration_s": round(n / sr, 2),
         "groove_s": round(groove_min * 60, 2),
+        "groove_end_s": round(ge * HOP_S, 2),           # where the groove ends: after it, the stylus was up
         "quiet_s": round(quiet_min * 60, 2),
         "samplerate": sr,
         "channels": nch,

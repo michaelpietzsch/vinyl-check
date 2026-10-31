@@ -516,7 +516,8 @@ After calibration, leave the gain alone. Both modes, record checks and alignment
    than once. Set 33⅓ or 45 rpm (the skip detector depends on it).
 3. **Check the level** and start the recording. Lower the stylus and record the **whole side, including lead-in
    and run-out groove**. vinyl-check stops by itself once the stylus has circled three times in the run-out groove
-   (at least 30 dB below the loudest music, after 60 seconds at the earliest). The analysis starts automatically.
+   (at least 30 dB below the loudest music, after 60 seconds at the earliest), or, with a calibrated chain, 15
+   seconds after the stylus has been lifted at the end. The analysis starts automatically.
 4. **Make two uncleaned recordings** before cleaning. Comparing them shows how much the measurement scatters on
    its own, and only improvements beyond that are real.
 5. **Clean, record again, compare.** See the [user guide](user-guide.md).

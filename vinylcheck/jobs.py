@@ -57,6 +57,33 @@ class ShuttingDown(Exception):
     """The worker is closing: the job was interrupted, not failed, and keeps its state for the next start."""
 
 
+def trim_audio(path: str, keep_s: float) -> float:
+    """Cut a recording after `keep_s` seconds, in place: the kept part goes to a temporary file next to it (same
+    format), which is synced and then replaces the file in one step. Returns the new length in seconds."""
+    import soundfile as sf
+    tmp = path + ".trim.part"
+    with sf.SoundFile(path) as r:
+        keep = min(r.frames, int(round(keep_s * r.samplerate)))
+        with sf.SoundFile(tmp, "w", samplerate=r.samplerate, channels=r.channels, subtype=r.subtype,
+                          format=r.format) as w:
+            left = keep
+            while left:
+                block = r.read(min(left, r.samplerate * 10), dtype="int32", always_2d=True)
+                if not len(block):
+                    break
+                w.write(block)
+                left -= len(block)
+        rate = r.samplerate
+    with open(tmp, "rb+") as f:
+        os.fsync(f.fileno())
+    try:
+        os.chmod(tmp, os.stat(path).st_mode & 0o777)
+    except OSError:
+        pass
+    os.replace(tmp, path)
+    return round(keep / rate, 2)
+
+
 def sha256_file(path: str) -> str:
     """SHA-256 of a file as hex string (read in 4 MB blocks)."""
     h = hashlib.sha256()

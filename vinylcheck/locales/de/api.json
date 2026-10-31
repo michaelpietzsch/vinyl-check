@@ -109,6 +109,9 @@
   "recording_too_short": "Aufnahme kürzer als 3 s",
   "event_side_end": "Seite ist wahrscheinlich am Ende: Nadel im Blick behalten, die Aufnahme stoppt in der Endrille selbst.",
   "event_end_groove": "Endrille erkannt, Aufnahme gestoppt. Die Analyse läuft.",
+  "event_stylus_up": "Nadel abgehoben, Aufnahme gestoppt. Die Analyse läuft.",
+  "trim_busy": "Die Aufnahme wird gerade analysiert; den Überhang nach der Analyse entfernen.",
+  "trim_nothing": "Kein Überhang zu entfernen: nach dem Ende der Rille weniger als {s:.0f} s mit angehobener Nadel.",
   "nothing_running": "Es läuft keine Aufnahme/Pegelkontrolle",
   "rewind_recording_only": "Zurückspulen geht nur bei einer Aufnahme, nicht bei der Pegelkontrolle",
   "audio_retention_deleted": {

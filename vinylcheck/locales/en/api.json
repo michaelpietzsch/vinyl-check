@@ -109,6 +109,9 @@
   "recording_too_short": "Recording shorter than 3 s",
   "event_side_end": "The side is probably ending: keep an eye on the stylus; the recording stops by itself in the run-out groove.",
   "event_end_groove": "Run-out groove detected, recording stopped. The analysis is running.",
+  "event_stylus_up": "Stylus lifted, recording stopped. The analysis is running.",
+  "trim_busy": "The recording is being analysed; remove the overhang once the analysis has finished.",
+  "trim_nothing": "No overhang to remove: less than {s:.0f} s with the stylus up after the end of the groove.",
   "nothing_running": "No recording or level check is running",
   "rewind_recording_only": "Rewinding only works during a recording, not during the level check",
   "audio_retention_deleted": {

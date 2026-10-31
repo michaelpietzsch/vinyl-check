@@ -1208,6 +1208,8 @@ async function showRecording(id) {
     <div class="panel-head"><h3>${T("recording.level_head")}</h3><span class="hint">${m.music_start_s != null && m.music_end_s != null ? T("recording.music_range", { start: fmtTime(m.music_start_s), end: fmtTime(m.music_end_s) }) : ""}</span></div>
     <div class="chart-wrap"><canvas id="ov-level" class="chart small"></canvas><div class="sel"></div><div class="tcursor"><span></span></div></div>
     <p class="hint">${T("recording.level_hint", { noise: num(m.noise_dbfs), ref: num(m.music_ref_dbfs) })}${m.chain_db != null ? T("recording.level_hint_chain", { db: num(m.chain_db) }) : ""}.</p>
+    ${rec.overhang_s ? `<div class="warnbox">${T("recording.overhang", { at: fmtTime(m.groove_end_s), len: fmtTime(rec.overhang_s) })}
+      <button class="secondary" data-trim="${rec.id}">${ico("trash", 16)} ${T("recording.overhang_trim")}</button></div>` : ""}
     ${trackTable(m)}
     ${state.status?.engineer_mode && rec.kind !== "calibration" ? `<div id="master-box"></div>` : ""}
     <h3>${T("recording.spectrogram_head")}</h3>
@@ -1238,6 +1240,12 @@ async function showRecording(id) {
     if (e.target.dataset.play) return play(rec.id, +e.target.dataset.play, +(e.target.dataset.before || 0.6), +(e.target.dataset.after || 1.2));
     if (e.target.dataset.mplay) return playMaster(rec.id, +e.target.dataset.mplay, +(e.target.dataset.before || 0.6), +(e.target.dataset.after || 1.2));
     if (e.target.closest("[data-master-run]")) return guard(async () => { await api(`/api/recordings/${rec.id}/master`, { method: "POST" }); loadMasterBox(rec); })();
+    if (e.target.closest("[data-trim]")) return guard(async () => {
+      if (!confirm(T("recording.overhang_confirm", { at: fmtTime(m.groove_end_s), len: fmtTime(rec.overhang_s) }))) return;
+      const out = await api(`/api/recordings/${rec.id}/trim`, { method: "POST" });
+      toast(T("recording.overhang_done", { len: fmtTime(out.removed_s) }), 8000);
+      closeView(); if (state.record) refreshRecord();
+    })();
     const wb = e.target.closest("[data-wi]");
     if (wb) { const w = wiGet(rec.id), s = wb.dataset.wi === "skip" ? w.sk : w.ev, t = +wb.dataset.t; s.has(t) ? s.delete(t) : s.add(t); renderEv(); return state.wiRefresh(); }
     if (e.target.closest("[data-wi-reset]")) { const w = wiGet(rec.id); w.ev.clear(); w.sk.clear(); renderEv(); return state.wiRefresh(); }

@@ -87,12 +87,17 @@ list of comparisons.
      ignored, and earlier labels are suggested.
    - **Remark** (optional).
 3. *Start recording*, then lower the stylus. Record the whole side **including lead-in and run-out groove**.
-4. vinyl-check stops by itself after three revolutions in the run-out groove. You can stop by hand at any time.
+4. vinyl-check stops by itself after three revolutions in the run-out groove, or, with a calibrated chain, 15
+   seconds after the stylus has been lifted at the end of the side. You can stop by hand at any time.
 5. The analysis starts automatically. A pill in the header shows it, and the recording table updates when it is
    done.
 
 While recording, the deck shows clipping (where, how many samples, when the last one happened), dropouts, the time
 since the music started and the expected remaining time of the side.
+
+If a recording ran on after the side had ended (the stylus lifted, nobody stopped it), its view says below the level
+chart how long it ran on with the stylus up and offers **Remove overhang**: the file is cut 2 seconds after the end of
+the groove and analysed again.
 
 **Recording table.** Click a column heading to sort, and click again to reverse the order. *Default* restores the
 order by copy and date. Double-click (or double-tap) the side, copy or condition cell to change it after a
@@ -301,7 +306,7 @@ In short:
 | Section | Contents |
 |---|---|
 | *Audio interface* | recording device, sample rate, bit depth, input pair; on Windows WASAPI exclusive mode and ASIO. *Test*, *Save*, *Back to the configuration file*. |
-| *Recording* | stop automatically in the run-out groove, longest recording, minimum free disk space |
+| *Recording* | stop automatically at the end of the side (run-out groove or stylus lifted), longest recording, minimum free disk space |
 | *Retention* | how long original audio is kept (default 30 days; measurements, grades, comparisons and the overview spectrogram stay). *Apply retention now*. |
 | *Discogs* | sync interval of the collection (default 15 minutes) |
 | *Clipping* | grace period at start and end (5 s), mention from (200 samples), no grade from (500 samples). Applies to new analyses. |

@@ -49,6 +49,28 @@ CHUNK_S = 0.1
 log = logging.getLogger("vinylcheck.capture")
 
 
+class StylusUpWatch:
+    """Live during a recording: the stylus has been lifted after the music, so the recording can stop by itself.
+
+    "Stylus up" is the analysis' own boundary (analysis.segment): the level stays below the chain noise + 6 dB. Once
+    the music has played for `after_music_s`, `hold_s` of it in a row ends the recording. The run-out watch
+    (EndGrooveWatch) needs three equal revolutions; when the turntable or the user lifts the arm sooner, it never
+    sees them, and the recording would run on with nothing but the chain's own noise until someone stops it.
+    Before the music has started the stylus is up anyway (it has not been lowered yet): that never counts."""
+
+    def __init__(self, threshold_dbfs: float, hold_s: float = 15.0, after_music_s: float = 30.0):
+        self.thr, self.hold_s, self.after_music_s = threshold_dbfs, hold_s, after_music_s
+        self.quiet_s = 0.0
+
+    def feed(self, level_dbfs: float, dt: float, t: float, music_start_s: float | None) -> bool:
+        """level_dbfs: level of the last `dt` seconds (all channels), t: time since the start. True = stylus up."""
+        if music_start_s is None or t < music_start_s + self.after_music_s or level_dbfs >= self.thr:
+            self.quiet_s = 0.0
+            return False
+        self.quiet_s += dt
+        return self.quiet_s >= self.hold_s - 1e-6                  # sums of 0.1 s steps fall a hair short
+
+
 class CaptureError(i18n.MessageError, RuntimeError):
     """A recording problem the user should see (an i18n message, see i18n.MessageError)."""
 
@@ -287,10 +309,13 @@ class Recorder:
 
     def start(self, *, device: str, rate: int, channels: int, fmt: str, path: Path | None,
               max_s: float, meta: dict | None = None, on_done=None, endstop_rpm: float | None = None,
-              music_thr_dbfs: float | None = None, side_length_s: float | None = None, on_event=None) -> dict:
+              music_thr_dbfs: float | None = None, side_length_s: float | None = None, on_event=None,
+              stylus_up_dbfs: float | None = None) -> dict:
         """Start recording to `path` (None = level check only) for at most `max_s` seconds.
 
         endstop_rpm: stop by itself once the stylus runs in the run-out groove (recordings only).
+        stylus_up_dbfs: stop by itself once the stylus has been lifted after the music: the level stays below this
+        threshold (chain noise + 6 dB) for StylusUpWatch.hold_s (recordings only, needs music_thr_dbfs).
         music_thr_dbfs: from this level (held for 1 s) the music counts as started; side_length_s: expected length
         of the side → "expected end" and a `side_end` event via on_event(name, state).
         on_done(state) is called from the recording thread when it ends. Raises CaptureError if one is running.
@@ -310,8 +335,8 @@ class Recorder:
                           "music_thr_dbfs": music_thr_dbfs, "music_start_s": None,
                           "side_length_s": side_length_s, "expected_end_s": None, "side_end_notified": False,
                           "source_notes": list(getattr(src, "notes", ()))}
-            self._thread = threading.Thread(target=self._run, args=(src, path, max_s, on_done, endstop_rpm, on_event),
-                                            daemon=True)
+            self._thread = threading.Thread(target=self._run, args=(src, path, max_s, on_done, endstop_rpm, on_event,
+                                                                     stylus_up_dbfs), daemon=True)
             self._thread.start()
             return self.status()
 
@@ -329,13 +354,14 @@ class Recorder:
         s["level"] = self.levels[-1] if self.levels else None
         return s
 
-    def _run(self, src, path, max_s, on_done, endstop_rpm=None, on_event=None):
+    def _run(self, src, path, max_s, on_done, endstop_rpm=None, on_event=None, stylus_up_dbfs=None):
         bytes_, subtype, full = FORMATS[self.state["format"]]
         rate, ch = self.state["rate"], self.state["channels"]
         frames = int(rate * CHUNK_S)
         live = LiveMeter(rate, ch)
         # Detect the run-out groove live and stop by itself (recordings only, not level checks or calibration)
         watch = EndGrooveWatch(rate, endstop_rpm) if (path and endstop_rpm) else None
+        lifted = StylusUpWatch(stylus_up_dbfs) if (path and stylus_up_dbfs is not None) else None
         writer = sf.SoundFile(str(path), "w", samplerate=rate, channels=ch, subtype=subtype,
                               format="WAV") if path else None
         err = None
@@ -387,6 +413,15 @@ class Recorder:
                             on_event("side_end", dict(st))
                         except Exception:  # noqa: BLE001
                             pass
+                if lifted is not None and lifted.feed(float(10 * np.log10(max(float(np.mean(rms ** 2)), 1e-20))),
+                                                      len(data) / rate, st["frames"] / rate, st["music_start_s"]):
+                    st["stopped_reason"] = i18n.msg("capture.stopped_stylus_up")
+                    if on_event:
+                        try:
+                            on_event("stylus_up", dict(st))
+                        except Exception:  # noqa: BLE001
+                            pass
+                    break
                 if watch is not None and watch.feed(x):
                     st["stopped_reason"] = i18n.msg("capture.stopped_end_groove")
                     if on_event:

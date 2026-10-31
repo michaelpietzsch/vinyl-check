@@ -4,5 +4,6 @@
   "test_file_mismatch": "Testdatei hat {file_rate} Hz/{file_channels} Kanäle, erwartet {rate} Hz/{channels}",
   "busy": "Es läuft bereits eine Aufnahme/Pegelkontrolle",
   "stopped_end_groove": "Endrille erkannt, automatisch gestoppt",
+  "stopped_stylus_up": "Nadel nach der Musik abgehoben, automatisch gestoppt",
   "stopped_max_duration": "Maximaldauer erreicht"
 }

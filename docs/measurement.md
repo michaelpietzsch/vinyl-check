@@ -44,6 +44,14 @@ Code: `capture.py`
   dropouts is marked, because it is useless for comparisons.
 - **End-groove stop.** When the signal repeats once per revolution (the run-out groove) for three revolutions, at
   least 30 dB below the loudest passage and no earlier than 60 s into the recording, the recording stops by itself.
+- **Stylus-up stop.** A turntable with an automatic lift, or a hand, often raises the arm before three revolutions of
+  run-out groove. With a calibrated chain the recording of a record side therefore also stops once its level has
+  stayed below the chain noise + 6 dB (the boundary the analysis uses between groove and stylus up) for 15 s, no
+  earlier than 30 s after the music started (`capture.StylusUpWatch`).
+- **Overhang.** The analysis stores where the groove ends (`groove_end_s`). If a recording runs on for 30 s or more
+  with the stylus up, the recording view offers *Remove overhang*: the file is checked against its checksum, cut 2 s
+  after the end of the groove (written to a temporary file, synced, then swapped in) and analysed again, which
+  stores the new checksum.
 - **Live measurement.** Five times per second the live meter estimates the fundamental, level and THD+N per
   channel. This drives the alignment live view.
 

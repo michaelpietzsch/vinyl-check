@@ -48,11 +48,14 @@ from . import __version__, analysis, capture, compare, discogs, grading, alignme
 from . import audio_settings, licenses, network, onboarding, storage, testrecords, tls, updates, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key, error_key
-from .jobs import MASTER_KINDS, Worker
+from .jobs import MASTER_KINDS, Worker, trim_audio
 
 log = logging.getLogger("vinylcheck.web")
 STATIC = Path(__file__).parent / "static"
 KINDS = ("calibration", "before", "after", "after_wet", "after_dry", "other", "alignment")
+CHECK_KINDS = ("before", "after", "after_wet", "after_dry", "other")       # recordings of a record side
+TRIM_MARGIN_S = 2.0      # "Remove overhang" keeps this much after the end of the groove …
+TRIM_MIN_S = 30.0        # … and is offered from this much stylus-up time after it
 KIND_LABEL = {k: i18n.msg(f"labels.kind.{k}") for k in KINDS}
 # Visible defects ("findings") a user can tick per copy and side
 FINDINGS = ("scratch", "hairline_scratch", "warp", "dirt", "fingerprints", "off_center")
@@ -1881,12 +1884,19 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             if s.kind != "calibration":
                 ref = prof.get("ref_dbfs") if prof and prof.get("accepted_at") else None
                 thr = (ref - 28.0) if ref is not None else -40.0           # music starts: 1 s above this threshold
+            # Record checks also stop once the stylus has been lifted after the music (the analysis' boundary:
+            # chain noise + 6 dB); only with a measured chain noise, and with the run-out stop switched on
+            chain = worker.profile_trim({"profile_id": prof["id"] if prof else None})["chain_db"]
+            lifted = (chain + 6.0 if chain is not None and cfg.autostop_end_groove and s.kind in CHECK_KINDS
+                      else None)
 
             def on_event(name: str, st: dict):
                 if name == "side_end":
                     push_event("side_end", i18n.msg("api.event_side_end"), rec_id)
                 elif name == "end_groove":
                     push_event("end_groove", i18n.msg("api.event_end_groove"), rec_id)
+                elif name == "stylus_up":
+                    push_event("stylus_up", i18n.msg("api.event_stylus_up"), rec_id)
 
             res = _start(lambda dev: path, {"recording_id": rec_id, "kind": s.kind, "setup_id": s.setup_id,
                                             "record_id": s.record_id,
@@ -1895,7 +1905,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                                             "side_length_source_label": SIDE_SOURCE_LABEL.get(side_src)}, s.device,
                          max_s=max_s, on_done=done,
                          endstop_rpm=rpm if cfg.autostop_end_groove and s.kind != "calibration" else None,
-                         music_thr_dbfs=thr, side_length_s=side_len, on_event=on_event)
+                         music_thr_dbfs=thr, side_length_s=side_len, on_event=on_event, stylus_up_dbfs=lifted)
         except HTTPException:
             db.delete_recording(rec_id)
             raise
@@ -1988,7 +1998,18 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             r["analysis"]["metrics"]["results"] = alignment.apply_targets(r["analysis"]["metrics"]["results"], targets)
         r["file_exists"] = bool(r.get("path")) and Path(r["path"]).exists()
         r["audio_available"] = r["file_exists"] and not r.get("audio_deleted_at")
+        r["overhang_s"] = _overhang(r)
         return r
+
+    def _overhang(r: dict) -> float | None:
+        """Seconds after the end of the groove (stylus up) that "Remove overhang" would cut, None below TRIM_MIN_S."""
+        m = (r.get("analysis") or {}).get("metrics") or {}
+        end = m.get("groove_end_s")
+        if (end is None or not r.get("duration_s") or r["kind"] not in CHECK_KINDS or r["status"] != "analyzed"
+                or not r.get("audio_available")):
+            return None
+        over = r["duration_s"] - (end + TRIM_MARGIN_S)
+        return round(over, 1) if over >= TRIM_MIN_S else None
 
     def _audio_gone_msg(r: dict) -> dict:
         """Why the audio of a recording is not available (message)."""
@@ -2024,6 +2045,34 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             worker.analyze(rec_id)          # new sensitivity or another side (Discogs tracks) → recompute
             r["reanalyzing"] = True
         return r
+
+    @app.post("/api/recordings/{rec_id}/trim")
+    def trim_recording(rec_id: int):
+        """Remove the overhang: cut the recording shortly after the end of the groove (what follows is the chain's
+        noise with the stylus up), store the new length and analyse it again. The file is checked against its
+        checksum first; the new checksum is stored by that analysis."""
+        r = get_recording(rec_id)
+        if r["status"] == "recording" or (recorder.active and (recorder.state.get("meta") or {}).get("recording_id") == rec_id):
+            raise HTTPException(409, i18n.msg("api.recording_in_progress", id=rec_id))
+        if r["status"] in ("queued", "analyzing"):
+            raise HTTPException(409, i18n.msg("api.trim_busy"))
+        if mover.active:
+            raise HTTPException(409, i18n.msg("storage.busy"))
+        if not r["audio_available"]:
+            raise HTTPException(409, _audio_gone_msg(r))
+        over = r["overhang_s"]
+        if over is None:
+            raise HTTPException(409, i18n.msg("api.trim_nothing", s=TRIM_MIN_S))
+        try:
+            worker.verify_audio(db.recording(rec_id))
+        except RuntimeError as e:
+            raise HTTPException(409, i18n.error_message(e)) from e
+        keep = r["analysis"]["metrics"]["groove_end_s"] + TRIM_MARGIN_S
+        new_len = trim_audio(r["path"], keep)
+        db.update_recording(rec_id, duration_s=new_len, sha256=None)
+        log.info("Recording %s: overhang of %.1f s removed, %.1f s kept", rec_id, r["duration_s"] - new_len, new_len)
+        worker.analyze(rec_id)
+        return {"duration_s": new_len, "removed_s": round(r["duration_s"] - new_len, 1)}
 
     @app.post("/api/recordings/{rec_id}/analyze")
     def reanalyze(rec_id: int):

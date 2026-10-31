@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The recording stops when the stylus is lifted.** A record side also stops by itself 15 s after the stylus has
+  been lifted at the end (the level stays at the chain's own noise), not only after three revolutions in the run-out
+  groove, which a turntable with an automatic lift never plays. Needs a calibrated chain; the switch is the existing
+  automatic stop under *Settings → Recording*.
+- **Remove overhang**: a recording that ran on for 30 s or more with the stylus up after the end of the groove offers
+  to cut it 2 s after the groove; the file is checked first, then analysed again with its new checksum.
+
 - **Guided first alignment.** A new station (no turntable accepted yet) offers it once in a welcome dialog: *Start*,
   *Later*, *Don't ask again*; *Guided first alignment* under the turntable list starts it at any time, and it can be
   ended at every step. It leads through the turntable assistant and adds the choice of the test record before it and
