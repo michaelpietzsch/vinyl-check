@@ -84,6 +84,9 @@ class Worker:
         self._close_lock = threading.Lock()                           # a second close() waits for the first
 
     def start(self) -> None:
+        partial = self.db.reset_partial_checksums()
+        if partial:
+            log.info("Recording(s) %s were analysed while still being recorded: checked and analysed again", partial)
         # Re-queue jobs that were left unfinished by a restart
         for r in self.db.q("SELECT id FROM recordings WHERE status IN ('queued', 'analyzing')"):
             self.analyze(r["id"])
@@ -98,7 +101,10 @@ class Worker:
         threading.Thread(target=self._retention_loop, daemon=True, name="vinylcheck-retention").start()
 
     def analyze(self, rec_id: int) -> None:
-        """Queue the analysis of a recording."""
+        """Queue the analysis of a recording (not while it is being recorded: the recorder queues it at the end)."""
+        r = self.db.recording(rec_id)
+        if r and r["status"] == "recording":
+            return
         self.db.update_recording(rec_id, status="queued", error=None)
         self.pending.append(("analyze", rec_id))
         self.q.put(("analyze", rec_id))
@@ -206,6 +212,7 @@ class Worker:
             except Exception as e:  # noqa: BLE001
                 ok, err = False, i18n.error_message(e)       # stored as a message (db.py)
                 log.error("%s %s failed: %s", kind, ident, traceback.format_exc())
+                self.db.add_problem(kind, ident, err)                 # the station's error log (System tab)
                 if kind == "analyze":
                     self.db.update_recording(ident, status="error", error=err)
                 elif kind == "master":
@@ -270,6 +277,11 @@ class Worker:
         rec = self.db.recording(rec_id)
         if not rec or not rec.get("path"):
             return
+        if rec["status"] == "recording":
+            # Still being recorded: its checksum and analysis would belong to an unfinished file. The recorder queues
+            # the analysis itself when the side has ended.
+            log.info("Recording %s is still being recorded: not analysed yet", rec_id)
+            return
         self.db.update_recording(rec_id, status="analyzing")
         self.verify_audio(rec)
         t0 = time.time()
@@ -278,8 +290,9 @@ class Worker:
             if chain > CALIBRATION_MAX_DBFS:
                 # The stylus was evidently down: with this value whole grooves would later be discarded as
                 # "stylus up", so do not take it over
-                self.db.update_recording(rec_id, status="error", error=i18n.msg(
-                    "jobs.calibration_too_loud", db=chain, max=CALIBRATION_MAX_DBFS))
+                err = i18n.msg("jobs.calibration_too_loud", db=chain, max=CALIBRATION_MAX_DBFS)
+                self.db.update_recording(rec_id, status="error", error=err)
+                self.db.add_problem("analyze", rec_id, err)
                 return
             self.db.update_recording(rec_id, chain_db=chain, status="analyzed")
             if rec.get("profile_id"):

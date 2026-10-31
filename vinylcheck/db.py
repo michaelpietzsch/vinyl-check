@@ -39,9 +39,16 @@ def side_key(side) -> str:
 
 
 def _load_error(row: dict | None) -> dict | None:
+    """Stored error → message; `error_key` names it (the interface explains known errors on hover)."""
     if row and "error" in row:
         row["error"] = i18n.loads_text(row["error"])
+        row["error_key"] = error_key(row["error"])
     return row
+
+
+def error_key(err) -> str | None:
+    """Catalog key of an error message ("jobs.integrity_error"), None for plain text or no error."""
+    return err.get("$t") if isinstance(err, dict) else None
 
 
 def _store_error(fields: dict) -> dict:
@@ -168,6 +175,13 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY, value TEXT NOT NULL, changed_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS problems (
+    id INTEGER PRIMARY KEY,
+    at REAL NOT NULL,
+    source TEXT NOT NULL,
+    ref_id INTEGER,
+    message TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS comparisons (
     id INTEGER PRIMARY KEY,
     a_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
@@ -741,6 +755,39 @@ class DB:
                             " AND profile_id = ? ORDER BY created_at DESC LIMIT 1", (profile_id,))
         return self.one("SELECT * FROM recordings WHERE kind = 'calibration' AND chain_db IS NOT NULL"
                         " ORDER BY created_at DESC LIMIT 1")
+
+    # ─── Problems: the error log of the station ─────────────────────────────────
+    PROBLEMS_KEPT = 500
+
+    def add_problem(self, source: str, ref_id: int | None, message) -> None:
+        """Log an error (source: analyze, compare, master, recording); only the newest PROBLEMS_KEPT stay."""
+        with self.lock:
+            self.conn.execute("INSERT INTO problems (at, source, ref_id, message) VALUES (?, ?, ?, ?)",
+                              (time.time(), source, ref_id, i18n.dumps(message)))
+            self.conn.execute("DELETE FROM problems WHERE id <= (SELECT id FROM problems ORDER BY id DESC"
+                              " LIMIT 1 OFFSET ?)", (self.PROBLEMS_KEPT,))
+
+    def problems(self, limit: int = 200) -> list[dict]:
+        rows = self.q("SELECT * FROM problems ORDER BY id DESC LIMIT ?", (limit,))
+        for r in rows:
+            r["message"] = i18n.loads_text(r["message"])
+            r["key"] = error_key(r["message"])
+        return rows
+
+    def clear_problems(self) -> None:
+        self.x("DELETE FROM problems")
+
+    def reset_partial_checksums(self) -> list[int]:
+        """Recordings whose checksum (and analysis) came from an unfinished file: analysed while they were still
+        being recorded, which versions before 1.3.0 allowed. Their checksum is dropped and they are queued again, so
+        the file is checked and analysed as recorded instead of failing the integrity check. Returns their ids."""
+        ids = [r["id"] for r in self.q("""
+            SELECT r.id FROM recordings r JOIN analyses a ON a.recording_id = r.id
+             WHERE r.sha256 IS NOT NULL AND r.duration_s IS NOT NULL AND r.status IN ('analyzed', 'error', 'recorded')
+               AND r.audio_deleted_at IS NULL AND a.analyzed_at < r.created_at + r.duration_s - 5""")]
+        for rid in ids:
+            self.update_recording(rid, sha256=None, status="queued", error=None)
+        return ids
 
     def delete_recording(self, rec_id: int) -> str | None:
         r = self.one("SELECT path FROM recordings WHERE id = ?", (rec_id,))

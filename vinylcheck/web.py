@@ -47,7 +47,7 @@ from pydantic import BaseModel
 from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
 from . import audio_settings, licenses, network, onboarding, storage, testrecords, tls, updates, vinylmind
 from .config import Config, config_file, load
-from .db import DB, copy_key
+from .db import DB, copy_key, error_key
 from .jobs import MASTER_KINDS, Worker
 
 log = logging.getLogger("vinylcheck.web")
@@ -812,6 +812,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         # recordings that were still running at the last shutdown are incomplete
         for r in db.q("SELECT id FROM recordings WHERE status = 'recording'"):
             db.update_recording(r["id"], status="error", error=i18n.dumps(i18n.msg("api.recording_interrupted")))
+            db.add_problem("recording", r["id"], i18n.msg("api.recording_interrupted"))
         worker.start()
         regrade_all()                                              # grading scheme changed? then regrade everything
         if not desktop:
@@ -1000,10 +1001,32 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                 "service": {"version": __version__, "started_at": app_started_at, "second_opinion": second_opinion.available()},
                 "worker": {"current": cur,
                            "pending": [p | {"label": _job_label(p["kind"], p["id"])} for p in w.get("pending", [])],
-                           "history": [h | {"label": _job_label(h["kind"], h["id"])} for h in w.get("history", [])]},
+                           "history": [h | {"label": _job_label(h["kind"], h["id"]), "error_key": error_key(h.get("error"))}
+                                       for h in w.get("history", [])]},
                 "recorder": {"active": recorder.active, "mode": rs.get("mode"), "elapsed_s": rs.get("elapsed_s"),
                              "recording_id": (rs.get("meta") or {}).get("recording_id")},
                 "storage": storage_status(cfg)}
+
+    # ─── Error log: what failed, where and when (System tab); kept across restarts ───────────────────────
+    @app.get("/api/problems")
+    def problems(limit: int = 200):
+        out = []
+        for p in db.problems(max(1, min(limit, 500))):
+            src, ref = p["source"], p["ref_id"]
+            where = {}
+            if src in ("analyze", "master", "recording") and ref:
+                r = db.recording(ref) or {}
+                where = {"recording_id": ref if r else None, "record_id": r.get("record_id"), "setup_id": r.get("setup_id"),
+                         "status": r.get("status")}
+            label = _job_label("analyze" if src == "recording" else src, ref) if ref else None
+            out.append({"id": p["id"], "at": p["at"], "source": src, "label": label, "message": p["message"],
+                        "key": p["key"], **where})
+        return out
+
+    @app.delete("/api/problems")
+    def problems_clear():
+        db.clear_problems()
+        return []
 
     @app.get("/api/health")
     def health():
@@ -1840,9 +1863,11 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                       "xruns": state.get("xruns", 0)}
             if state.get("error"):
                 db.update_recording(rec_id, status="error", error=i18n.dumps(state["error"]), **fields)
+                db.add_problem("recording", rec_id, state["error"])
             elif (state.get("duration_s") or 0) < 3:
                 db.update_recording(rec_id, status="error", error=i18n.dumps(i18n.msg("api.recording_too_short")),
                                     **fields)
+                db.add_problem("recording", rec_id, i18n.msg("api.recording_too_short"))
             else:
                 db.update_recording(rec_id, status="recorded", **fields)
                 worker.analyze(rec_id)
@@ -2003,6 +2028,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     @app.post("/api/recordings/{rec_id}/analyze")
     def reanalyze(rec_id: int):
         r = get_recording(rec_id)
+        if r["status"] == "recording":                # its analysis follows by itself once the side has ended
+            raise HTTPException(409, i18n.msg("api.recording_in_progress", id=rec_id))
         if not r["audio_available"]:
             raise HTTPException(409, _audio_gone_msg(r))
         worker.analyze(rec_id)

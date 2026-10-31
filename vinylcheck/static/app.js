@@ -156,7 +156,23 @@ function scalePopup(el) {
     <div class="hint">${T("grade.scale_hint", { gap: g.secondary_gap ?? 2, version: String(g.version ?? "–") })}</div>`;
   placePop(el);
 }
-const popTarget = (t) => { const r = t.closest?.("[data-grade-rec]"); if (r) return [r, gradePopup]; const s = t.closest?.("[data-grade-scale]"); return s ? [s, scalePopup] : null; };
+// ─── Errors: what happened and what to do, on hover (or tap) over any error message ──────────
+// The catalog "problems" explains known errors by their message key; anything else gets the general text.
+const probText = (key, part) => (I18N.has(`problems.${key}.${part}`) ? T(`problems.${key}.${part}`) : T(`problems.generic.${part}`));
+const problemAttrs = (key, text) => `data-problem="${esc(key || "generic")}" data-problem-text="${esc(text || "")}" tabindex="0"`;
+function problemPopup(el) {
+  const key = el.dataset.problem || "generic", pop = $("#pop");
+  pop.innerHTML = `<div class="pop-head">${ico("bad", 16)} <b>${esc(el.dataset.problemText || "")}</b></div>
+    <h4>${T("problems.pop_what")}</h4><p>${probText(key, "what")}</p>
+    <h4>${T("problems.pop_todo")}</h4><p>${probText(key, "todo")}</p>
+    ${el.closest("#problems-box") ? "" : `<div class="hint">${T("problems.pop_more")}</div>`}`;
+  placePop(el);
+}
+const popTarget = (t) => {
+  const r = t.closest?.("[data-grade-rec]"); if (r) return [r, gradePopup];
+  const s = t.closest?.("[data-grade-scale]"); if (s) return [s, scalePopup];
+  const p = t.closest?.("[data-problem]"); return p ? [p, problemPopup] : null;
+};
 let popTimer = null;
 document.addEventListener("mouseover", (e) => { const h = popTarget(e.target); if (!h) return; clearTimeout(popTimer); popTimer = setTimeout(() => h[1](h[0]), 150); });
 document.addEventListener("mouseout", (e) => { if (!popTarget(e.target)) return; clearTimeout(popTimer); popTimer = setTimeout(() => $("#pop").classList.add("hidden"), 250); });
@@ -633,13 +649,13 @@ function recTableHtml(r) {
         <td class="edit-cell" data-edit="side" data-rec="${x.id}" title="${esc(T("records.edit_side_title"))}">${esc(x.side)}</td><td class="edit-cell" data-edit="copy_label" data-rec="${x.id}" title="${esc(T("records.edit_copy_title"))}">${x.copy_label ? `<b>${esc(x.copy_label)}</b>` : `<span class="hint">–</span>`}</td><td class="edit-cell" data-edit="kind" data-rec="${x.id}" title="${esc(T("records.edit_kind_title"))}"><span class="kind-label">${KIND[x.kind]}</span>${x.cleaning_method ? `<br><small class="hint">${esc(x.cleaning_method)}</small>` : ""}${mixedProfiles && profInfo(x) ? `<br><small class="hint">${ico("tonearm", 12)} ${esc(profInfo(x).name)}</small>` : ""}${findingsText(x) ? `<br><small class="hint" title="${esc(T("records.findings_seen"))}">${esc(findingsText(x))}</small>` : ""}${x.notes ? `<br><small class="hint">${esc(x.notes)}</small>` : ""}</td>
         <td>${dateStr(x.created_at)}</td>
         <td class="num">${fmtTime(x.duration_s)}</td>
-        <td class="status-${x.status}" title="${esc(x.error || "")}">${["queued", "analyzing", "recording"].includes(x.status) ? '<span class="spin"></span>' : ""}${STATUS[x.status] || x.status}${x.xruns ? ` ⚠ ${T("records.dropouts")}` : ""}${(x.summary?.clip_in_groove || 0) > clipMax ? ` ⚠ ${T("records.clip_no_grade", { n: x.summary.clip_in_groove })}` : (x.summary?.clip_in_groove || 0) >= clipMention ? ` <small class="hint" title="${esc(T("records.clip_tight_title"))}">${T("records.clip_samples", { n: x.summary.clip_in_groove })}</small>` : ""}${x.summary?.level_vs_profile_db != null && x.summary.level_vs_profile_db < -14 ? ` ⚠ ${T("records.db_too_quiet", { db: Math.round(-x.summary.level_vs_profile_db) })}` : ""}${x.summary?.skips_back ? ` <button class="link warn-link" data-play-rec="${x.id}" data-t="${x.summary.skips?.[0]?.t ?? 0}" data-before="3" data-after="4" title="${esc(T("records.skip_play_title"))}">⚠ ${T("records.skipped_n", { n: x.summary.skips_back })} ▶</button>` : ""}${x.audio_deleted_at ? `<br><small class="hint">${T("records.audio_deleted")}</small>` : ""}</td>
+        <td class="status-${x.status}" ${x.status === "error" && x.error ? problemAttrs(x.error_key, x.error) : ""}>${["queued", "analyzing", "recording"].includes(x.status) ? '<span class="spin"></span>' : ""}${STATUS[x.status] || x.status}${x.xruns ? ` ⚠ ${T("records.dropouts")}` : ""}${(x.summary?.clip_in_groove || 0) > clipMax ? ` ⚠ ${T("records.clip_no_grade", { n: x.summary.clip_in_groove })}` : (x.summary?.clip_in_groove || 0) >= clipMention ? ` <small class="hint" title="${esc(T("records.clip_tight_title"))}">${T("records.clip_samples", { n: x.summary.clip_in_groove })}</small>` : ""}${x.summary?.level_vs_profile_db != null && x.summary.level_vs_profile_db < -14 ? ` ⚠ ${T("records.db_too_quiet", { db: Math.round(-x.summary.level_vs_profile_db) })}` : ""}${x.summary?.skips_back ? ` <button class="link warn-link" data-play-rec="${x.id}" data-t="${x.summary.skips?.[0]?.t ?? 0}" data-before="3" data-after="4" title="${esc(T("records.skip_play_title"))}">⚠ ${T("records.skipped_n", { n: x.summary.skips_back })} ▶</button>` : ""}${x.audio_deleted_at ? `<br><small class="hint">${T("records.audio_deleted")}</small>` : ""}</td>
         <td>${gradeChip(x.grade, "", x.id)}</td>
         <td class="num">${num(x.summary?.clicks_music_confirmed_per_min ?? x.summary?.clicks_music_per_min)}${x.summary?.learned?.clicks_music_per_min != null ? ` <small class="${x.summary.learned.graded ? "ok" : "hint"}" title="${esc(T(x.summary.learned.graded ? "records.learned_title_graded" : "records.learned_title"))}">≈ ${num(x.summary.learned.clicks_music_per_min)}</small>` : ""}</td>
         <td class="num">${rawNet(x.summary, "clicks_quiet_per_min")}</td><td class="num">${rawNet(x.summary, "ticks_quiet_per_min")}</td>
         <td class="num">${num(x.summary?.pops_per_min, 2)}</td><td class="num">${num(x.summary?.noise_rel_db)}</td>
         <td style="white-space:nowrap">${x.status === "analyzed" ? `<button class="link" data-view="${x.id}" title="${esc(T("records.report_title"))}">${ico("spectro", 15)} ${T("records.report")}</button>` : ""}
-            ${x.audio_deleted_at ? "" : `<button class="link" data-reana="${x.id}" title="${esc(T("records.reanalyze"))}">↻</button>`}
+            ${x.audio_deleted_at || x.status === "recording" ? "" : `<button class="link" data-reana="${x.id}" title="${esc(T("records.reanalyze"))}">↻</button>`}
             <button class="link" data-del="${x.id}" title="${esc(T("records.delete"))}">✕</button></td>
       </tr>`).join("")}
     </table></div>`;
@@ -2605,12 +2621,30 @@ function setMode(m) {
   if (m === "alignment") loadSetups().then(() => { if (!state.setup && state.profileId) return openProfile(state.profileId); }).catch((e) => toast(e.message));
   if (m === "station") loadStation().catch((e) => toast(e.message));
   if (m === "system") loadSystem().catch((e) => toast(e.message));
-  if (m === "jobs") { loadJobs().catch((e) => toast(e.message)); loadStorage().catch((e) => toast(e.message)); }
+  if (m === "jobs") { loadJobs().catch((e) => toast(e.message)); loadStorage().catch((e) => toast(e.message)); loadProblems().catch((e) => toast(e.message)); }
   if (state.status) renderLive(state.status);
 }
 
 // Duration of a job: seconds below 90 s, else m:ss min
 const jobDur = (sec) => (sec == null ? "–" : sec < 90 ? `${Math.round(sec)} s` : `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")} min`);
+
+// ─── System: the error log (what failed, where, when), kept across restarts ───────────────────
+const PROBLEM_SOURCE = { analyze: T("problems.source_analyze"), compare: T("problems.source_compare"),
+                         master: T("problems.source_master"), recording: T("problems.source_recording") };
+async function loadProblems() {
+  const list = await api("/api/problems"), el = $("#problems-box"); if (!el) return;
+  el.innerHTML = `<h2>${ico("warn")} ${T("problems.title")}</h2><p class="hint">${T("problems.intro")}</p>
+    ${list.length ? `<div class="scroll"><table><tr><th>${T("problems.col_when")}</th><th>${T("problems.col_where")}</th><th>${T("problems.col_what")}</th><th></th></tr>
+      ${list.map((p) => `<tr><td>${dateStr(p.at)}</td><td>${esc(PROBLEM_SOURCE[p.source] || p.source)}${p.label ? `<br><small class="hint">${esc(p.label)}</small>` : ""}</td>
+        <td><span class="problem" ${problemAttrs(p.key, p.message)}>${esc(p.message)}</span></td>
+        <td>${p.record_id ? `<button class="link" data-prob-rec="${p.record_id}">${T("problems.open")}</button>` : p.setup_id ? `<button class="link" data-prob-setup="${p.setup_id}">${T("problems.open")}</button>` : ""}</td></tr>`).join("")}
+    </table></div>
+    <div class="row"><button class="secondary" id="problems-clear">${T("problems.clear")}</button></div>` : `<p class="empty">${T("problems.empty")}</p>`}`;
+  const c = $("#problems-clear");
+  if (c) c.onclick = guard(async () => { if (!confirm(T("problems.confirm_clear"))) return; await api("/api/problems", { method: "DELETE" }); toast(T("problems.cleared")); loadProblems(); });
+  el.querySelectorAll("[data-prob-rec]").forEach((b) => (b.onclick = guard(async () => { setMode("record"); await openRecord(+b.dataset.probRec); })));
+  el.querySelectorAll("[data-prob-setup]").forEach((b) => (b.onclick = guard(async () => { setMode("alignment"); await openSetup(+b.dataset.probSetup); })));
+}
 
 // ─── Drop-down at the "analysis running" pill: what runs, what waits; refreshes every 2 s while open ──
 let jobsPopTimer = null;
@@ -2667,7 +2701,7 @@ async function loadJobs() {
     ${cur ? `<div class="warnbox">${T("jobs.running", { label: esc(cur.label), dur: jobDur(cur.elapsed_s) })}${share != null ? T("jobs.about_pct", { pct: share }) : ""}${cur.duration_s ? T("jobs.recording_long", { t: fmtTime(cur.duration_s) }) : ""}</div>` : `<p class="hint">${T("jobs.nothing")}</p>`}
     ${w.pending.length ? `<table><tr><th>#</th><th>${T("jobs.col_waiting")}</th></tr>${w.pending.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.label)}</td></tr>`).join("")}</table>` : `<p class="hint">${T("jobs.queue_empty")}</p>`}
     ${w.history.length ? `<h3>${T("jobs.recently_done")}</h3><div class="scroll"><table><tr><th>${T("jobs.col_when")}</th><th>${T("jobs.col_job")}</th><th class="num">${T("jobs.col_duration")}</th><th></th></tr>
-      ${w.history.map((h) => `<tr><td>${I18N.date(h.finished_at, { timeStyle: "short" })}</td><td>${esc(h.label)}</td><td class="num">${jobDur(h.seconds)}</td><td>${h.ok ? `<span class="ok">✓</span>` : `<span class="bad" title="${esc(h.error || "")}">${T("jobs.error")}</span>`}</td></tr>`).join("")}</table></div>` : ""}`;
+      ${w.history.map((h) => `<tr><td>${I18N.date(h.finished_at, { timeStyle: "short" })}</td><td>${esc(h.label)}</td><td class="num">${jobDur(h.seconds)}</td><td>${h.ok ? `<span class="ok">✓</span>` : `<span class="bad problem" ${problemAttrs(h.error_key, h.error)}>${T("jobs.error")}</span>`}</td></tr>`).join("")}</table></div>` : ""}`;
   drawCpuHist($("#cpu-hist"));
   clearTimeout(loadJobs.timer); loadJobs.timer = setTimeout(() => { if (state.mode === "jobs") loadJobs().catch(() => {}); }, 2000);
 }
@@ -3616,9 +3650,9 @@ function renderSetup() {
     <h3>${T("alignment.recordings")}</h3>
     ${recs.length ? `<div class="scroll"><table><tr><th>${T("alignment.side")}</th><th>${T("alignment.col_date")}</th><th class="num">${T("alignment.col_duration")}</th><th>${T("alignment.col_status")}</th><th class="num">${T("alignment.col_bands")}</th><th>${T("alignment.col_findings")}</th><th></th></tr>
       ${recs.map((x) => `<tr><td>${esc(x.side)}</td><td>${dateStr(x.created_at)}</td><td class="num">${fmtTime(x.duration_s)}</td>
-        <td class="status-${x.status}" title="${esc(x.error || "")}">${STATUS[x.status] || x.status}${x.xruns ? ` ⚠ ${T("alignment.dropouts")}` : ""}${x.clip_in_bands ? ` ⚠ ${T("alignment.clipped")}` : x.clip_samples ? ` <small class="hint" title="${T("alignment.drop_clip_title", { n: x.clip_samples })}">${T("alignment.drop_clip")}</small>` : ""}${x.audio_deleted_at ? `<br><small class="hint">${T("alignment.audio_deleted")}</small>` : ""}${x.status === "error" && x.error ? `<br><small class="hint">${esc(x.error)}</small>` : ""}</td>
+        <td class="status-${x.status}" ${x.status === "error" && x.error ? problemAttrs(x.error_key, x.error) : ""}>${STATUS[x.status] || x.status}${x.xruns ? ` ⚠ ${T("alignment.dropouts")}` : ""}${x.clip_in_bands ? ` ⚠ ${T("alignment.clipped")}` : x.clip_samples ? ` <small class="hint" title="${T("alignment.drop_clip_title", { n: x.clip_samples })}">${T("alignment.drop_clip")}</small>` : ""}${x.audio_deleted_at ? `<br><small class="hint">${T("alignment.audio_deleted")}</small>` : ""}${x.status === "error" && x.error ? `<br><small class="hint">${esc(x.error)}</small>` : ""}</td>
         <td class="num">${x.status === "analyzed" ? x.bands : ""}</td><td>${x.status === "analyzed" ? chips(x.status_counts) : ""}</td>
-        <td style="white-space:nowrap">${x.status === "analyzed" ? `<button class="link" data-jview="${x.id}" title="${T("alignment.report_title")}">${ico("spectro", 15)} ${T("alignment.report")}</button>` : ""}${x.audio_available ? `<button class="link" data-reana="${x.id}" title="${T("alignment.reanalyze")}">↻</button>` : ""}<button class="link" data-del="${x.id}" title="${T("alignment.delete")}">✕</button></td></tr>`).join("")}
+        <td style="white-space:nowrap">${x.status === "analyzed" ? `<button class="link" data-jview="${x.id}" title="${T("alignment.report_title")}">${ico("spectro", 15)} ${T("alignment.report")}</button>` : ""}${x.audio_available && x.status !== "recording" ? `<button class="link" data-reana="${x.id}" title="${T("alignment.reanalyze")}">↻</button>` : ""}<button class="link" data-del="${x.id}" title="${T("alignment.delete")}">✕</button></td></tr>`).join("")}
       </table></div>` : `<p class="empty">${T("alignment.no_recordings")}</p>`}
     <h3>${T("alignment.run_findings")}</h3>
     ${resultsTable(s.results)}`;

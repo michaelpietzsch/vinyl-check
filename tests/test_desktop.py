@@ -322,7 +322,7 @@ def test_interrupted_job_runs_again_at_the_next_start(tmp_path):
     db = DB(cfg.db_path)
     w = jobs.Worker(cfg, db)
     rid = db.add_record(artist="A", title="B")
-    rec = db.add_recording(record_id=rid, side="A", kind="before", path=str(tmp_path / "a.wav"))
+    rec = db.add_recording(record_id=rid, side="A", kind="before", path=str(tmp_path / "a.wav"), status="recorded")
 
     def analyze(rec_id):
         db.update_recording(rec_id, status="analyzing")

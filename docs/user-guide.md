@@ -441,6 +441,12 @@ The *System* page lists the running job (with a rough progress estimate), the qu
 with their duration, plus CPU (total and per core), load, memory, the service's own memory, CPU temperature,
 uptime and storage. The analysis pill in the header opens the same list.
 
+**Error log.** The *System* page also keeps every error of recordings, analyses, comparisons and master checks: when,
+where (recording, record and side, or the run) and the message, newest first, across restarts (the last 500).
+*Open* goes to the record or the run, *Clear the log* empties it (the recordings keep their status). Hovering over
+an error, or tapping it, explains what happened and what to do; this works wherever an error is shown: in the log,
+in the list of recent jobs and in the status column of the recordings.
+
 *Storage* on the same page shows the user-data folder and the application folder with their paths, drives (kind and
 model where known, and which one is the system drive), free space and what they hold, files still outside the
 user-data folder, and the progress of a move. It only shows; changes are made under *Settings → Storage*.

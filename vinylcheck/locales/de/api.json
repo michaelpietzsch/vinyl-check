@@ -150,5 +150,6 @@
   "discogs_token_invalid": "Das sieht nicht nach einem persönlichen Zugangstoken aus: noch einmal aus den Discogs-Entwicklereinstellungen kopieren, ohne Leerzeichen",
   "discogs_username_invalid": "Den Discogs-Benutzernamen ohne Leerzeichen eintragen",
   "oauth_denied": "Freigabe nicht erteilt oder abgelaufen. Fenster schließen und in den Einstellungen erneut „Mit Discogs verbinden“.",
-  "oauth_failed": "Discogs hat die Freigabe nicht bestätigt: {error}"
+  "oauth_failed": "Discogs hat die Freigabe nicht bestätigt: {error}",
+  "recording_in_progress": "Aufnahme #{id} läuft noch; sie wird von selbst analysiert, sobald die Seite zu Ende ist."
 }

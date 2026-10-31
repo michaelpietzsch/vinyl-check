@@ -26,8 +26,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Guides** for 15 adjustments (platter level, protractor, tracking force, anti-skating, VTA, azimuth, recording
   level, speed, wow & flutter, balance, resonance, cartridge loading, RIAA, rumble and hum, stylus care): why, steps,
   how to check, next to each finding and before the first measurement.
-- API: `GET/POST /api/testrecords`, `PUT/DELETE /api/testrecords/{id}`, `GET/POST /api/onboarding`; profiles take
-  `test_record` and return `test_record_info`, `progress.sides` and `readiness`.
+- **Error log** on the *System* page: every error of recordings, analyses, comparisons and master checks with time,
+  place and message, kept across restarts (the last 500), with a way to the record or run and to clear the log.
+- **Errors explain themselves**: hovering over an error (or tapping it) shows what happened and what to do, in the
+  log, in the list of recent jobs and in the status column of the recordings.
+- API: `GET/POST /api/testrecords`, `PUT/DELETE /api/testrecords/{id}`, `GET/POST /api/onboarding`,
+  `GET/DELETE /api/problems`; profiles take `test_record` and return `test_record_info`, `progress.sides` and
+  `readiness`; recordings and finished jobs carry `error_key`.
 
 ### Changed
 
@@ -36,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A recording could be analysed while it was still being recorded (↻ in the list of recordings): the analysis ran
+  on the unfinished file and stored its checksum, so the analysis at the end of the side failed with an integrity
+  error although the file was fine. Re-analysing is no longer offered or accepted during a recording, and at its
+  first start the station checks and analyses such recordings again.
 - The turntable assistant no longer shows *GO* after a recording of its profile has ended.
 - A form being filled in on the turntable page is no longer redrawn when an analysis finishes.
 

@@ -150,5 +150,6 @@
   "discogs_token_invalid": "This does not look like a personal access token: copy it again from the Discogs developer settings, without spaces",
   "discogs_username_invalid": "Enter the Discogs user name without spaces",
   "oauth_denied": "Access was not granted or has expired. Close this window and choose “Connect to Discogs” in the settings again.",
-  "oauth_failed": "Discogs did not confirm the access: {error}"
+  "oauth_failed": "Discogs did not confirm the access: {error}",
+  "recording_in_progress": "Recording #{id} is still being recorded; it is analysed by itself once the side has ended."
 }
