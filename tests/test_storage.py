@@ -157,7 +157,10 @@ def test_a_move_takes_the_files_from_outside_along(station, tmp_path):
     db.add_recording(record_id=1, side="B", kind="after_wet", path=str(tmp_path / "missing" / "x.wav"))
     r = storage.check(cfg, db, str(tmp_path / "third"))
     assert r["ok"] and r["files"] == 4 and r["outside_files"] == 3
-    assert keys(r["warnings"]) == ["storage.outside_missing"]
+    # on a machine whose /tmp is its own mount (a tmpfs on a Raspberry Pi) the target also warns that its drive
+    # must be mounted; that is right, and not what this test is about
+    assert "storage.outside_missing" in keys(r["warnings"])
+    assert set(keys(r["warnings"])) <= {"storage.outside_missing", "storage.drive_required"}
     mover = storage.Mover(cfg, db)
     mover.start(str(tmp_path / "third"))
     wait(mover)
