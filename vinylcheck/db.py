@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS records (
     notes TEXT NOT NULL DEFAULT '',
     sides TEXT,
     tracks TEXT,
+    repeat_rule TEXT,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS setups (
@@ -357,6 +358,8 @@ class DB:
             self.conn.execute("ALTER TABLE records ADD COLUMN sides TEXT")
         if "tracks" not in rec_cols:                                                   # 0.7.0: tracks per side
             self.conn.execute("ALTER TABLE records ADD COLUMN tracks TEXT")
+        if "repeat_rule" not in rec_cols:                                              # 1.4.0: repeat rule per record
+            self.conn.execute("ALTER TABLE records ADD COLUMN repeat_rule TEXT")
         if "profile_id" in rcols and "profile_id" in scols:
             return
         has_data = self.conn.execute("SELECT COUNT(*) FROM recordings").fetchone()[0] > 0
@@ -587,7 +590,8 @@ class DB:
         return self.one("SELECT * FROM records WHERE id = ?", (rid,))
 
     def update_record(self, rid: int, **fields) -> None:
-        allowed = {"artist", "title", "discogs_release_id", "discogs_media_condition", "notes", "sides", "tracks"}
+        allowed = {"artist", "title", "discogs_release_id", "discogs_media_condition", "notes", "sides", "tracks",
+                   "repeat_rule"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if sets:
             self.x(f"UPDATE records SET {', '.join(f'{k} = ?' for k in sets)} WHERE id = ?",

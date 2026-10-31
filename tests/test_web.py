@@ -86,6 +86,21 @@ def test_full_flow(client):
     assert client.put(f"/api/recordings/{a['id']}/events/label", json={"t": 9999.0, "label": "music"}).status_code == 404
     rec_m = client.get(f"/api/recordings/{a['id']}").json()["analysis"]["metrics"]
     assert rec_m["counts"]["labeled_music"] == 1
+    # every event says why it does not count and which audible group it belongs to
+    evs = client.get(f"/api/recordings/{a['id']}/events?limit=20000&order=t").json()
+    assert all({"why", "grp", "grp_of"} <= set(e) for e in evs) and all(e["why"] in (None, "label", "rule", "group") for e in evs)
+    assert sum(1 for e in evs if e["why"] == "label") == 1
+    assert rec_m["counts"]["grouped"] == sum(1 for e in evs if e["why"] == "group" and e["region"] == "music")
+    # the repeat rule per record: a bad value is refused, a change recounts the record's sides at once
+    assert client.patch(f"/api/records/{rid}", json={"repeat_rule": "sometimes"}).status_code == 422
+    assert client.get(f"/api/records/{rid}").json()["repeat_rule"] is None
+    assert client.patch(f"/api/records/{rid}", json={"repeat_rule": "off"}).json()["repeat_rule"] == "off"
+    rec_off = client.get(f"/api/recordings/{a['id']}").json()["analysis"]["metrics"]
+    assert rec_off["repeats"]["rule"]["mode"] == "off" and not rec_off["repeats"]["rule"]["active"]
+    assert client.patch(f"/api/records/{rid}", json={"repeat_rule": "on"}).json()["repeat_rule"] == "on"
+    rec_on = client.get(f"/api/recordings/{a['id']}").json()["analysis"]["metrics"]
+    assert rec_on["repeats"]["rule"]["mode"] == "on" and rec_on["repeats"]["rule"]["active"]
+    assert client.patch(f"/api/records/{rid}", json={"repeat_rule": "auto"}).json()["repeat_rule"] == "auto"
     exp = client.get("/api/audit/export").json()
     assert exp["count"] == 1 and exp["events"][0]["label"] == "music" and exp["events"][0]["recording_id"] == a["id"]
     assert client.patch(f"/api/recordings/{a['id']}", json={"copy_label": " Version 1 "}).json()["copy_label"] == " Version 1 "

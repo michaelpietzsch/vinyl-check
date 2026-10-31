@@ -32,6 +32,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -147,6 +148,7 @@ class RecordPatch(BaseModel):
     discogs_media_condition: str | None = None
     notes: str | None = None
     tracks: dict[str, list[TrackIn]] | None = None    # hand-entered track list (record not on Discogs), {"A": [...]}
+    repeat_rule: str | None = None                     # "auto" | "on" | "off": clicks that repeat with the music
 
 
 class StartIn(BaseModel):
@@ -695,6 +697,14 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         pid = rec.get("profile_id")
         return learning.zero_point(db.profile(pid) if pid else None)
 
+    def acfg_for(rec_id: int) -> analysis.AnalysisConfig:
+        """The analysis settings for counting a recording: the configuration, with the record's own repeat rule
+        (records.repeat_rule, set by the user) in place of the configured one."""
+        row = db.one("SELECT rc.repeat_rule FROM recordings r JOIN records rc ON rc.id = r.record_id WHERE r.id = ?",
+                     (rec_id,)) or {}
+        rule = row.get("repeat_rule")
+        return replace(cfg.analysis, repeat_rule=rule) if rule in analysis.REPEAT_RULES else cfg.analysis
+
     def learn_recount(rec_id: int, r: dict | None = None) -> tuple[dict, dict] | None:
         """Recount a stored analysis with event judgments, skip judgments and the current learned model, and save it."""
         r = r or db.recording(rec_id)
@@ -704,7 +714,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         metrics, grading_ = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
                                              skip_labels=db.skip_labels(rec_id), warnings=warnings,
                                              learned=learn_model(), learn_grade=cfg.learn_grade,
-                                             zero_point=learn_zp(r))
+                                             zero_point=learn_zp(r), acfg=acfg_for(rec_id))
         db.update_analysis(rec_id, metrics, grading_, warnings)
         return metrics, grading_
 
@@ -802,7 +812,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             # recount from the stored events: a new scheme may also change the metrics (e.g. pops counted only in
             # the music); the audio is not recomputed
             m, g = analysis.recount(m, db.events(r["recording_id"]), cfg.grading,
-                                    learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r))
+                                    learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r),
+                                    acfg=acfg_for(r["recording_id"]))
             db.update_analysis(r["recording_id"], m, g)
             n += 1
         db.set_setting("grading_version", str(grading.VERSION))
@@ -1776,7 +1787,15 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if p.tracks is not None:                       # a hand-entered track list replaces Discogs' (side lengths too)
             tracks = clean_tracks(p.tracks)
             fields.update(tracks=json.dumps(tracks), sides=json.dumps(side_lengths(tracks)))
+        if p.repeat_rule is not None and p.repeat_rule not in analysis.REPEAT_RULES:
+            raise HTTPException(422, i18n.msg("api.repeat_rule_invalid", allowed=", ".join(analysis.REPEAT_RULES)))
+        before = (db.record(rid) or {}).get("repeat_rule")
         db.update_record(rid, **fields)
+        if p.repeat_rule is not None and p.repeat_rule != (before or "auto"):
+            # the rule changes what counts: every analysed side of the record is counted and graded again
+            for rec in db.recordings(rid):
+                learn_recount(rec["id"])
+            ref_cache["key"] = None
         return get_record(rid)
 
     @app.delete("/api/records/{rid}")
@@ -2103,16 +2122,32 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
 
     @app.get("/api/recordings/{rec_id}/events")
     def events(rec_id: int, order: str = "strength", limit: int = 200):
+        """The detections, each with `why` it does not count ("label", "rule", "group" or null), `grp` (the number
+        of impulses of its audible group, on the representative) and `grp_of` (the representative's time, on the
+        other members); `lp` is the learned model's estimate."""
         evs = db.events(rec_id, limit=min(limit, 20000), order=order)
+        if not evs:
+            return evs
+        all_evs = db.events(rec_id)                 # grouping, counting and the "density" feature need every event
+        ea = analysis.event_arrays(all_evs)
+        acfg = acfg_for(rec_id)
+        _c, _r, why, _i = analysis.count_mask(ea["kind"], ea["region"], ea["label"], ea["rep"], ea["t"],
+                                              ea["strength"], acfg)
+        rep_of = analysis.group_impulses(ea["t"], ea["region"], ea["kind"], ea["strength"], acfg.click_group_ms)
+        size = np.bincount(rep_of, minlength=len(all_evs))
+        extra = {round(e["t"], 5): {"why": why[i], "grp": int(size[i]) if size[i] > 1 else None,
+                                    "grp_of": None if rep_of[i] == i else all_evs[rep_of[i]]["t"]}
+                 for i, e in enumerate(all_evs)}
         model = learn_model()
-        if model and evs:
-            # the "density" feature needs all events of the recording, not just the selected ones
-            all_evs = db.events(rec_id)
+        lp = {}
+        if model:
             r = db.one("SELECT json_extract(a.metrics, '$.music_ref_dbfs') AS ref, r.profile_id FROM analyses a "
                        "JOIN recordings r ON r.id = a.recording_id WHERE a.recording_id = ?", (rec_id,)) or {}
             _, p = learning.estimate(all_evs, model, r.get("ref"), learn_zp(r))
             lp = {round(e["t"], 5): (None if p[i] != p[i] else round(float(p[i]), 3)) for i, e in enumerate(all_evs)}
-            for e in evs:
+        for e in evs:
+            e.update(extra.get(round(e["t"], 5)) or {"why": None, "grp": None, "grp_of": None})
+            if model:
                 e["lp"] = lp.get(round(e["t"], 5))
         return evs
 
@@ -2129,7 +2164,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if not hit:
             raise HTTPException(404, i18n.msg("api.no_event_at_time"))
         metrics, grading = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
-                                            learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r))
+                                            learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r),
+                                            acfg=acfg_for(rec_id))
         db.update_analysis(rec_id, metrics, grading)
         ref_cache["key"] = None
         return {"t": p.t, "label": p.label, "grade": grading.get("grade"), "score": grading.get("score"),
@@ -2151,7 +2187,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         warnings = list(r["analysis"].get("warnings") or [])
         metrics, grading = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
                                             skip_labels=db.skip_labels(rec_id), warnings=warnings,
-                                            learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r))
+                                            learned=learn_model(), learn_grade=cfg.learn_grade, zero_point=learn_zp(r),
+                                            acfg=acfg_for(rec_id))
         db.update_analysis(rec_id, metrics, grading, warnings)
         ref_cache["key"] = None
         return {"t": p.t, "label": p.label, "grade": grading.get("grade"), "skips_back": metrics.get("skips_back"),
@@ -2169,7 +2206,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         a = r["analysis"]
         m, g, hit = analysis.what_if(a["metrics"], db.events(rec_id), db.skip_labels(rec_id), p.ignore_events,
                                      p.ignore_skips, cfg.grading, learned=learn_model(), learn_grade=cfg.learn_grade,
-                                     zero_point=learn_zp(r))
+                                     zero_point=learn_zp(r), acfg=acfg_for(rec_id))
         base, bm = a.get("grading") or {}, a["metrics"]
         keys = ("clicks_music_per_min", "clicks_quiet_per_min", "ticks_quiet_per_min", "pops_per_min", "skips_back")
         out = {"grade": g.get("grade"), "score": g.get("score"), "explanation": g.get("explanation"), "ignored": hit,

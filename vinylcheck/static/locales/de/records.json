@@ -121,6 +121,7 @@
   "cover_remove_confirm": "Eigenes Cover entfernen?",
   "cover_saved": "Cover gespeichert.",
   "discogs_release": "Release auf Discogs",
+  "repeat_rule": "Sequenzierte Musik (Clicks, die sich mit der Musik wiederholen, zählen nicht):",
   "side_lengths": "Seitenlängen: {list} – daraus kommt die Warnung „Seite wahrscheinlich am Ende“.",
   "tracks": "Titel: {list}",
   "delete_record": "Platte löschen",

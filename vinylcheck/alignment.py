@@ -949,7 +949,7 @@ def click_floor(audio, sr, t0: float, t1: float, ref_db: float | None, cfg: Alig
     anything (two real chains differed by a factor of 30: 678 vs. 22 per minute). Classified as in the record
     check: a click from strength `click_strength` or from the pop threshold relative to the reference tone,
     the rest is crackle."""
-    from .analysis import AnalysisConfig
+    from .analysis import AnalysisConfig, group_impulses
     x = _seg(audio, sr, t0 + 1.0, t1 - 1.0)
     if len(x) < 10 * sr:
         return {"ok": False}
@@ -958,6 +958,11 @@ def click_floor(audio, sr, t0: float, t1: float, ref_db: float | None, cfg: Alig
     ev = detect.merge_channels([detect.detect_channel(x[:, c], sr, dp) for c in range(x.shape[1])], dp.merge_ms)
     pop_thr = acfg.pop_dbfs if ref_db is None else ref_db + (acfg.pop_dbfs - cfg.target_ref_dbfs)
     strong = (ev["strength"] >= acfg.click_strength) | (ev["amp_dbfs"] >= pop_thr)
+    # audible clicks, counted as in the record check (analysis.group_impulses): impulses within click_group_ms are one
+    kind = np.where(strong, "click", "tick").astype(object)
+    rep_of = group_impulses(ev["t"].astype(float), np.full(len(ev), "quiet", dtype=object), kind,
+                            ev["strength"].astype(float), acfg.click_group_ms)
+    strong &= rep_of == np.arange(len(ev))
     minutes = len(x) / sr / 60
     return {"ok": True, "dur_s": round(len(x) / sr, 1), "events": int(len(ev)),
             "clicks_per_min": round(float(strong.sum()) / minutes, 1),

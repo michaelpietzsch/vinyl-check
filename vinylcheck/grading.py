@@ -62,8 +62,9 @@ from . import i18n
 GRADES = ["NM", "VG+", "VG", "G+", "G", "F"]
 # Grading scheme: 1 = worst single grade of all metrics, 2 = grade from the music (pauses cost at most one step),
 # 3 = pauses information only and pops counted in the music only, 4 = weighted 90 % clicks / 10 % pops in the
-# music, 5 = dust accepted: milder limits
-VERSION = 5
+# music, 5 = dust accepted: milder limits, 6 = audible clicks (impulses within 20 ms count as one) and the repeat
+# rule for sequenced music (clicks that repeat with the music do not count; analysis.count_mask)
+VERSION = 6
 # Score range per grade (top, bottom)
 BANDS = [(100, 90), (90, 75), (75, 55), (55, 35), (35, 15), (15, 0)]
 
@@ -227,6 +228,16 @@ def grade(metrics: dict, cfg: GradingConfig = GradingConfig(), floor: dict | Non
     if used_floor:
         hints.append(i18n.msg("grading.floor_applied", clicks=_floor_value(floor.get("clicks_per_min")),
                               ticks=_floor_value(floor.get("ticks_per_min"))))
+    rule = (metrics.get("repeats") or {}).get("rule") or {}
+    if rule.get("removed"):                                   # sequenced music: repeating hits are not counted
+        mode = rule.get("mode") if rule.get("mode") in ("auto", "on", "off") else "auto"
+        hints.append(i18n.msg("grading.repeat_rule_applied", n=rule["removed"],
+                              share=round(100 * (rule.get("share") or 0)),
+                              mode=i18n.msg(f"grading.repeat_rule_mode_{mode}",
+                                            pct=round(100 * (rule.get("threshold") or 0.2)))))
+    if (metrics.get("counts") or {}).get("grouped"):
+        hints.append(i18n.msg("grading.grouped", n=metrics["counts"]["grouped"],
+                              ms=round(metrics.get("click_group_ms") or 20)))
     left_out = [METRIC_LABELS[n] for n in cfg.metrics if n not in cfg.graded and n not in cfg.secondary and per.get(n, {}).get("grade")]
     if left_out:
         hints.append(i18n.msg("grading.not_in_grade", metrics=i18n.msg_join(left_out, ", ")))

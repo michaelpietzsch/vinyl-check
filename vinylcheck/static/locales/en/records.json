@@ -121,6 +121,7 @@
   "cover_remove_confirm": "Remove your own cover?",
   "cover_saved": "Cover saved.",
   "discogs_release": "Release on Discogs",
+  "repeat_rule": "Sequenced music (clicks that repeat with the music are not counted):",
   "side_lengths": "Side lengths: {list} – used for the warning “side has probably ended”.",
   "tracks": "Tracks: {list}",
   "delete_record": "Delete record",

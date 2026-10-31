@@ -48,5 +48,6 @@
   "findings_line": "Befund: {list}",
   "back_to_record": "Zurück zur Platte",
   "listen": "anhören",
+  "info": "Was ist das?",
   "profile_sensitivity_saved": "Empfindlichkeit gespeichert. Der Laufwerksgrund wird aus Seite 2 der Testplatte neu gemessen."
 }

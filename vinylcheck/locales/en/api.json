@@ -126,6 +126,7 @@
   "label_invalid": "label must be one of: {allowed} (or null)",
   "recording_not_analyzed": "Recording not found or not analyzed",
   "no_event_at_time": "No event at this time (±3 ms)",
+  "repeat_rule_invalid": "The repeat rule must be one of: {allowed}",
   "no_skip_at_time": "No groove skip at this time (±2 s)",
   "too_many_items": "Too many events at once",
   "spectrogram_failed": "Spectrogram cannot be computed: {error}",

@@ -67,14 +67,83 @@ def test_sequenced_hits_repeat_and_defects_do_not():
     # surroundings come back with the loop, but the spike is not there
     m = res["metrics"]["repeats"]
     assert m["available"] and m["repeated_music"] >= 0.8 * len(on_hit)
-    assert m["clicks_music_unrepeated_per_min"] < res["metrics"]["clicks_music_per_min"]
-    assert res["metrics"]["clicks_music_per_min"] > 20                         # the grade still counts them all
+    # the rule (sequenced music from 20 % repeating clicks on) takes the repeating hits out of the count
+    assert m["rule"]["active"] and m["rule"]["mode"] == "auto" and m["share_music"] >= 0.5
+    assert m["rule"]["removed"] == res["metrics"]["counts"]["rule_music"] >= 0.8 * len(on_hit)
+    assert res["metrics"]["clicks_music_per_min"] == m["clicks_music_unrepeated_per_min"]
     # ticks and clicks outside the music carry no count
     assert all(e["rep"] is None for e in res["events"] if e["kind"] == "tick" or e["region"] != "music")
     # recount from the stored events keeps the figures
     m2, _ = analysis.recount(res["metrics"], res["events"])
     assert m2["repeats"]["repeated_music"] == m["repeated_music"]
     assert m2["repeats"]["clicks_music_unrepeated_per_min"] == m["clicks_music_unrepeated_per_min"]
+    assert m2["clicks_music_per_min"] == res["metrics"]["clicks_music_per_min"]
+
+
+def test_repeat_rule_in_the_count_and_verdicts_override():
+    """With the rule off every click counts; a verdict "click" on a repeating hit counts it again, a verdict
+    "false alarm" on a defect takes it out; the record's own setting replaces the configured rule."""
+    audio, hits, defects = _sequenced_side()
+    res = analysis.analyze(audio, SR, analysis.AnalysisConfig(second_opinion=False))
+    events, metrics = res["events"], res["metrics"]
+    on = metrics["clicks_music_per_min"]
+    m_off, _ = analysis.recount(metrics, events, acfg=analysis.AnalysisConfig(repeat_rule="off"))
+    assert not m_off["repeats"]["rule"]["active"] and m_off["counts"]["rule_music"] == 0
+    assert m_off["clicks_music_per_min"] > on * 2                              # the hits are back in the count
+    m_on, _ = analysis.recount(metrics, events, acfg=analysis.AnalysisConfig(repeat_rule="on", repeat_rule_share=0.99))
+    assert m_on["repeats"]["rule"]["active"] and m_on["clicks_music_per_min"] == on
+    m_auto, _ = analysis.recount(metrics, events, acfg=analysis.AnalysisConfig(repeat_rule_share=0.99))
+    assert not m_auto["repeats"]["rule"]["active"]                            # below the share: auto stays off
+    # verdicts: "defect" on a repeating hit counts it again, "music" on a plain click takes it out
+    hit = next(e for e in events if e["region"] == "music" and (e["rep"] or 0) >= repeats.MIN_REPEATS)
+    plain = next(e for e in events if e["region"] == "music" and e["kind"] == "click" and (e["rep"] or 0) < repeats.MIN_REPEATS)
+    ea = analysis.event_arrays(events)
+    counted, raw, why, info = analysis.count_mask(ea["kind"], ea["region"], ea["label"], ea["rep"], ea["t"], ea["strength"],
+                                                  analysis.AnalysisConfig())
+    i_hit, i_plain = events.index(hit), events.index(plain)
+    assert why[i_hit] == "rule" and not counted[i_hit] and counted[i_plain] and why[i_plain] is None
+    judged = [dict(e) for e in events]
+    judged[i_hit]["label"], judged[i_plain]["label"] = "defect", "music"
+    m_j, _ = analysis.recount(metrics, judged)
+    assert m_j["counts"]["rule_music"] == metrics["counts"]["rule_music"] - 1
+    assert m_j["counts"]["labeled_music"] == 1
+    ea = analysis.event_arrays(judged)
+    counted, raw, why, info = analysis.count_mask(ea["kind"], ea["region"], ea["label"], ea["rep"], ea["t"], ea["strength"],
+                                                  analysis.AnalysisConfig())
+    assert counted[i_hit] and why[i_hit] is None and not counted[i_plain] and why[i_plain] == "label"
+
+
+def test_audible_clicks_group_impulses_within_20_ms():
+    """A particle makes the stylus bounce: impulses 2 ms and 10 ms apart are one audible click; the strongest one
+    stands for the group, crackle is not grouped, and a verdict on any member speaks for the group."""
+    t = np.array([1.000, 1.010, 1.012, 1.025, 1.060, 2.000, 2.015, 3.000, 3.005])
+    region = np.array(["music"] * 7 + ["quiet", "quiet"], dtype=object)
+    kind = np.array(["click", "click", "click", "click", "click", "tick", "tick", "click", "pop"], dtype=object)
+    strength = np.array([30.0, 80.0, 40.0, 35.0, 50.0, 10.0, 12.0, 60.0, 90.0])
+    rep_of = analysis.group_impulses(t, region, kind, strength, 20.0)
+    assert list(rep_of[:4]) == [1, 1, 1, 1]                 # chained within 20 ms, the strongest (80) represents
+    assert rep_of[4] == 4                                   # 35 ms after the last member: on its own
+    assert list(rep_of[5:7]) == [5, 6]                      # crackle is never grouped
+    assert list(rep_of[7:]) == [8, 8]                       # the pop (90) stands for the click 5 ms before it
+    # a group spans at most 2.5 × 20 ms from its first impulse
+    tt = np.arange(0, 0.2, 0.015)
+    r2 = analysis.group_impulses(tt, np.array(["music"] * len(tt), dtype=object),
+                                 np.array(["click"] * len(tt), dtype=object), np.ones(len(tt)), 20.0)
+    assert len(set(r2)) >= 3
+    label = np.array([None] * 9, dtype=object)
+    cfg = analysis.AnalysisConfig(repeat_rule="off")
+    counted, raw, why, info = analysis.count_mask(kind, region, label, None, t, strength, cfg)
+    assert list(counted) == [False, True, False, False, True, True, True, False, True]
+    assert info["grouped"] == 3 and info["grouped_all"] == 4 and list(why[[0, 2, 3, 7]]) == ["group"] * 4
+    label[0] = "music"                                      # a verdict on a member applies to the group
+    counted, raw, why, info = analysis.count_mask(kind, region, label, None, t, strength, cfg)
+    assert not counted[1] and why[1] == "label" and info["labeled_music"] == 1
+    label[0], label[2] = None, "defect"
+    counted, raw, why, info = analysis.count_mask(kind, region, label, None, t, strength, cfg)
+    assert counted[1] and why[1] is None
+    counted, raw, why, info = analysis.count_mask(kind, region, label, None, t, strength,
+                                                  analysis.AnalysisConfig(repeat_rule="off", click_group_ms=0))
+    assert counted.sum() == 9 and info["grouped"] == 0      # grouping off: every impulse counts
 
 
 def test_filter_can_be_switched_off_and_a_plain_side_has_few_repeats():
@@ -84,7 +153,9 @@ def test_filter_can_be_switched_off_and_a_plain_side_has_few_repeats():
     share = np.mean([(e["rep"] or 0) >= repeats.MIN_REPEATS for e in ev]) if ev else 0.0
     assert share <= 0.1, share                                                 # random clicks in music that does not loop
     off = analysis.analyze(audio, SR, analysis.AnalysisConfig(second_opinion=False, repeat_filter=False))
-    assert off["metrics"]["repeats"] == {"available": False, "min_repeats": repeats.MIN_REPEATS}
+    assert off["metrics"]["repeats"] == {"available": False, "min_repeats": repeats.MIN_REPEATS,
+                                         "rule": {"mode": "auto", "active": False, "share": None, "threshold": 0.2,
+                                                  "removed": 0}}
     assert all(e["rep"] is None for e in off["events"])
 
 

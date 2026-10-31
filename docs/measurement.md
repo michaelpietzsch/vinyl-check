@@ -164,8 +164,26 @@ jump within 8 dB of the candidate's, at least 60 % of it and at least 6 dB). Two
 detection *repeating*. The count is stored per event (`rep`) and summarised in the metrics (`repeats`: share of
 the music clicks that repeat, clicks per minute without them). Measured on real recordings: 50 % of the music
 clicks of the sequencer record repeated, 1–4 % on live rock, jazz and studio rock (coincidences: a click within a
-few milliseconds of a transient the music itself repeats), none of 25 clicks a listener had judged defects. The grade does not use the
-figure yet; that waits for more judgements by ear and master comparisons.
+few milliseconds of a transient the music itself repeats), none of 25 clicks a listener had judged defects. Checked
+against 28 verdicts by ear on a second side of the sequencer record: where the count said *repeating*, the listener
+heard music in 19 of 20 cases; of the 8 without repeats, 5 were defects and 3 a one-off fill that does not come
+back within ±8 s.
+
+**The repeat rule** (`analysis.count_mask`, `[analysis] repeat_rule`). From `repeat_rule_share` (20 %) repeating
+clicks in the music on, the side counts as sequenced music and the repeating clicks are left out of the count and
+the grade (`auto`); on music that does not loop the rule never applies, so nothing changes there. Per record the
+user can force the rule `on` or `off` (*records.repeat_rule*), which recounts every side of the record at once. A
+verdict always wins: *click* on a repeating hit counts it again, *false alarm* takes any click out. The metrics
+carry the state (`repeats.rule`: mode, active, share, removed) and the counts what was taken out (`counts.rule_music`).
+
+**Audible clicks** (`analysis.group_impulses`, `[analysis] click_group_ms`). The detector resolves impulses 1.5 ms
+apart and counts each one; a particle or a scratch makes the stylus bounce, so one audible click is often two or
+three impulses 2–20 ms apart, and the event list showed them as separate rows. Clicks and pops of the same region
+within 20 ms of each other (a chain of at most 50 ms) form one group; its strongest impulse stands for it and
+counts, the others do not (`why = group`), and a verdict on any member speaks for the group. Crackle is not grouped,
+its density is the measure. On eleven real sides the grouping took 6–16 % off the listed clicks in the music. The
+click floor of the alignment counts the silent groove the same way, so a floor measured before this change is a
+little higher than one measured after it, until the alignment is run again.
 
 **Click floor.** During alignment, the detector counts clicks and crackle in the silent groove of the test record.
 This is what the chain itself contributes (stylus, cartridge, static, dust on the test record). On real hardware,

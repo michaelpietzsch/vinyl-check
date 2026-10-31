@@ -164,15 +164,32 @@ zoomed clicks chart), listen with ▶ and decide:
 
 | Judgement | Meaning | Effect |
 |---|---|---|
-| *Click* | a real defect | confirmed, counts |
+| *Click* | a real defect | counts, even where the repeat rule had taken it out |
 | *False alarm* | the music itself (a drum hit, a pluck) | removed from counts, grade and scratch search |
-| *Unsure* | can't tell | stays as detected |
+| *Unsure* | can't tell | left to the rules |
 
 For skips, the choices are *run-out groove* (no damage) and *no skip* (rhythm or a loop). Judgements are applied
 immediately, survive re-analysis and are the training data for the [learning](measurement.md#learning) model.
 
 Judged rows disappear from the list so that you can work through the rest. *Show judged* brings them back for
 corrections and shows how many are hidden. The charts always show every detection, with false alarms in grey.
+
+### Sequenced music and audible clicks
+
+Electronic music is hard for any click detector: a drum-computer hit looks exactly like a click. The *Repeats*
+column says how often the same hit came back with the same music around it within ±8 s. From 20 % repeating
+clicks in the music on, the side counts as **sequenced music**: the repeating clicks are shown greyed with *not
+counted (repeats)* and left out of the grade; the line under the list says how many. Music that does not loop
+stays as it is. The selector *Rule for this record* (also on the record page) forces the rule on or off for every
+side of the record, and your own verdicts always win: *Click* on a greyed hit counts it again.
+
+A particle or a scratch makes the stylus bounce, so one audible click is often two or three impulses within 20 ms.
+The list shows the strongest with a chip such as *×3* and counts the group once; *show single impulses* lists the
+others too (*part of 0:15.6*). The most useful rows to judge are strong clicks without repeats in loud passages
+(music the rule missed?) and repeating ones in quiet passages (a defect the rule took?).
+
+Small ⓘ circles next to the grade, the *Repeats* column, the verdict column and the rule explain these features
+on hover, tap or keyboard focus.
 
 ## Cleaning comparison
 

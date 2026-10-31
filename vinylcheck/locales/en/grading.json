@@ -20,5 +20,10 @@
   },
   "uncalibrated": "Limits not calibrated yet: the grade is a rough estimate.",
   "floor_applied": "Clicks and crackle in quiet passages are reduced by the turntable baseline ({clicks} clicks, {ticks} crackle per minute in the silent groove of the test record).",
+  "repeat_rule_applied": "Sequenced music: {n} clicks that come back with the same music around them ({share} % of the clicks in the music) are not counted ({mode}); a verdict “click” on one of them counts it again.",
+  "repeat_rule_mode_auto": "rule applied automatically from {pct} % on",
+  "repeat_rule_mode_on": "rule switched on for this record",
+  "repeat_rule_mode_off": "rule switched off for this record",
+  "grouped": "{n} impulses within {ms} ms of a stronger one are counted with it as one audible click.",
   "not_in_grade": "Not part of the grade: {metrics}."
 }

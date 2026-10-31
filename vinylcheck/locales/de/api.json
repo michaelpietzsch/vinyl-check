@@ -126,6 +126,7 @@
   "label_invalid": "label muss einer der Werte {allowed} sein (oder null)",
   "recording_not_analyzed": "Aufnahme nicht gefunden oder nicht analysiert",
   "no_event_at_time": "Kein Ereignis zu dieser Zeit (±3 ms)",
+  "repeat_rule_invalid": "Die Wiederholer-Regel muss eines sein von: {allowed}",
   "no_skip_at_time": "Kein Rillensprung zu dieser Zeit (±2 s)",
   "too_many_items": "Zu viele Meldungen auf einmal",
   "spectrogram_failed": "Spektrogramm nicht berechenbar: {error}",

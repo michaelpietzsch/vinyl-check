@@ -20,5 +20,10 @@
   },
   "uncalibrated": "Grenzwerte noch nicht kalibriert: Note ist eine grobe Einschätzung.",
   "floor_applied": "Clicks und Knistern in ruhigen Passagen sind um den Laufwerksgrund vermindert ({clicks} Clicks, {ticks} Knistern je Minute in der stillen Rille der Testplatte).",
+  "repeat_rule_applied": "Sequenzierte Musik: {n} Clicks, die mit derselben Musik drumherum wiederkommen ({share} % der Clicks in der Musik), zählen nicht ({mode}); das Urteil „Knackser“ an einem davon zählt ihn wieder.",
+  "repeat_rule_mode_auto": "Regel greift automatisch ab {pct} %",
+  "repeat_rule_mode_on": "Regel für diese Platte eingeschaltet",
+  "repeat_rule_mode_off": "Regel für diese Platte ausgeschaltet",
+  "grouped": "{n} Impulse innerhalb von {ms} ms nach einem stärkeren zählen mit ihm als ein hörbarer Knackser.",
   "not_in_grade": "Nicht in der Note: {metrics}."
 }

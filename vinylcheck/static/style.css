@@ -492,3 +492,11 @@ details.guide li { margin: .25rem 0; }
 #pop h4 { font-size: .85rem; margin: .6rem 0 .2rem; }
 #pop p { margin: 0 0 .3rem; }
 #problems-box td { vertical-align: top; }
+/* Info circles: a small "i" that explains a feature on hover, tap or focus (catalog "info") */
+.info { display: inline-flex; align-items: center; justify-content: center; width: 1.05em; height: 1.05em; margin-left: .15em; border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font: italic 700 .72em/1 Georgia, serif; vertical-align: middle; cursor: help; }
+.info:hover, .info:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+/* Audible clicks: the representative of a group of impulses carries a count chip, the weaker members are listed muted */
+.grp { font-size: .72rem; padding: 0 .35rem; border-radius: .6rem; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--muted); }
+tr.rule-row td { opacity: .55; }
+tr.grp-row td { opacity: .4; font-style: italic; }
+select.inline { width: auto; display: inline-block; margin-left: .3rem; vertical-align: middle; }

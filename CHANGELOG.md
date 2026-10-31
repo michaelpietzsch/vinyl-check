@@ -5,16 +5,40 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] – 2026-11-01
 
 ### Added
 
-- **Repeats with the music** (experimental): for every click in the music the analysis counts how often the same
-  hit comes back within ±8 s in the same music around it. A sequenced drum hit repeats bar after bar, a defect does
-  not. The count is shown per detection (*Repeats*) and summed up above the list, with the clicks per minute
-  without the repeating ones; the grade does not use it yet. `repeat_filter = false` under `[analysis]` switches
-  it off. On a sequencer record half of the reported clicks repeated; on live, jazz and rock recordings 1–4 % did,
-  and none of 25 clicks a listener had judged defects.
+- **Repeats with the music**: for every click in the music the analysis counts how often the same hit comes back
+  within ±8 s in the same music around it. A sequenced drum hit repeats bar after bar, a defect does not. The count
+  is shown per detection (*Repeats*) and summed up under the list. `repeat_filter = false` under `[analysis]`
+  switches it off. On a sequencer record half of the reported clicks repeated; on live, jazz and rock recordings
+  1–4 % did, and none of 25 clicks a listener had judged defects. Checked against 28 verdicts by ear on a second
+  side: 19 of 20 repeating detections were music, 5 of 8 non-repeating ones defects.
+- **Sequenced music in the grade.** From 20 % repeating clicks in the music on, the side counts as sequenced music
+  and the repeating clicks are left out of count and grade (`repeat_rule = "auto"`, threshold `repeat_rule_share`);
+  music that does not loop is unchanged. A selector per record (*Rule for this record*: automatic, on, off) forces
+  the rule and recounts every side of the record at once. Verdicts always win: *Click* on a repeating hit counts it
+  again, *False alarm* takes any click out. The rows the rule took out stay in the list, greyed, with *not counted
+  (repeats)*. On the sequencer record this moved side A from G to VG and side B from VG to VG+, matching what the
+  listener heard; the damaged lead-in of both sides (no repeats) stays counted.
+- **Audible clicks.** Impulses within 20 ms of a stronger click or pop (the stylus bouncing off a particle or a
+  scratch, listed so far as two or three rows 2–20 ms apart) count with it as one click, as the ear hears them
+  (`click_group_ms`, 0 switches it off). The list shows the strongest with a *×3* chip and hides the others unless
+  *show single impulses* is on; a verdict on any of them speaks for the group. Crackle is not grouped. On eleven
+  real sides this took 6–16 % off the listed clicks in the music. The alignment's click floor is counted the same
+  way from the next run on.
+- **ⓘ explanations.** Small info circles next to the grade, the *Repeats* column, the verdict column and the rule
+  explain on hover, tap or keyboard focus what the feature does and how the grade is made (web catalog `info`).
+- Events from the API carry `why` (why a detection does not count: `label`, `rule`, `group` or null), `grp` (the
+  size of its audible group) and `grp_of` (the representative's time); the grade's explanation names the clicks
+  the rule and the grouping took out.
+
+### Changed
+
+- Grading scheme 6: stored analyses are counted and graded again at the first start (no audio is processed).
+  Sides analysed before 1.3.0 carry no repeat counts, so the rule cannot apply to them until they are analysed
+  again (↻); the audible grouping applies to all.
 
 ## [1.3.0] – 2026-10-31
 
@@ -515,7 +539,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.3

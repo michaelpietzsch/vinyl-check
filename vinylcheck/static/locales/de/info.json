@@ -1,0 +1,17 @@
+{
+  "repeats.title": "Wiederholt sich mit der Musik",
+  "repeats.text": "Zu jedem Click in der Musik sucht die Analyse innerhalb von ±8 s dieselbe Musik (±200 ms Höhen-Hüllkurve). Sitzt dort derselbe Schlag, wiederholt sich der Click: ein sequenzierter Drum-Schlag kommt Takt für Takt wieder, ein Fehler nicht. Die Zahl sagt, wie oft er wiederkam.",
+  "repeats.more": "Treffer im Abstand einer Umdrehung sind ausgenommen, das ist ein Kratzer. Musik ohne Loops (Rock, Jazz, Klassik) zeigt typisch 1–4 % Wiederholer, ein Drumcomputer 50 % und mehr.",
+  "repeat_rule.title": "Sequenzierte Musik",
+  "repeat_rule.text": "Elektronische Musik ist für jeden Knackser-Detektor schwer: ein Drumcomputer-Schlag sieht genauso aus wie ein Click. Ab 20 % Wiederholern unter den Clicks in der Musik gilt die Aufnahme als sequenziert, und die Wiederholer fallen aus Zählung und Note („automatisch“). Je Platte lässt sich die Regel fest ein- oder ausschalten.",
+  "repeat_rule.more": "Deine Urteile haben immer das letzte Wort: „Knackser“ an einem Wiederholer zählt ihn wieder, „Fehlalarm“ nimmt jeden Click heraus. Anteil und Anzahl stehen unter der Ereignisliste.",
+  "grouping.title": "Hörbare Knackser",
+  "grouping.text": "Ein Partikel oder Kratzer lässt die Nadel hüpfen: zwei oder drei Impulse innerhalb von 10–20 ms, die das Ohr als einen Knackser hört. Impulse innerhalb von 20 ms nach einem stärkeren zählen mit ihm als ein hörbarer Knackser; die Liste zeigt den stärksten mit „×3“ und blendet die anderen aus, solange „Einzelimpulse zeigen“ aus ist.",
+  "grouping.more": "Knistern wird nicht zusammengefasst, dort ist die Dichte das Maß. Der Laufwerksgrund aus der stillen Rille der Testplatte wird ab der nächsten Einmessung genauso gezählt.",
+  "grade_calc.title": "So entsteht die Note",
+  "grade_calc.text": "Die Note kommt aus den Clicks je Minute in der Musik (90 %) und den Pops je Minute (10 %), jeweils auf einer an gewaschenen Platten kalibrierten Skala. Gezählt werden hörbare Knackser, die weder deine Fehlalarme sind noch, bei sequenzierter Musik, Schläge, die sich mit der Musik wiederholen. Ruhige Passagen, Knistern und Rauschen stehen nur zur Information dabei.",
+  "grade_calc.more": "Die Grenzen der Skala siehst du beim Zeigen auf eine Note; die Erklärung unter der Note nennt alles, was herausgenommen wurde.",
+  "verdicts.title": "Deine Urteile",
+  "verdicts.text": "▶ anhören, dann urteilen. „Knackser“ zählt die Erkennung auch dann, wenn die Wiederholer-Regel sie herausgenommen hat, „Fehlalarm“ (die Musik selbst) nimmt sie sofort aus Zählung und Note, „unsicher“ überlässt es den Regeln. Urteile bleiben an der Stelle, überleben eine neue Analyse und trainieren das Stationsmodell.",
+  "verdicts.more": "Am wertvollsten: starke Clicks ohne Wiederholung in lauten Passagen (Musik, die die Regel verpasst hat?) und Wiederholer in leisen Stellen (ein Fehler, den die Regel genommen hat?)."
+}

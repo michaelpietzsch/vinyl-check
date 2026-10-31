@@ -1,0 +1,17 @@
+{
+  "repeats.title": "Repeats with the music",
+  "repeats.text": "For every click in the music the analysis looks for the same music (±200 ms of treble envelope) within ±8 s. If the same hit sits there as well, the click repeats: a sequenced drum hit comes back bar after bar, a defect does not. The number is how often it came back.",
+  "repeats.more": "Hits every revolution are excluded, that is a scratch. Music that does not loop (rock, jazz, classical) typically shows 1–4 % repeating clicks, a drum machine 50 % and more.",
+  "repeat_rule.title": "Sequenced music",
+  "repeat_rule.text": "Electronic music is hard for any click detector: a drum-computer hit looks exactly like a click. From 20 % repeating clicks in the music on, the recording counts as sequenced and the repeating clicks are left out of the count and the grade (“automatic”). Per record you can switch the rule on or off for good.",
+  "repeat_rule.more": "Your verdicts always win: “click” on a repeating hit counts it again, “false alarm” on any click takes it out. The share and the number taken out are shown under the event list.",
+  "grouping.title": "Audible clicks",
+  "grouping.text": "A particle or a scratch makes the stylus bounce: two or three impulses within 10–20 ms that the ear hears as one click. Impulses within 20 ms of a stronger one are counted with it as one audible click; the list shows the strongest with “×3” and hides the others unless “show single impulses” is on.",
+  "grouping.more": "Crackle is not grouped, its density is the measure. The turntable baseline from the silent groove of the test record is counted the same way from the next alignment run on.",
+  "grade_calc.title": "How the grade is made",
+  "grade_calc.text": "The grade comes from the clicks per minute in the music (90 %) and the pops per minute (10 %), each on a scale calibrated on cleaned records. Counted are audible clicks that are neither your false alarms nor, in sequenced music, hits that repeat with the music. Quiet passages, crackle and noise are shown for information only.",
+  "grade_calc.more": "Hover over a grade for the limits of the scale; the explanation under the grade names everything that was taken out.",
+  "verdicts.title": "Your verdicts",
+  "verdicts.text": "▶ listen, then judge. “Click” counts the detection even if the repeat rule took it out, “false alarm” (the music itself) takes it out of count and grade at once, “unsure” leaves it to the rules. Verdicts stay with the place, survive a new analysis and train the station model.",
+  "verdicts.more": "Most useful to judge: strong clicks without repeats in loud passages (music the rule missed?) and repeating ones in quiet passages (a defect the rule took?)."
+}

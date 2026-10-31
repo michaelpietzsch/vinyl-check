@@ -97,6 +97,10 @@ class AnalysisConfig:
     no_groove_dbfs: float = -75.0
     second_opinion: bool = True       # ask the grooveclean network about the candidates (needs PyTorch)
     repeat_filter: bool = True        # count how often each click in the music repeats with the music (repeats.py)
+    repeat_rule: str = "auto"         # clicks that repeat with the music do not count: "auto" (from repeat_rule_share
+                                      # of the clicks in the music on, i.e. sequenced music), "on", "off"
+    repeat_rule_share: float = 0.2    # "auto": the rule applies from this share of repeating clicks in the music
+    click_group_ms: float = 20.0      # impulses closer together than this are one audible click (0 = count impulses)
     clip_grace_s: float = CLIP_GRACE_S   # clipping: grace period at the start and end of the groove (settings)
     clip_mention: int = CLIP_MENTION     # … mention from this many samples in the music on (settings)
 
@@ -116,33 +120,109 @@ def labels_for(times: np.ndarray, labels: dict | None, tol_s: float = 0.003) -> 
     return out
 
 
+REPEAT_RULES = ("auto", "on", "off")
+GROUP_SPAN = 2.5            # a group of impulses spans at most this many times click_group_ms
+
+
+def group_impulses(t: np.ndarray, region: np.ndarray, kind: np.ndarray, strength: np.ndarray,
+                   group_ms: float, span: float = GROUP_SPAN) -> np.ndarray:
+    """Audible clicks: clicks and pops of the same region closer together than `group_ms` form one group. A particle
+    or a scratch makes the stylus bounce, two or three impulses within 10–20 ms that the ear hears as one click
+    (seen as rows 2 ms and 10 ms apart in the event list). Crackle is not grouped: its density is the measure.
+
+    Returns the index of the group's representative (its strongest impulse) per event; an impulse that stands
+    alone points at itself. A group spans at most span × group_ms from its first impulse."""
+    n = len(t)
+    rep_of = np.arange(n)
+    if group_ms <= 0 or n < 2:
+        return rep_of
+    gap, limit = group_ms / 1000.0, span * group_ms / 1000.0
+    cand = np.flatnonzero(np.isin(kind, ("pop", "click")))
+    order = cand[np.argsort(t[cand], kind="stable")]
+    start = 0
+    for k in range(1, len(order) + 1):
+        if (k == len(order) or t[order[k]] - t[order[k - 1]] > gap or region[order[k]] != region[order[k - 1]]
+                or t[order[k]] - t[order[start]] > limit):
+            members = order[start:k]
+            if len(members) > 1:
+                rep_of[members] = members[np.argmax(strength[members])]
+            start = k
+    return rep_of
+
+
+def count_mask(kind: np.ndarray, region: np.ndarray, label: np.ndarray, rep: np.ndarray | None, t: np.ndarray,
+               strength: np.ndarray, cfg: "AnalysisConfig") -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    """Which detections count. In this order: the audible grouping (group_impulses: only the representative of a
+    group can count, a verdict on any member applies to the group), the verdicts (music → no, defect → yes), then
+    the repeat rule (a click that repeats with the music is a sequenced hit, not a defect; cfg.repeat_rule).
+
+    Returns (counted, raw, why, info): `raw` is the mask by verdicts alone (the figures about the repeats are
+    reported against it), `why` says per event why it does not count ("label", "rule", "group", else None) and
+    `info` carries the figures for the metrics (counts of what was taken out, the state of the rule)."""
+    n = len(kind)
+    label = np.array(list(label), dtype=object)
+    rep_of = group_impulses(t, region, kind, strength, cfg.click_group_ms)
+    member = rep_of != np.arange(n)
+    # a verdict on any member of a group speaks for the group: the representative inherits it ("defect" first)
+    for i in np.flatnonzero(member):
+        if label[i] and not label[rep_of[i]]:
+            label[rep_of[i]] = label[i]
+        elif label[i] == "defect" and label[rep_of[i]] != "defect":
+            label[rep_of[i]] = "defect"
+    raw = (label != "music") & ~member
+    music_click = (region == "music") & np.isin(kind, ("pop", "click"))
+    share = None
+    rpt = repeats.repeating(rep) if rep is not None and len(rep) else np.zeros(n, bool)
+    base = raw & music_click
+    if rep is not None and base.any():
+        share = round(float(np.sum(base & rpt) / np.sum(base)), 3)
+    mode = cfg.repeat_rule if cfg.repeat_rule in REPEAT_RULES else "auto"
+    active = mode == "on" or (mode == "auto" and share is not None and share >= cfg.repeat_rule_share)
+    by_rule = base & rpt & (label != "defect") if active else np.zeros(n, bool)
+    counted = raw & ~by_rule
+    why = np.array([None] * n, dtype=object)
+    why[member] = "group"
+    why[~member & (label == "music")] = "label"
+    why[by_rule] = "rule"
+    info = {"grouped": int(np.sum(member & music_click)), "grouped_all": int(np.sum(member)),
+            "group_ms": float(cfg.click_group_ms), "labeled_music": int(np.sum(why == "label")),
+            "rule": {"mode": mode, "active": bool(active), "share": share, "threshold": cfg.repeat_rule_share,
+                     "removed": int(np.sum(by_rule))}}
+    return counted, raw, why, info
+
+
 def tally(kind: np.ndarray, region: np.ndarray, counted: np.ndarray, gc: np.ndarray | None,
           quiet_min: float, music_min: float, groove_min: float, floor: dict | None,
-          rep: np.ndarray | None = None) -> dict:
+          rep: np.ndarray | None = None, raw: np.ndarray | None = None, info: dict | None = None) -> dict:
     """Counts and per-minute metrics from the events; shared by analyze() and recount().
 
     `counted` is either a boolean mask (raw count) or a weight per event, 0…1 (estimated count from the
     learning model). `gc` holds the second opinion per event (NaN where there is none); `rep` the repeats with
-    the music per event (repeats.py; NaN where there is no count)."""
+    the music per event (repeats.py; NaN where there is no count). `raw` is the mask by verdicts alone (the
+    figures about the repeats are reported against it, default `counted`), `info` what count_mask took out."""
     weighted = counted.dtype != bool
     wts = counted.astype(float)
+    rw = (counted if raw is None else raw).astype(float)
 
-    def count(reg=None, kinds=("pop", "click", "tick"), extra=None):
+    def count(reg=None, kinds=("pop", "click", "tick"), extra=None, w=None):
         m = np.isin(kind, kinds) & (region != "excluded")
         if reg:
             m &= region == reg
         if extra is not None:
             m &= extra
-        s = float(np.sum(wts[m]))
-        return round(s, 1) if weighted else int(round(s))
+        s = float(np.sum((wts if w is None else w)[m]))
+        return round(s, 1) if weighted and w is None else int(round(s))
 
     enough_quiet = quiet_min >= 0.1   # at least 6 s of quiet groove
+    info = info or {}
     m = {
         "counts": {
             "pop": count(kinds=("pop",)), "click": count(kinds=("click",)), "tick": count(kinds=("tick",)),
             "quiet": count("quiet"), "music": count("music"),
             "excluded": int(np.sum(region == "excluded")),
-            "labeled_music": 0 if weighted else int(np.sum(~counted)),
+            "labeled_music": 0 if weighted else int(info["labeled_music"] if "labeled_music" in info else np.sum(~counted)),
+            "rule_music": int((info.get("rule") or {}).get("removed") or 0),
+            "grouped": int(info.get("grouped") or 0),
         },
         "clicks_quiet_per_min": round(count("quiet", ("pop", "click")) / quiet_min, 2) if enough_quiet else None,
         "ticks_quiet_per_min": round(count("quiet", ("tick",)) / quiet_min, 2) if enough_quiet else None,
@@ -159,17 +239,22 @@ def tally(kind: np.ndarray, region: np.ndarray, counted: np.ndarray, gc: np.ndar
                                                if music_min > 0 else None)
     m["second_opinion"] = so
     # Repeats with the music (repeats.py): how many clicks in the music are sequenced hits, and the count without
-    # them. A finding next to the count, not (yet) the figure the grade uses.
+    # them, reported against the detections by verdicts alone (`raw`). With the rule active (count_mask) the
+    # repeating ones are already out of the count above.
     rp = {"available": rep is not None, "min_repeats": repeats.MIN_REPEATS}
     if rep is not None and len(rep):
         rpt = repeats.repeating(rep)
-        n = count("music", ("pop", "click"))
+        n = count("music", ("pop", "click"), w=rw)
         rp["music_clicks"] = n
-        rp["repeated_music"] = count("music", ("pop", "click"), rpt)
+        rp["repeated_music"] = count("music", ("pop", "click"), rpt, w=rw)
         rp["share_music"] = round(rp["repeated_music"] / n, 3) if n else None
-        rp["clicks_music_unrepeated_per_min"] = (round(count("music", ("pop", "click"), ~rpt) / music_min, 2)
+        rp["clicks_music_unrepeated_per_min"] = (round(count("music", ("pop", "click"), ~rpt, w=rw) / music_min, 2)
                                                 if music_min > 0 else None)
+    if info.get("rule"):
+        rp["rule"] = info["rule"]
     m["repeats"] = rp
+    if "group_ms" in info:
+        m["click_group_ms"] = info["group_ms"]
     for key, fk in (("clicks_quiet_per_min", "clicks_per_min"), ("ticks_quiet_per_min", "ticks_per_min")):
         raw, fv = m.get(key), (floor or {}).get(fk)
         m[key.replace("_per_min", "_net_per_min")] = (None if raw is None or fv is None
@@ -238,13 +323,16 @@ def track_stats(bounds: list[dict], t: np.ndarray, kind: np.ndarray, region: np.
 
 def learned_metrics(m: dict, events: list[dict], kind: np.ndarray, region: np.ndarray, model: dict | None,
                     quiet_min: float, music_min: float, groove_min: float,
-                    zero_point: dict | None = None) -> dict | None:
+                    zero_point: dict | None = None, keep: np.ndarray | None = None) -> dict | None:
     """Estimated genuine clicks from the learning model (learning.estimate): the same metrics as the raw count,
     only weighted. None without a model. `zero_point`: the recording's turntable profile (learning.zero_point), used
-    by models of feature version 2."""
+    by models of feature version 2. `keep`: events the count_mask took out for good (grouped impulses, the repeat
+    rule) get weight 0."""
     if not model:
         return None
     wts, _ = learning.estimate(events, model, m.get("music_ref_dbfs"), zero_point)
+    if keep is not None:
+        wts = np.asarray(wts, float) * keep
     est = tally(kind, region, wts, None, quiet_min, music_min, groove_min, m.get("floor"))
     usable = [k for k, v in (model.get("kinds") or {}).items() if v.get("usable")]
     return {"model_id": model.get("id"), "usable": usable, "counts": est["counts"],
@@ -266,28 +354,43 @@ def graded_view(m: dict, learn_grade: bool) -> dict:
     return g
 
 
+def event_arrays(events: list[dict]) -> dict:
+    """The stored events of a recording as arrays (kind, region, label, t, strength, gc, rep); gc and rep are None
+    when no event has a value."""
+    def opt(key):
+        vals = [e.get(key) for e in events]
+        return (np.array([(np.nan if v is None else float(v)) for v in vals])
+                if any(v is not None for v in vals) else None)
+    return {"kind": np.array([e["kind"] for e in events], dtype=object),
+            "region": np.array([e["region"] for e in events], dtype=object),
+            "label": np.array([e.get("label") for e in events], dtype=object),
+            "t": np.array([float(e["t"]) for e in events], dtype=float),
+            "strength": np.array([float(e.get("strength") or 0.0) for e in events], dtype=float),
+            "gc": opt("gc"), "rep": opt("rep")}
+
+
 def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConfig(),
             skip_labels: dict | None = None, warnings: list | None = None,
             learned: dict | None = None, learn_grade: bool = False,
-            zero_point: dict | None = None) -> tuple[dict, dict]:
+            zero_point: dict | None = None, acfg: AnalysisConfig | None = None) -> tuple[dict, dict]:
     """Recompute counts and grade of a stored analysis after labels have changed.
 
     Returns (metrics, grading) with the same keys as analyze(). With `skip_labels` the groove skips are
     reclassified as well; the `warnings` list (if given) is then updated in place with the new skip warning.
-    `zero_point` is the recording's turntable profile for a learned model of feature version 2."""
-    kind = np.array([e["kind"] for e in events], dtype=object)
-    region = np.array([e["region"] for e in events], dtype=object)
-    counted = np.array([e.get("label") != "music" for e in events], dtype=bool)
-    gcs = [e.get("gc") for e in events]
-    gc = np.array([(np.nan if v is None else float(v)) for v in gcs]) if any(v is not None for v in gcs) else None
-    reps = [e.get("rep") for e in events]
-    rep = np.array([(np.nan if v is None else float(v)) for v in reps]) if any(v is not None for v in reps) else None
+    `zero_point` is the recording's turntable profile for a learned model of feature version 2; `acfg` carries
+    the repeat rule and the audible grouping (count_mask), by default the built-in values."""
+    acfg = acfg or AnalysisConfig()
+    ea = event_arrays(events)
+    kind, region, gc, rep = ea["kind"], ea["region"], ea["gc"], ea["rep"]
+    counted, raw, _why, info = count_mask(kind, region, ea["label"], rep, ea["t"], ea["strength"], acfg)
     quiet_min = (metrics.get("quiet_s") or 0) / 60
     groove_min = (metrics.get("groove_s") or 0) / 60
     music_min = max(groove_min - quiet_min, 0.0)
     m = dict(metrics)
-    m.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, metrics.get("floor"), rep))
-    m["learned"] = learned_metrics(m, events, kind, region, learned, quiet_min, music_min, groove_min, zero_point)
+    m.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, metrics.get("floor"), rep,
+                   raw=raw, info=info))
+    m["learned"] = learned_metrics(m, events, kind, region, learned, quiet_min, music_min, groove_min, zero_point,
+                                   keep=(counted | ~raw))
     if m["learned"] is not None:
         m["learned"]["graded"] = bool(learn_grade and m["learned"]["usable"])
     if skip_labels is not None:
@@ -310,7 +413,7 @@ def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConf
 def what_if(metrics: dict, events: list[dict], skip_labels: dict | None, ignore_events=(), ignore_skips=(),
             gcfg: GradingConfig = GradingConfig(), learned: dict | None = None, learn_grade: bool = False,
             tol_ev_s: float = 0.003, tol_skip_s: float = 2.0,
-            zero_point: dict | None = None) -> tuple[dict, dict, dict]:
+            zero_point: dict | None = None, acfg: AnalysisConfig | None = None) -> tuple[dict, dict, dict]:
     """What-if: count and grade as if the given detections were not there ("what would the grade be without
     this skip?").
 
@@ -337,7 +440,7 @@ def what_if(metrics: dict, events: list[dict], skip_labels: dict | None, ignore_
         sl[t] = "no_skip"
         hit_sk += 1
     m, g = recount(metrics, kept, gcfg, skip_labels=sl, warnings=None, learned=learned, learn_grade=learn_grade,
-                   zero_point=zero_point)
+                   zero_point=zero_point, acfg=acfg)
     return m, g, {"events": hit_ev, "skips": hit_sk}
 
 
@@ -583,7 +686,6 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         gc[strong_idx] = p
         so_seconds = round(time.time() - t_so, 1)
     label = labels_for(ev["t"], labels)
-    counted = np.array([lb != "music" for lb in label], dtype=bool)
     # Repeats with the music: clicks and pops in the music only (repeats.py)
     rep = None
     if cfg.repeat_filter:
@@ -591,6 +693,9 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         rep = np.full(len(ev), np.nan)
         if sel.size:
             rep[sel] = repeats.count(audio, sr, ev["t"][sel], ev["ch"][sel], rpm=rpm)
+    # What counts: audible grouping, verdicts, repeat rule (count_mask)
+    counted, raw, _why, count_info = count_mask(kind, region, label, rep, ev["t"].astype(float),
+                                                ev["strength"].astype(float), cfg)
 
     groove_min = (ge - gs) * HOP_S / 60
     quiet_min = float(np.sum(quiet)) * HOP_S / 60
@@ -618,7 +723,8 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         else round(noise_dbfs - chain_db, 2),
         "separable": seg["separable"],
     }
-    metrics.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, floor, rep))
+    metrics.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, floor, rep, raw=raw,
+                         info=count_info))
     metrics["second_opinion"].update({"seconds": so_seconds, "cached": so_cached, "computed": len(so_new)})
     metrics["floor"] = floor
     metrics["detect"] = {"threshold": cfg.detect.threshold, "stripe_db": cfg.detect.stripe_db, "stripe_ms": cfg.detect.stripe_ms}
