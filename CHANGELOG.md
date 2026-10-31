@@ -5,6 +5,17 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Repeats with the music** (experimental): for every click in the music the analysis counts how often the same
+  hit comes back within ±8 s in the same music around it. A sequenced drum hit repeats bar after bar, a defect does
+  not. The count is shown per detection (*Repeats*) and summed up above the list, with the clicks per minute
+  without the repeating ones; the grade does not use it yet. `repeat_filter = false` under `[analysis]` switches
+  it off. On a sequencer record half of the reported clicks repeated; on live, jazz and rock recordings 1–4 % did,
+  and none of 25 clicks a listener had judged defects.
+
 ## [1.3.0] – 2026-10-31
 
 ### Added

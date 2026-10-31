@@ -59,6 +59,9 @@ spot, re-analyse with a different sensitivity and compare recordings later.
   per ITU-R BS.1770, stereo correlation, rumble, hum).
 - Interactive overview, level and spectrogram charts: click any point to listen, drag to zoom, and play back only
   the detected clicks to check them by ear.
+- Sequenced music: every click in the music carries how often the same hit comes back with the same music around
+  it (a drum machine repeats, a defect does not), shown per detection and as clicks per minute without the
+  repeating ones (experimental, not yet in the grade).
 
 **Cleaning before and after**
 - Record a side before and after cleaning. vinyl-check aligns both recordings sample-accurately and labels every

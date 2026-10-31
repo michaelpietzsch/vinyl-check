@@ -118,7 +118,9 @@ CREATE TABLE IF NOT EXISTS analyses (
 CREATE TABLE IF NOT EXISTS events (
     recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
     t REAL NOT NULL, dur_ms REAL, strength REAL, amp_dbfs REAL,
-    ch INTEGER, kind TEXT, region TEXT
+    ch INTEGER, kind TEXT, region TEXT,
+    gc REAL, label TEXT,
+    rep INTEGER
 );
 CREATE INDEX IF NOT EXISTS events_rec ON events(recording_id, t);
 CREATE TABLE IF NOT EXISTS so_cache (
@@ -346,7 +348,8 @@ class DB:
             self.conn.execute("ALTER TABLE recordings ADD COLUMN findings TEXT NOT NULL DEFAULT '[]'")
             rcols = rcols | {"findings"}
         ecols = {r[1] for r in self.conn.execute("PRAGMA table_info(events)")}
-        for col in ("gc REAL", "label TEXT"):                                          # 0.7.0: second opinion, verdict
+        for col in ("gc REAL", "label TEXT",                                           # 0.7.0: second opinion, verdict
+                    "rep INTEGER"):                                                        # 1.4.0: repeats with the music
             if col.split()[0] not in ecols:
                 self.conn.execute(f"ALTER TABLE events ADD COLUMN {col}")
         rec_cols = {r[1] for r in self.conn.execute("PRAGMA table_info(records)")}
@@ -807,10 +810,10 @@ class DB:
                     rec_id, version, json.dumps(res["metrics"]), json.dumps(res["grading"]),
                     json.dumps(res["warnings"]), json.dumps(res["overview"]),
                     res["grading"]["grade"], res["grading"]["score"], duration_s, time.time()))
-                c.executemany("INSERT INTO events (recording_id, t, dur_ms, strength, amp_dbfs, ch, kind, region, gc, label)"
-                              " VALUES (?,?,?,?,?,?,?,?,?,?)", [
+                c.executemany("INSERT INTO events (recording_id, t, dur_ms, strength, amp_dbfs, ch, kind, region, gc, label,"
+                              " rep) VALUES (?,?,?,?,?,?,?,?,?,?,?)", [
                     (rec_id, e["t"], e["dur_ms"], e["strength"], e["amp_dbfs"], e["ch"],
-                     e["kind"], e["region"], e.get("gc"), e.get("label")) for e in res["events"]])
+                     e["kind"], e["region"], e.get("gc"), e.get("label"), e.get("rep")) for e in res["events"]])
                 c.execute("COMMIT")
             except Exception:
                 c.execute("ROLLBACK")
@@ -841,7 +844,7 @@ class DB:
 
     def events(self, rec_id: int, limit: int | None = None, order: str = "t") -> list[dict]:
         order_sql = "strength DESC" if order == "strength" else "t"
-        sql = f"SELECT t, dur_ms, strength, amp_dbfs, ch, kind, region, gc, label FROM events WHERE recording_id = ? ORDER BY {order_sql}"
+        sql = f"SELECT t, dur_ms, strength, amp_dbfs, ch, kind, region, gc, label, rep FROM events WHERE recording_id = ? ORDER BY {order_sql}"
         if limit:
             sql += f" LIMIT {int(limit)}"
         return self.q(sql, (rec_id,))

@@ -69,6 +69,7 @@ discogs_sync_minutes = 15               # sync the collection this often; a sear
 # click_strength = 25.0                  # from this strength a "click", below it "crackle"
 # pop_dbfs = -20.0                       # from this level a "pop"
 # no_groove_dbfs = -75.0                 # quieter = stylus up (only without calibration)
+# repeat_filter = true                   # count how often a click in the music repeats with the music (sequenced hits)
 
 # [grading]                              # upper limits per grade: NM, VG+, VG, G+, G (above: F)
 # calibrated = false                     # true once checked against records of known condition

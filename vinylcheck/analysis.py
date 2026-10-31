@@ -26,7 +26,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import ndimage, signal
 
-from . import detect, i18n, learning, skips, technical, second_opinion
+from . import detect, i18n, learning, repeats, skips, technical, second_opinion
 from .grading import GradingConfig, grade
 from .measure import runs as _runs
 
@@ -96,6 +96,7 @@ class AnalysisConfig:
     pop_dbfs: float = -20.0
     no_groove_dbfs: float = -75.0
     second_opinion: bool = True       # ask the grooveclean network about the candidates (needs PyTorch)
+    repeat_filter: bool = True        # count how often each click in the music repeats with the music (repeats.py)
     clip_grace_s: float = CLIP_GRACE_S   # clipping: grace period at the start and end of the groove (settings)
     clip_mention: int = CLIP_MENTION     # … mention from this many samples in the music on (settings)
 
@@ -116,11 +117,13 @@ def labels_for(times: np.ndarray, labels: dict | None, tol_s: float = 0.003) -> 
 
 
 def tally(kind: np.ndarray, region: np.ndarray, counted: np.ndarray, gc: np.ndarray | None,
-          quiet_min: float, music_min: float, groove_min: float, floor: dict | None) -> dict:
+          quiet_min: float, music_min: float, groove_min: float, floor: dict | None,
+          rep: np.ndarray | None = None) -> dict:
     """Counts and per-minute metrics from the events; shared by analyze() and recount().
 
     `counted` is either a boolean mask (raw count) or a weight per event, 0…1 (estimated count from the
-    learning model). `gc` holds the second opinion per event (NaN where there is none)."""
+    learning model). `gc` holds the second opinion per event (NaN where there is none); `rep` the repeats with
+    the music per event (repeats.py; NaN where there is no count)."""
     weighted = counted.dtype != bool
     wts = counted.astype(float)
 
@@ -155,6 +158,18 @@ def tally(kind: np.ndarray, region: np.ndarray, counted: np.ndarray, gc: np.ndar
         so["clicks_music_confirmed_per_min"] = (round(count("music", ("pop", "click"), ok) / music_min, 2)
                                                if music_min > 0 else None)
     m["second_opinion"] = so
+    # Repeats with the music (repeats.py): how many clicks in the music are sequenced hits, and the count without
+    # them. A finding next to the count, not (yet) the figure the grade uses.
+    rp = {"available": rep is not None, "min_repeats": repeats.MIN_REPEATS}
+    if rep is not None and len(rep):
+        rpt = repeats.repeating(rep)
+        n = count("music", ("pop", "click"))
+        rp["music_clicks"] = n
+        rp["repeated_music"] = count("music", ("pop", "click"), rpt)
+        rp["share_music"] = round(rp["repeated_music"] / n, 3) if n else None
+        rp["clicks_music_unrepeated_per_min"] = (round(count("music", ("pop", "click"), ~rpt) / music_min, 2)
+                                                if music_min > 0 else None)
+    m["repeats"] = rp
     for key, fk in (("clicks_quiet_per_min", "clicks_per_min"), ("ticks_quiet_per_min", "ticks_per_min")):
         raw, fv = m.get(key), (floor or {}).get(fk)
         m[key.replace("_per_min", "_net_per_min")] = (None if raw is None or fv is None
@@ -265,11 +280,13 @@ def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConf
     counted = np.array([e.get("label") != "music" for e in events], dtype=bool)
     gcs = [e.get("gc") for e in events]
     gc = np.array([(np.nan if v is None else float(v)) for v in gcs]) if any(v is not None for v in gcs) else None
+    reps = [e.get("rep") for e in events]
+    rep = np.array([(np.nan if v is None else float(v)) for v in reps]) if any(v is not None for v in reps) else None
     quiet_min = (metrics.get("quiet_s") or 0) / 60
     groove_min = (metrics.get("groove_s") or 0) / 60
     music_min = max(groove_min - quiet_min, 0.0)
     m = dict(metrics)
-    m.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, metrics.get("floor")))
+    m.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, metrics.get("floor"), rep))
     m["learned"] = learned_metrics(m, events, kind, region, learned, quiet_min, music_min, groove_min, zero_point)
     if m["learned"] is not None:
         m["learned"]["graded"] = bool(learn_grade and m["learned"]["usable"])
@@ -567,6 +584,13 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         so_seconds = round(time.time() - t_so, 1)
     label = labels_for(ev["t"], labels)
     counted = np.array([lb != "music" for lb in label], dtype=bool)
+    # Repeats with the music: clicks and pops in the music only (repeats.py)
+    rep = None
+    if cfg.repeat_filter:
+        sel = np.flatnonzero(strong & (region == "music"))
+        rep = np.full(len(ev), np.nan)
+        if sel.size:
+            rep[sel] = repeats.count(audio, sr, ev["t"][sel], ev["ch"][sel], rpm=rpm)
 
     groove_min = (ge - gs) * HOP_S / 60
     quiet_min = float(np.sum(quiet)) * HOP_S / 60
@@ -594,7 +618,7 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         else round(noise_dbfs - chain_db, 2),
         "separable": seg["separable"],
     }
-    metrics.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, floor))
+    metrics.update(tally(kind, region, counted, gc, quiet_min, music_min, groove_min, floor, rep))
     metrics["second_opinion"].update({"seconds": so_seconds, "cached": so_cached, "computed": len(so_new)})
     metrics["floor"] = floor
     metrics["detect"] = {"threshold": cfg.detect.threshold, "stripe_db": cfg.detect.stripe_db, "stripe_ms": cfg.detect.stripe_ms}
@@ -687,8 +711,10 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         {"t": round(float(e["t"]), 5), "dur_ms": round(float(e["dur_ms"]), 3),
          "strength": round(float(e["strength"]), 2), "amp_dbfs": round(float(e["amp_dbfs"]), 2),
          "ch": int(e["ch"]), "kind": str(k), "region": str(r),
-         "gc": None if gc is None or np.isnan(g) else round(float(g), 3), "label": lb}
-        for e, k, r, g, lb in zip(ev, kind, region, gc if gc is not None else [np.nan] * len(ev), label)
+         "gc": None if gc is None or np.isnan(g) else round(float(g), 3), "label": lb,
+         "rep": None if rep is None or np.isnan(rp) else int(rp)}
+        for e, k, r, g, lb, rp in zip(ev, kind, region, gc if gc is not None else [np.nan] * len(ev), label,
+                                      rep if rep is not None else [np.nan] * len(ev))
     ]
     return _py({"metrics": metrics, "grading": grade(metrics, gcfg, floor), "warnings": warnings,
                 "events": events, "overview": overview, "so_new": so_new})

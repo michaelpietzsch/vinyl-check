@@ -153,6 +153,20 @@ Code: `analysis.py`
 | scratches | clicks that repeat at the revolution period (±0.6 %) for at least 4 revolutions. A scratch across several grooves shows up as a chain, and dust does not. |
 | clipping | clipped samples in the groove, excluding 5 s after touch-down and before lift-off and everything after the end of the music. Mentioned from 200 samples, no grade from 500. |
 
+**Repeats with the music** (`repeats.py`, experimental). Electronic music with a drum machine or a sequencer plays
+the same hard transient bar after bar, and to the detector such a hit is a click: on one sequencer record it
+reported 75 clicks per minute in the music. Timing alone (is the detection on the beat?) did not separate them,
+because the tempo drifts over a side. What does: a defect sits in music that occurs once, a sequenced hit in
+music that comes back. For every click or pop in the music the treble envelope around it (±0.2 s) is compared
+with the envelope within ±8 s; where the surroundings match (normalized cross-correlation ≥ 0.8, at least 0.25 s
+away, not at a multiple of one revolution, which is a scratch) the spike must be there too (within ±5 ms, its
+jump within 8 dB of the candidate's, at least 60 % of it and at least 6 dB). Two or more such places make the
+detection *repeating*. The count is stored per event (`rep`) and summarised in the metrics (`repeats`: share of
+the music clicks that repeat, clicks per minute without them). Measured on real recordings: 50 % of the music
+clicks of the sequencer record repeated, 1–4 % on live rock, jazz and studio rock (coincidences: a click within a
+few milliseconds of a transient the music itself repeats), none of 25 clicks a listener had judged defects. The grade does not use the
+figure yet; that waits for more judgements by ear and master comparisons.
+
 **Click floor.** During alignment, the detector counts clicks and crackle in the silent groove of the test record.
 This is what the chain itself contributes (stylus, cartridge, static, dust on the test record). On real hardware,
 an entry-level USB chain produced several hundred hits per minute there, and a high-end chain a few dozen. Quiet-passage
