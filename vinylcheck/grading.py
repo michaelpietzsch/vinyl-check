@@ -235,6 +235,8 @@ def grade(metrics: dict, cfg: GradingConfig = GradingConfig(), floor: dict | Non
                               share=round(100 * (rule.get("share") or 0)),
                               mode=i18n.msg(f"grading.repeat_rule_mode_{mode}",
                                             pct=round(100 * (rule.get("threshold") or 0.2)))))
+    if (metrics.get("counts") or {}).get("shocks"):
+        hints.append(i18n.msg("grading.shocks", n=metrics["counts"]["shocks"]))
     if (metrics.get("counts") or {}).get("grouped"):
         hints.append(i18n.msg("grading.grouped", n=metrics["counts"]["grouped"],
                               ms=round(metrics.get("click_group_ms") or 20)))

@@ -5,6 +5,19 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] – 2026-11-01
+
+### Added
+
+- **Mechanical shocks do not count.** The needle drop, the dust cover closing or a hand on the plinth reach the
+  stylus as an impulse followed by the tonearm resonance ringing below 25 Hz for a few hundred milliseconds; a
+  click from the groove has no such tail. Every click or pop candidate now carries its shock gain (`shock`, the
+  rise of the sub-25 Hz energy after the impulse against before it, lateral or vertical); from 15 dB on it is a
+  shock, left out of count and grade and listed as *not counted (shock)*, a verdict “click” counts it again.
+  On nine real sides the needle drops rose by 28–53 dB, every click in the music and every judged defect by
+  10 dB at most. `shock_filter = false` under `[analysis]` switches it off; sides analysed before 1.4.2 carry no
+  shock gain until analysed again.
+
 ## [1.4.1] – 2026-11-01
 
 ### Changed
@@ -556,7 +569,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.2.0...v1.3.0

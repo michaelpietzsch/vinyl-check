@@ -1090,6 +1090,7 @@ const EV_DEFAULT_SORT = { key: "t", dir: 1 };
 // Why a detection does not count, from the server's view plus a verdict given since: a verdict "false alarm" takes it
 // out, "click" puts it back (unless it is a weaker impulse of an audible group, which never counts on its own).
 const whyOf = (e) => (e.skip ? null : e.label === "music" ? "label" : e.label === "defect" ? (e.why === "group" ? "group" : null) : e.why === "label" ? null : e.why || null);
+const byRules = (e) => whyOf(e) === "rule" || whyOf(e) === "shock";          // taken out by a rule, not by a verdict
 state.showImpulses = (() => { try { return localStorage.getItem("vc-show-impulses") === "1"; } catch (_) { return false; } })();
 // By default the list holds what the grade is made of: clicks and pops in the music. Crackle, the pauses and the
 // lead-in/run-out groove (information only) come in with "show everything".
@@ -1180,8 +1181,8 @@ function eventsTable(rows0, rec, sort) {
   rows0 = rows0.map((e) => (e.skip ? e : { ...e, label: evLabel(e, rec) }));
   if (!state.showAll) rows0 = rows0.filter(forGrade);
   if (!state.showImpulses) rows0 = rows0.filter((e) => whyOf(e) !== "group");   // the weaker impulses of a group
-  const nRule = rows0.filter((e) => whyOf(e) === "rule" && !e.label).length;
-  if (!state.showRule) rows0 = rows0.filter((e) => whyOf(e) !== "rule" || e.label);
+  const nRule = rows0.filter((e) => byRules(e) && !e.label).length;
+  if (!state.showRule) rows0 = rows0.filter((e) => !byRules(e) || e.label);
   const nJudged = rows0.filter((e) => e.label).length;
   if (!state.showJudged) rows0 = rows0.filter((e) => !e.label);
   const cnt = $("#ev-judged-n"); if (cnt) cnt.textContent = nJudged ? T(state.showJudged ? "recording.judged_count" : "recording.judged_count_hidden", { n: nJudged }) : "";
@@ -1201,6 +1202,7 @@ function eventsTable(rows0, rec, sort) {
     : e.region === "excluded" ? `<td class="wi-cell hint" title="${esc(T("recording.wi_never_title"))}">${T("recording.wi_never")}</td>`
     : whyOf(e) === "label" ? `<td class="wi-cell hint" title="${esc(T("recording.wi_false_alarm_title"))}">${T("recording.wi_not_counted")}</td>`
     : whyOf(e) === "rule" ? `<td class="wi-cell hint" title="${esc(T("recording.wi_rule_title"))}">${T("recording.wi_rule")}</td>`
+    : whyOf(e) === "shock" ? `<td class="wi-cell hint" title="${esc(T("recording.wi_shock_title", { db: num(e.shock, 0) }))}">${T("recording.wi_shock")}</td>`
     : whyOf(e) === "group" ? `<td class="wi-cell hint" title="${esc(T("recording.wi_part_of_title", { ms: groupMs }))}">${T("recording.wi_part_of", { t: fmtT(e.grp_of) })}</td>` : wiBtn("ev", e.t, wi.ev.has(e.t)));
   const grpChip = (e) => (e.grp && whyOf(e) !== "group" ? ` <span class="grp" title="${esc(T("recording.grp_title", { n: e.grp, ms: groupMs }))}">×${e.grp}</span>` : "");
   const off = (e) => (e.skip ? wi.sk.has(e.t) : wi.ev.has(e.t));
@@ -1210,7 +1212,7 @@ function eventsTable(rows0, rec, sort) {
   const row = (e) => e.skip
     ? `<tr class="skip-row ${e.label ? "muted-row" : ""} ${off(e) ? "wi-off" : ""}"><td>${fmtT(e.t)}</td><td><b>${EVKIND.skip}</b></td><td>${T("recording.skip_grooves", { n: e.skip.grooves, repeats: e.skip.repeats })}${e.skip.repeats >= 4 ? " ⚠" : ""} · ${T("recording.skip_at", { pct: num(e.skip.position_pct, 0) })}${e.skip.radius_mm ? ` · r ≈ ${e.skip.radius_mm} mm` : ""}${skipTrack(e)}</td><td class="num" title="${esc(T("recording.confidence"))}">${num(e.strength, 2)}</td><td class="num">–</td><td>–</td><td class="num">–</td><td class="num">–</td><td>${playBtn(e)}</td>
         <td class="audit">${SKIP_JUDGE.map(([l, txt, tip]) => `<button class="link ${e.label === l ? "chosen" : ""}" data-skip-label="${l}" data-t="${e.t}" data-rec="${rec.id}" title="${esc(tip)}">${txt}</button>`).join(" ")}${e.label ? ` <button class="link" data-skip-label="" data-t="${e.t}" data-rec="${rec.id}" title="${esc(T("recording.verdict_withdraw"))}">×</button>` : ""}</td>${wiCell(e)}</tr>`
-    : `<tr class="${whyOf(e) === "label" ? "muted-row" : whyOf(e) === "rule" ? "rule-row" : whyOf(e) === "group" ? "grp-row" : ""} ${off(e) ? "wi-off" : ""}"><td>${fmtT(e.t)}${grpChip(e)}</td><td>${EVKIND[e.kind]}</td><td class="region-cell" title="${esc(ri(e).title)}">${esc(ri(e).txt)}</td><td class="num">${num(e.strength)}</td><td class="num">${num(e.amp_dbfs)}</td><td>${["", "L", "R", "L+R"][e.ch]}</td><td class="num">${e.gc == null ? "–" : `<span class="${e.gc >= 0.55 ? "ok" : "bad"}">${Math.round(e.gc * 100)} %</span>`}</td><td class="num" title="${esc(T("recording.col_real_title"))}">${e.lp == null ? "–" : `<span class="${e.lp >= 0.5 ? "ok" : "bad"}">${Math.round(e.lp * 100)} %</span>`}</td><td class="num" title="${esc(T("recording.col_repeat_title"))}">${e.rep == null ? "–" : e.rep >= (m.repeats?.min_repeats ?? 2) ? `<span class="ok">${T("recording.rep_cell", { n: e.rep })} ${T("recording.rep_music")}</span>` : T("recording.rep_cell", { n: e.rep })}</td><td>${playBtn(e)}</td>
+    : `<tr class="${whyOf(e) === "label" ? "muted-row" : byRules(e) ? "rule-row" : whyOf(e) === "group" ? "grp-row" : ""} ${off(e) ? "wi-off" : ""}"><td>${fmtT(e.t)}${grpChip(e)}</td><td>${EVKIND[e.kind]}</td><td class="region-cell" title="${esc(ri(e).title)}">${esc(ri(e).txt)}</td><td class="num">${num(e.strength)}</td><td class="num">${num(e.amp_dbfs)}</td><td>${["", "L", "R", "L+R"][e.ch]}</td><td class="num">${e.gc == null ? "–" : `<span class="${e.gc >= 0.55 ? "ok" : "bad"}">${Math.round(e.gc * 100)} %</span>`}</td><td class="num" title="${esc(T("recording.col_real_title"))}">${e.lp == null ? "–" : `<span class="${e.lp >= 0.5 ? "ok" : "bad"}">${Math.round(e.lp * 100)} %</span>`}</td><td class="num" title="${esc(T("recording.col_repeat_title"))}">${e.rep == null ? "–" : e.rep >= (m.repeats?.min_repeats ?? 2) ? `<span class="ok">${T("recording.rep_cell", { n: e.rep })} ${T("recording.rep_music")}</span>` : T("recording.rep_cell", { n: e.rep })}</td><td>${playBtn(e)}</td>
         <td class="audit">${EV_JUDGE.map(([l, txt, tip]) => `<button class="link ${e.label === l ? "chosen" : ""}" data-label="${l}" data-t="${e.t}" data-rec="${rec.id}" title="${esc(tip)}">${txt}</button>`).join(" ")}</td>${wiCell(e)}</tr>`;
   if (!rows.length) return `<p class="empty">${nJudged ? T("recording.all_judged", { n: nJudged }) : T("recording.no_events")}</p>`;
   return `<table><tr>${EV_COLS.map(([k, l, c]) => th(k, l, c)).join("")}<th></th><th>${T("recording.col_verdict")} ${info("verdicts")}</th><th title="${esc(T("recording.col_for_grade_title"))}">${T("recording.col_for_grade")}</th></tr>${rows.map(row).join("")}</table>`;

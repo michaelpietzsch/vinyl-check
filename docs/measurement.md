@@ -177,6 +177,16 @@ lies in the lead-in or run-out groove even when the level there put it into the 
 as a quiet-passage click (`analysis.music_region`), for new and stored analyses alike. On real sides that moved 0–6 %
 of the clicks out of the music count.
 
+**Mechanical shocks** (`shock.py`, `[analysis] shock_filter`). The needle drop, the dust cover closing or a hand on
+the plinth reach the stylus as an impulse that the detector takes for a click or a pop, followed by the
+tonearm/cartridge resonance (around 10 Hz) ringing for a few hundred milliseconds. For every click or pop candidate
+the energy below 25 Hz in the 20–350 ms after it is compared with the 100–500 ms before it, on the lateral (L+R)
+and the vertical (L−R) signal, both decimated to 200 Hz; the larger rise is the shock gain (`shock`, dB). From
+15 dB on, with the ringing at least −40 dBFS, the detection is a shock and does not count (`why = shock`); a verdict
+*click* counts it again. On nine real sides the needle drops rose by 28–53 dB, every click in the music and every
+judged defect by 10 dB at most. Most shocks sit before the music starts and are out of the grade anyway; the rule
+matters for the one that comes during the music and for the event list.
+
 **The repeat rule** (`analysis.count_mask`, `[analysis] repeat_rule`). From `repeat_rule_share` (20 %) repeating
 clicks in the music on, the side counts as sequenced music and the repeating clicks are left out of the count and
 the grade (`auto`); on music that does not loop the rule never applies, so nothing changes there. Per record the

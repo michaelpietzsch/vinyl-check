@@ -24,6 +24,7 @@
   "repeat_rule_mode_auto": "Regel greift automatisch ab {pct} %",
   "repeat_rule_mode_on": "Regel für diese Platte eingeschaltet",
   "repeat_rule_mode_off": "Regel für diese Platte ausgeschaltet",
+  "shocks": "{n} Erschütterungen (Nadel aufgesetzt, Deckel, Hand am Laufwerk) zählen nicht als Knackser.",
   "grouped": "{n} Impulse innerhalb von {ms} ms nach einem stärkeren zählen mit ihm als ein hörbarer Knackser.",
   "not_in_grade": "Nicht in der Note: {metrics}."
 }

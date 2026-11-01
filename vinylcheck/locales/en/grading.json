@@ -24,6 +24,7 @@
   "repeat_rule_mode_auto": "rule applied automatically from {pct} % on",
   "repeat_rule_mode_on": "rule switched on for this record",
   "repeat_rule_mode_off": "rule switched off for this record",
+  "shocks": "{n} mechanical shocks (needle drop, dust cover, a hand on the plinth) are not counted as clicks.",
   "grouped": "{n} impulses within {ms} ms of a stronger one are counted with it as one audible click.",
   "not_in_grade": "Not part of the grade: {metrics}."
 }

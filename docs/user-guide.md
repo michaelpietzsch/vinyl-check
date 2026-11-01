@@ -190,6 +190,10 @@ The list shows the strongest with a chip such as *×3* and counts the group once
 others too (*part of 0:15.6*). The most useful rows to judge are strong clicks without repeats in loud passages
 (music the rule missed?) and repeating ones in quiet passages (a defect the rule took?).
 
+A needle drop, the dust cover closing or a hand on the plinth is a mechanical shock, not a click: the tonearm rings
+after it, which the analysis recognises. Such detections are listed as *not counted (shock)* behind the same
+checkbox as the repeating hits; judge one as *Click* if it really is one.
+
 Small ⓘ circles next to the grade, the *Repeats* column, the verdict column and the rule explain these features
 on hover, tap or keyboard focus.
 

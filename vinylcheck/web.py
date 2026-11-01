@@ -2135,7 +2135,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                       "FROM analyses WHERE recording_id = ?", (rec_id,)) or {}
         region = analysis.music_region(ea["region"], ea["t"], (span.get("ms"), span.get("me")))
         _c, _r, why, _i = analysis.count_mask(ea["kind"], region, ea["label"], ea["rep"], ea["t"],
-                                              ea["strength"], acfg)
+                                              ea["strength"], acfg, shk=ea["shock"])
         rep_of = analysis.group_impulses(ea["t"], region, ea["kind"], ea["strength"], acfg.click_group_ms)
         size = np.bincount(rep_of, minlength=len(all_evs))
         extra = {round(e["t"], 5): {"why": why[i], "grp": int(size[i]) if size[i] > 1 else None,
