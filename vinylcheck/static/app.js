@@ -686,6 +686,7 @@ function renderRecord() {
         <div class="hint">${r.discogs_release_id ? `<a href="https://www.discogs.com/release/${r.discogs_release_id}" target="_blank" rel="noopener">${T("records.discogs_release")}</a>` : ""}${r.cover_local ? ` <button class="link" id="cover-del">${T("records.cover_remove")}</button>` : ""}</div>
         <div class="condition" id="rec-condition">${conditionBlock(r, null)}</div>
         <div class="hint" style="margin-top:.4rem"><label>${T("records.repeat_rule")} <span style="white-space:nowrap"><select class="inline" data-rule-record="${r.id}">${[["auto", T("recording.rule_auto", { pct: 20 })], ["on", T("recording.rule_on")], ["off", T("recording.rule_off")]].map(([v, l]) => `<option value="${v}" ${(r.repeat_rule || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select> ${info("repeat_rule")}</span></label></div>
+        <div class="hint" style="margin-top:.3rem"><label><input type="checkbox" data-mono-record="${r.id}" ${r.mono ? "checked" : ""}> ${T("records.mono")} ${info("mono")}</label></div>
         ${Object.keys(r.side_lengths || {}).length ? `<div class="hint" style="margin-top:.4rem">${T("records.side_lengths", { list: Object.entries(r.side_lengths).sort().map(([k, v]) => `${esc(k)} ${fmtTime(v.s)} (${esc(v.source_label || v.source)})`).join(" · ") })}</div>` : ""}
         ${Object.keys(r.tracks || {}).length ? `<div class="hint">${T("records.tracks", { list: Object.entries(r.tracks).sort().map(([s, l]) => `<b>${esc(s)}</b> ${l.map((t) => `${esc(t.title)}${t.dur_s ? " " + fmtTime(t.dur_s) : ""}`).join(", ")}`).join(" · ") })}</div>` : ""}</div>
       <button class="link" id="del-record">${T("records.delete_record")}</button>
@@ -1134,7 +1135,9 @@ function trackAt(t, m) {
   return { prev: [...tr].reverse().find((x) => x.t1 <= t), next: tr.find((x) => x.t0 > t) };
 }
 function regionInfo(t, region, m) {
-  const g = m?.groove || [], ms = m?.music_start_s, me = m?.music_end_s, base = REGION[region] ?? "–";
+  // the groove bounds: metrics carry its end and its length (the overview carries both ends)
+  const g = m?.groove || (m?.groove_end_s != null && m?.groove_s != null ? [m.groove_end_s - m.groove_s, m.groove_end_s] : []);
+  const ms = m?.music_start_s, me = m?.music_end_s, base = REGION[region] ?? "–";
   if (region === "excluded") {
     if (g.length && t < g[0]) return { txt: T("recording.region_lead_in"), title: T("recording.region_lead_in_title") };
     if (g.length && t >= g[1]) return { txt: T("recording.region_lead_out"), title: T("recording.region_lead_out_title") };
@@ -1143,7 +1146,7 @@ function regionInfo(t, region, m) {
   if (ms != null && t < ms) return { txt: T("recording.region_in_lead_in", { region: base }), title: T("recording.region_in_lead_in_title") };
   if (me != null && t > me) return { txt: T("recording.region_in_run_out", { region: base }), title: T("recording.region_in_run_out_title") };
   const k = trackAt(t, m);
-  if (k.cur) return { txt: `${base} · ${trackName(k.cur)}`, title: T("recording.region_in_track", { region: base, track: trackName(k.cur) }) };
+  if (k.cur) return { txt: `${base} · ${trackName(k.cur)} · ${fmtTime(t - k.cur.t0)}`, title: T("recording.region_in_track_at", { region: base, track: trackName(k.cur), t: fmtTime(t - k.cur.t0) }) };
   if (region === "quiet" && k.prev && k.next) return { txt: T("recording.region_pause", { prev: k.prev.pos || "", next: k.next.pos || "" }).trim(), title: T("recording.region_between", { prev: trackName(k.prev), next: trackName(k.next) }) };
   return { txt: base, title: "" };
 }
@@ -1174,6 +1177,19 @@ async function wiCompute(rec) {
   bar.innerHTML = `<b>${T("recording.wi_title")}</b> <span class="hint">${T("recording.wi_view_only")}</span> <button class="link" data-wi-reset>${T("recording.wi_count_all")}</button><br>
     ${T("recording.wi_without", { what: parts, grade: gradeChip(r.grade), score: num(r.score, 0) })}${same ? " " + T("recording.wi_unchanged") : " " + T("recording.wi_instead", { grade: `${gradeChip(r.base.grade)} ${num(r.base.score, 0)}` })}${recLine}${ch ? `<br><small class="hint">${ch}</small>` : ""}`;
   if (card) card.innerHTML = T("recording.wi_card", { what: parts, grade: gradeChip(r.grade), score: num(r.score, 0) });
+}
+// Where to look on the record: recurring scratches and the strongest counted clicks of the music, each with the
+// track and the time within it and the estimated distance from the centre (r; the server assumes an even groove
+// pitch from the start of the groove to the end of the music, like the position of a skip).
+const trackAtText = (t, m) => { const k = trackAt(t, m); return k.cur ? T("recording.in_track_at", { track: trackName(k.cur), t: fmtTime(t - k.cur.t0) }) : ""; };
+function spotsBlock(rec, m, rows) {
+  const play = (t, before, after) => (rec.audio_available ? `<button class="link" data-play="${t}" data-before="${before}" data-after="${after}" title="${esc(T("common.listen"))}">▶</button> ` : "");
+  const where = (t, r) => `${r ? ` · ${T("recording.spot_radius", { mm: r })}` : ""}${trackAtText(t, m) ? ` · ${esc(trackAtText(t, m))}` : ""}`;
+  const scratches = (m.scratches || []).map((x) => `<li>${play(x.t, 0.5, 2.5)}<b>${T("recording.spot_scratch", { revs: x.revs })}</b> ${fmtTime(x.t)}–${fmtTime(x.until)}${x.radius_mm && x.radius_end_mm && x.radius_end_mm !== x.radius_mm ? ` · ${T("recording.spot_radius_range", { a: x.radius_mm, b: x.radius_end_mm })}${trackAtText(x.t, m) ? ` · ${esc(trackAtText(x.t, m))}` : ""}` : where(x.t, x.radius_mm)}</li>`);
+  const counted = rows.map((e) => (e.skip ? e : { ...e, label: evLabel(e, rec) })).filter((e) => !e.skip && e.region === "music" && e.kind !== "tick" && !whyOf(e));
+  const clicks = counted.sort((a, b) => b.strength - a.strength).slice(0, 5).map((e) => `<li>${play(e.t, 0.6, 1.2)}<b>${EVKIND[e.kind]}</b> ${fmtT(e.t)}${where(e.t, e.r_mm)} <small class="hint" title="${esc(T("recording.confidence"))}">${num(e.strength)}</small></li>`);
+  if (!scratches.length && !clicks.length) return "";
+  return `<div class="panel-head"><h3>${T("recording.spots_head")}</h3><span class="hint">${T("recording.spots_hint")}</span></div><ul class="spots">${scratches.join("")}${clicks.join("")}</ul>`;
 }
 function eventsTable(rows0, rec, sort) {
   const { key, dir } = sort || EV_DEFAULT_SORT;
@@ -1240,6 +1256,7 @@ async function showRecording(id) {
     ${!rec.audio_available ? `<div class="warnbox">${rec.audio_deleted_at ? T("recording.audio_deleted_on", { date: dayStr(rec.audio_deleted_at) }) : T("recording.audio_missing")}</div>` : ""}
     ${g.explanation ? `<div class="warnbox">${esc(g.explanation)}</div>` : ""}
     ${a.warnings.map((w) => `<div class="warnbox">${esc(w)}</div>`).join("")}
+    ${m.mono ? `<p class="hint">${T("recording.mono_hint")} ${info("mono")}</p>` : ""}
     <div class="row" style="gap:16px;align-items:center;flex-wrap:wrap">
       ${rec.audio_available ? `<button class="secondary" data-clicks-only="${rec.id}">▶ ${T("recording.clicks_only")}</button>` : ""}
       <label class="hint">${T("recording.sensitivity")} <select data-rec-sens="${rec.id}">${[0.3, 0.4, 0.5, 0.6, 0.7].map((s) => `<option value="${s}" ${Math.abs(s - (rec.sensitivity ?? m.profile?.sensitivity ?? 0.5)) < 0.01 ? "selected" : ""}>${num(s, 1)}${s === 0.5 ? ` ${T("recording.sensitivity_calibrated")}` : ""}</option>`).join("")}</select>
@@ -1255,6 +1272,7 @@ async function showRecording(id) {
     <div class="panel-head"><h3>${T("recording.clicks_head")}</h3><span class="hint">${T("recording.counts", { clicks: m.counts.click + m.counts.pop, ticks: m.counts.tick })}${m.scratch_count ? ` · ${T("recording.scratches", { n: m.scratch_count, revs: m.scratch_clicks })}` : ""}</span></div>
     <div class="chart-wrap"><canvas id="ov-clicks" class="chart small"></canvas><div class="sel"></div><div class="tcursor"><span></span></div></div>
     <p class="hint"><span id="chart-range">${T("recording.whole_side")}</span> · ${T("recording.chart_hint")} <label><input type="checkbox" id="hover-play" ${hoverPlay.on ? "checked" : ""}> ${T("recording.hover_play")}</label></p>
+    <div id="spots"></div>
     <div class="panel-head"><h3>${T("recording.level_head")}</h3><span class="hint">${m.music_start_s != null && m.music_end_s != null ? T("recording.music_range", { start: fmtTime(m.music_start_s), end: fmtTime(m.music_end_s) }) : ""}</span></div>
     <div class="chart-wrap"><canvas id="ov-level" class="chart small"></canvas><div class="sel"></div><div class="tcursor"><span></span></div></div>
     <p class="hint">${T("recording.level_hint", { noise: num(m.noise_dbfs), ref: num(m.music_ref_dbfs) })}${m.chain_db != null ? T("recording.level_hint_chain", { db: num(m.chain_db) }) : ""}.</p>
@@ -1286,7 +1304,11 @@ async function showRecording(id) {
   $("#close-view").onclick = closeView;
   let evRows = top;
   state.evLimit = 60;
-  const renderEv = () => { const w = $("#ev-wrap"); if (w) w.innerHTML = eventsTable(eventRows(evRows, m.skips), rec, state.evSort); };
+  const renderEv = () => {
+    const rows = eventRows(evRows, m.skips), w = $("#ev-wrap"), sp = $("#spots");
+    if (w) w.innerHTML = eventsTable(rows, rec, state.evSort);
+    if (sp) sp.innerHTML = spotsBlock(rec, m, rows);                 // verdicts change what is counted, so both follow
+  };
   state.renderEv = renderEv; renderEv();
   state.wiRefresh = () => guard(() => wiCompute(rec))();
   state.wiRefresh();                                              // restore this recording's what-if
@@ -4128,6 +4150,12 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("change", (e) => {
   const t = e.target;
+  if (t.dataset?.monoRecord) guard(async () => {                   // mono record: every side with audio is analysed again as L+R
+    await api(`/api/records/${t.dataset.monoRecord}`, { method: "PATCH", body: { mono: t.checked } });
+    gradeCache.clear?.();
+    toast(T(t.checked ? "records.mono_on" : "records.mono_off"), 8000);
+    refreshRecord();
+  })();
   if (t.dataset?.ruleRecord) guard(async () => {                   // repeat rule per record: recounts every side at once
     await api(`/api/records/${t.dataset.ruleRecord}`, { method: "PATCH", body: { repeat_rule: t.value } });
     gradeCache.clear?.();

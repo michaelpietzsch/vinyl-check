@@ -101,6 +101,15 @@ def test_full_flow(client):
     rec_on = client.get(f"/api/recordings/{a['id']}").json()["analysis"]["metrics"]
     assert rec_on["repeats"]["rule"]["mode"] == "on" and rec_on["repeats"]["rule"]["active"]
     assert client.patch(f"/api/records/{rid}", json={"repeat_rule": "auto"}).json()["repeat_rule"] == "auto"
+    # mono record: stored on the record; every side with audio is analysed again as L+R (and back)
+    assert client.get(f"/api/records/{rid}").json()["mono"] is None
+    assert client.patch(f"/api/records/{rid}", json={"mono": True}).json()["mono"] == 1
+    a = _wait(client, a["id"])
+    assert a["analysis"]["metrics"]["mono"] is True and all(e["ch"] == 3 for e in client.get(f"/api/recordings/{a['id']}/events?limit=50").json())
+    assert client.patch(f"/api/records/{rid}", json={"mono": False}).json()["mono"] == 0
+    a = _wait(client, a["id"])
+    assert a["analysis"]["metrics"]["mono"] is False
+    assert all("r_mm" in e for e in client.get(f"/api/recordings/{a['id']}/events?limit=50").json())   # place on the record
     exp = client.get("/api/audit/export").json()
     assert exp["count"] == 1 and exp["events"][0]["label"] == "music" and exp["events"][0]["recording_id"] == a["id"]
     assert client.patch(f"/api/recordings/{a['id']}", json={"copy_label": " Version 1 "}).json()["copy_label"] == " Version 1 "

@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS records (
     sides TEXT,
     tracks TEXT,
     repeat_rule TEXT,
+    mono INTEGER,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS setups (
@@ -362,6 +363,8 @@ class DB:
             self.conn.execute("ALTER TABLE records ADD COLUMN tracks TEXT")
         if "repeat_rule" not in rec_cols:                                              # 1.4.0: repeat rule per record
             self.conn.execute("ALTER TABLE records ADD COLUMN repeat_rule TEXT")
+        if "mono" not in rec_cols:                                                     # 1.5.0: mono record (L+R)
+            self.conn.execute("ALTER TABLE records ADD COLUMN mono INTEGER")
         if "profile_id" in rcols and "profile_id" in scols:
             return
         has_data = self.conn.execute("SELECT COUNT(*) FROM recordings").fetchone()[0] > 0
@@ -541,10 +544,11 @@ class DB:
 
     # ─── Records ────────────────────────────────────────────────────────────
     def add_record(self, artist: str, title: str, discogs_release_id=None,
-                   discogs_media_condition=None, notes: str = "") -> int:
+                   discogs_media_condition=None, notes: str = "", mono: bool | None = None) -> int:
         return self.x("INSERT INTO records (artist, title, discogs_release_id, discogs_media_condition,"
-                      " notes, created_at) VALUES (?,?,?,?,?,?)",
-                      (artist, title, discogs_release_id, discogs_media_condition, notes, time.time()))
+                      " notes, mono, created_at) VALUES (?,?,?,?,?,?,?)",
+                      (artist, title, discogs_release_id, discogs_media_condition, notes,
+                       None if mono is None else int(bool(mono)), time.time()))
 
     def copy_grades(self, rid: int | None = None) -> dict[int, list[dict]]:
         """Record grade per record and copy: per side the most recent graded recording, combined into the side
@@ -593,7 +597,7 @@ class DB:
 
     def update_record(self, rid: int, **fields) -> None:
         allowed = {"artist", "title", "discogs_release_id", "discogs_media_condition", "notes", "sides", "tracks",
-                   "repeat_rule"}
+                   "repeat_rule", "mono"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if sets:
             self.x(f"UPDATE records SET {', '.join(f'{k} = ?' for k in sets)} WHERE id = ?",

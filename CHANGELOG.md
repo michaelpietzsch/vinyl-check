@@ -5,6 +5,36 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] – 2026-11-01
+
+### Added
+
+- **Where to look on the record.** The report lists the recurring scratches (a click every revolution) and the
+  five strongest counted clicks of the music with a play button, the track and the time within it, and the
+  estimated distance from the centre (even groove pitch assumed, about ±5 mm; none at 45 rpm). Every event of the
+  events API carries the radius (`r_mm`), every scratch its share of the side and its radius at the first and the
+  last revolution. The region column of the event list now names the time within the track as well.
+- **Mono records.** A switch per record (pre-set when the Discogs format says *Mono*) analyses its sides as L+R,
+  what a mono switch or a mono cartridge hears: vertical noise and damage do not count and the grade describes mono
+  playback. Switching analyses every side whose audio is still there again (`PATCH /api/records/{id}` with
+  `mono`, `[analysis] mono` internally).
+- **A hint instead of a bare crash on old x86 processors.** NumPy 2.4 and newer are built for x86-64-v2
+  (SSE4.2); on an older CPU `import numpy` ends with *Illegal instruction*. `vinyl-check` now checks the processor
+  before it loads NumPy and prints what to do (`pip install "numpy<2.4"`); the README and the setup guide say the
+  same.
+
+### Changed
+
+- **The second opinion runs everywhere, and the grade no longer depends on PyTorch.** The grooveclean network is
+  evaluated in NumPy from the same checkpoint (BatchNorm folded into the convolutions, `tools/convert_grooveclean.py`),
+  on a crop around every candidate, with the same result as the PyTorch path (difference at most 3·10⁻⁶ in the
+  tests) and about the same speed on a desktop CPU. PyTorch stays optional (`pip install ".[ml]"`). Before, the
+  desktop apps, which do not ship PyTorch, counted every candidate: a side with 75–80 % confirmed clicks came out
+  one grade lower there than on a station with PyTorch.
+- **Clicks and pops.** The figure that makes 90 % of the grade counts clicks *and* pops in the music; its labels,
+  the ⓘ explanation of the grade and the documentation now say so (the pops enter once more on their own with
+  10 %). The numbers are unchanged.
+
 ## [1.4.2] – 2026-11-01
 
 ### Added
@@ -570,9 +600,10 @@ by minor version.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
 [Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.2...HEAD
-[1.4.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.1...v1.4.2
-[1.4.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.0...v1.4.1
-[1.4.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.4.0
+[1.5.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0
+[1.4.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0
+[1.4.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0
+[1.4.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0
 [1.3.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.1...v1.1.3

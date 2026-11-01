@@ -97,7 +97,8 @@ class AnalysisConfig:
     no_groove_dbfs: float = -75.0
     second_opinion: bool = True       # ask the grooveclean network about the candidates (needs PyTorch)
     repeat_filter: bool = True        # count how often each click in the music repeats with the music (repeats.py)
-    shock_filter: bool = True         # mechanical shocks (needle drop, dust cover) do not count as clicks (shock.py)
+    shock_filter: bool = True
+    mono: bool = False                 # analyse L+R (a mono record on a stereo cartridge); per record, records.mono         # mechanical shocks (needle drop, dust cover) do not count as clicks (shock.py)
     repeat_rule: str = "auto"         # clicks that repeat with the music do not count: "auto" (from repeat_rule_share
                                       # of the clicks in the music on, i.e. sequenced music), "on", "off"
     repeat_rule_share: float = 0.2    # "auto": the rule applies from this share of repeating clicks in the music
@@ -626,6 +627,12 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
     counted, the labels are re-attached to the new events (±3 ms)."""
     if audio.ndim == 1:
         audio = audio[:, None]
+    if cfg.mono and audio.shape[1] > 1:
+        # A mono record played with a stereo cartridge: what differs between the channels is vertical movement,
+        # that is noise and damage a mono pickup does not read. Summing to L+R (the mono switch) cancels it, and
+        # the grade then says what mono playback sounds like. Both channels keep the sum so that the rest of the
+        # analysis runs unchanged ("L+R" at every detection, no vertical component for the shock measure).
+        audio = np.repeat(audio.mean(axis=1, keepdims=True, dtype=np.float32), audio.shape[1], axis=1)
     n, nch = audio.shape
     hop = int(round(sr * HOP_S))
     nfr = n // hop
@@ -789,6 +796,7 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
     back = [e for e in skip_events if e["kind"] == "backward"]
     weak = [e for e in skip_events if e["kind"] == "uncertain"]
     metrics["rpm"] = round(rpm, 3)
+    metrics["mono"] = bool(cfg.mono)
     metrics.update(metrics_music)
     if music_end is not None and clip_in:                        # the run-out groove is not clipping in the music
         clip_in_t = clip_in_t[clip_in_t <= music_end]
@@ -798,6 +806,9 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
     # Recurring scratches from the clicks/pops in the groove (crackle is too dense to form chains)
     strong_t = np.sort(ev["t"][(region != "excluded") & (kind != "tick") & counted])
     scratches = find_scratches(strong_t, skips.revolution_s(rpm))
+    for sc in scratches:                                          # where on the record: share of the side, radius
+        sc.update(skips.position(sc["t"], groove_s, music_end, rpm))
+        sc["radius_end_mm"] = skips.position(sc["until"], groove_s, music_end, rpm).get("radius_mm")
     metrics["scratches"] = scratches
     metrics["scratch_count"] = len(scratches)
     metrics["scratch_clicks"] = int(sum(s["revs"] for s in scratches))

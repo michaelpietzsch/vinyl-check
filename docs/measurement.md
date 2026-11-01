@@ -150,8 +150,21 @@ Code: `analysis.py`
 | clicks per minute, music | clicks and pops in the music, per minute of music |
 | pops per minute | pops in the music, per minute of music |
 | noise | level of the quiet passages in dBFS, A-weighted, relative to the music and relative to the chain |
-| scratches | clicks that repeat at the revolution period (±0.6 %) for at least 4 revolutions. A scratch across several grooves shows up as a chain, and dust does not. |
+| scratches | clicks that repeat at the revolution period (±0.6 %) for at least 4 revolutions. A scratch across several grooves shows up as a chain, and dust does not. Each scratch carries its place: share of the side and estimated radius at its first and last revolution. |
 | clipping | clipped samples in the groove, excluding 5 s after touch-down and before lift-off and everything after the end of the music. Mentioned from 200 samples, no grade from 500. |
+
+**Where to look on the record.** The report lists the recurring scratches and the five strongest counted clicks
+of the music with the track, the time within it and the estimated groove radius (`r_mm` on every event of the
+events API). The radius assumes an even groove pitch from the start of the groove (146 mm) to the end of the music
+(65 mm), like the position of a groove skip; real pitch varies with the level cut, so expect about ±5 mm. At
+45 rpm no radius is given, because the record could be 7" or 12".
+
+**Mono records** (`[analysis] mono`, set per record). A mono record carries its signal laterally; whatever differs
+between the channels is vertical movement, that is noise and damage a mono pickup does not read. With the record
+marked mono (pre-set when the Discogs format says *Mono*), the analysis sums the channels to L+R before anything
+else, the way a mono switch does: vertical clicks cancel, lateral ones stay, and the grade describes mono playback.
+Switching the flag analyses every side whose audio is still there again. Alignment runs are not affected; with a
+true mono cartridge their crosstalk and azimuth figures are meaningless and can be ignored.
 
 **Repeats with the music** (`repeats.py`, experimental). Electronic music with a drum machine or a sequencer plays
 the same hard transient bar after bar, and to the detector such a hit is a click: on one sequencer record it
@@ -222,11 +235,20 @@ pink noise. As a second opinion on vinyl-check's own candidates, it is useful:
   resampled to 44.1 kHz, blockwise.
 - Per candidate, the maximum within ±2.7 ms over both channels counts. From **0.55** a click is *confirmed*.
 - Results are cached by file checksum, so re-analysing the same recording only evaluates new candidates.
-- It needs PyTorch (`pip install ".[ml]"`). Without it, the second opinion is silently unavailable, and
-  `[analysis] second_opinion = false` switches it off.
+- It runs everywhere. Without PyTorch the network is evaluated in NumPy from `grooveclean-detector.npz`, the same
+  checkpoint with the BatchNorm layers folded into the convolutions (`tools/convert_grooveclean.py`); the NumPy
+  path normalizes each window like the PyTorch one and then evaluates only a crop of ±(2.7 ms + half the receptive
+  field) around every candidate, batched, which gives the same values (the tests check both backends against each
+  other, maximum difference 3·10⁻⁶) and is about as fast as PyTorch on a desktop CPU; it needs a real BLAS
+  (OpenBLAS, which the PyPI wheels and the desktop apps bring along, and `deploy.sh` installs on Debian; on the
+  reference BLAS of a bare Debian it took 0.3 s per candidate on a Raspberry Pi 5). With PyTorch installed
+  (`pip install ".[ml]"`) it is used instead. `[analysis] second_opinion = false` switches the second opinion off.
+- The grade therefore does not depend on the installation: before 1.5.0 the desktop apps, which do not ship
+  PyTorch, counted every candidate and graded a side with 75–80 % confirmed clicks one step lower than a station
+  with PyTorch.
 
-The network is a hint, not a judge: the grade uses confirmed clicks when available, but the network also confirms
-drum hits with a click-like attack.
+The network is a hint, not a judge: the grade uses confirmed clicks, but the network also confirms drum hits with a
+click-like attack.
 
 ## Grading
 
@@ -243,8 +265,8 @@ interpolated linearly:
 
 | Metric | NM | VG+ | VG | G+ | G | Weight |
 |---|---|---|---|---|---|---|
-| clicks per minute in the music (confirmed by the second opinion if available) | 8 | 15 | 30 | 50 | 100 | 90 % |
-| pops per minute in the music | 2 | 5 | 10 | 20 | 40 | 10 % |
+| clicks and pops per minute in the music (confirmed by the second opinion) | 8 | 15 | 30 | 50 | 100 | 90 % |
+| pops per minute in the music (the pops once more, on their own) | 2 | 5 | 10 | 20 | 40 | 10 % |
 
 The side's score is the weighted mean of both scores, and the grade follows from the score bands. Rules:
 

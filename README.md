@@ -64,6 +64,13 @@ spot, re-analyse with a different sensitivity and compare recordings later.
   the repeating hits are left out of the grade; a switch per record overrides that, and your own verdicts always win.
 - Audible clicks: impulses within 20 ms of a stronger one (the stylus bouncing off a particle) count as one click,
   as the ear hears them. Small ⓘ circles in the interface explain each of these features on hover.
+- A second opinion on every click candidate from a small neural network, on every installation: it runs in NumPy,
+  PyTorch is optional and only makes it faster. The same recording gets the same grade on a Raspberry Pi and in
+  the desktop apps.
+- Where to look on the record: recurring scratches and the strongest counted clicks are listed with the track, the
+  time within it and the estimated distance from the centre, so a damaged spot can be found under the lamp.
+- Mono records: a switch per record (pre-set from the Discogs format) analyses the sides as L+R, what a mono
+  switch or a mono cartridge hears; vertical noise and damage then do not count.
 
 **Cleaning before and after**
 - Record a side before and after cleaning. vinyl-check aligns both recordings sample-accurately and labels every
@@ -137,11 +144,15 @@ git clone https://github.com/michaelpietzsch/vinyl-check.git
 cd vinyl-check
 python3 -m venv .venv
 . .venv/bin/activate              # Windows: .venv\Scripts\activate
-pip install .                     # or: pip install ".[ml]" to add the second-opinion network (PyTorch)
+pip install .                     # or: pip install ".[ml]" to run the second-opinion network on PyTorch (faster)
 ```
 
 On Linux, `pip install ".[portaudio]"` adds PortAudio recording as an alternative to `arecord`; macOS and Windows
 get it by default.
+
+If `vinyl-check` stops at once with *Illegal instruction* on an older x86 computer (processors before about 2009,
+without SSE4.2): NumPy 2.4 and newer are built for the x86-64-v2 baseline. An older NumPy in the same environment
+fixes it: `pip install "numpy<2.4"`. vinyl-check prints a hint to that effect before it loads NumPy.
 
 ### Run
 
@@ -191,7 +202,8 @@ over SSH (key login and password-less `sudo` on the Pi):
 VC_TARGET=user@raspberrypi.local ./deploy.sh
 ```
 
-The script installs the Debian packages, creates the service user `vinylcheck`, copies the code to
+The script installs the Debian packages (among them OpenBLAS: Debian's NumPy otherwise runs on the reference BLAS,
+and the second-opinion network without PyTorch then takes minutes per side instead of seconds), creates the service user `vinylcheck`, copies the code to
 `/opt/vinyl-check`, installs the sandboxed systemd unit (`systemd/vinyl-check.service`), runs the test suite on the
 Pi and restarts the service once no recording or analysis is running. The configuration in
 `/etc/vinyl-check/config.toml` is created from [`config.example.toml`](config.example.toml) on the first run and

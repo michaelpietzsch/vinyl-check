@@ -333,8 +333,10 @@ class Worker:
         if rec["kind"] == "alignment":
             res = self.run_heavy(heavy.alignment_job, rec["path"], self.cfg.alignment, chain, dp)
         else:
+            record = self.db.record(rec["record_id"]) if rec.get("record_id") else None
             acfg = replace(self.cfg.analysis, pop_dbfs=trim["pop_dbfs"], detect=dp,
-                           clip_grace_s=float(self.cfg.clip_grace_s), clip_mention=int(self.cfg.clip_mention_samples))
+                           clip_grace_s=float(self.cfg.clip_grace_s), clip_mention=int(self.cfg.clip_mention_samples),
+                           mono=bool((record or {}).get("mono")))          # a mono record is analysed as L+R
             gcfg = replace(self.cfg.grading, clip_samples_max=int(self.cfg.clip_max_samples))
             res = self.run_heavy(heavy.analyze_job, rec["path"], acfg, gcfg, chain, trim["rpm"],
                                  trim["ref_dbfs"], trim["floor"], self.db.labels(rec_id), self.side_tracks(rec),

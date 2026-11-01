@@ -319,6 +319,11 @@ use it from elsewhere, forward the port over SSH or use a VPN.
 - **Keep the configuration file and the database to yourself.** They hold the Discogs token and OAuth secrets in
   clear text: treat them, and any backup of them, like a password. `deploy.sh` sets the permissions on a service
   (`config.toml` readable by root and the service only, the state directory by the service only).
+- **OpenBLAS.** On Debian, NumPy uses whichever BLAS is installed; with nothing but the reference `libblas3` every
+  matrix product runs single-threaded and slowly (the second-opinion network without PyTorch took 0.3 s per click
+  candidate on a Raspberry Pi 5 that way). `deploy.sh` installs `libopenblas0-pthread`; on a hand-installed Linux
+  station `sudo apt install libopenblas0-pthread` does the same, NumPy picks it up without reinstalling. The
+  wheels from PyPI and the desktop apps bring OpenBLAS along.
 - **Distribution packages.** `deploy.sh` installs the Python libraries as Debian packages, which can be older than
   the versions on PyPI; Debian 13 ships Starlette 0.46 with published advisories. The interface does not use the
   affected features (form parsing, range requests on file downloads, the HTTP endpoint classes), so a service on
@@ -540,6 +545,14 @@ After calibration, leave the gain alone. Both modes, record checks and alignment
 with the last one. Re-align the profile after changing the stylus, cartridge, interface or location.
 
 ## Help
+
+**Linux: "Illegal instruction" right at the start.** NumPy 2.4 and newer are built for the x86-64-v2 baseline
+(SSE4.2, POPCNT: processors from about 2009). On an older computer `import numpy` dies before vinyl-check can print
+anything. vinyl-check prints a hint before it loads NumPy; the fix is an older NumPy in the same environment:
+
+```bash
+pip install "numpy<2.4"
+```
 
 Something does not work as described, or a measurement looks wrong? Write to
 [info@vinylcheck.net](mailto:info@vinylcheck.net) with the version (shown next to the logo), the operating system and,

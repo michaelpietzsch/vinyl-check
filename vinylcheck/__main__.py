@@ -2,13 +2,16 @@
 
 import logging
 
-import uvicorn
-
-from .config import load
-from .web import create_app
+from . import preflight
 
 
 def main() -> None:
+    preflight.run()                 # before NumPy is imported: a hint instead of a bare "Illegal instruction"
+    import uvicorn
+
+    from .config import load
+    from .web import create_app
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     cfg = load()
     if cfg.host not in ("127.0.0.1", "::1", "localhost") and not cfg.access_code:

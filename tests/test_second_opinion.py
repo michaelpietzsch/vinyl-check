@@ -6,7 +6,7 @@ import pytest
 from vinylcheck import analysis, grading, synth, second_opinion
 
 SR = 48000
-needs_torch = pytest.mark.skipif(not second_opinion.available(), reason="PyTorch or weights missing")
+needs_torch = pytest.mark.skipif(second_opinion.backend() != "torch", reason="PyTorch not installed")
 
 
 def test_segments_merge_overlapping_windows():
@@ -14,9 +14,9 @@ def test_segments_merge_overlapping_windows():
     assert segs == [(9.85, 10.35), (29.85, 30.15)]
     assert second_opinion.segments(np.zeros(0)) == []
     assert second_opinion.info()["model"].startswith("grooveclean")
+    assert second_opinion.available() and second_opinion.info()["backend"] in ("torch", "numpy")   # weights ship
 
 
-@needs_torch
 def test_net_says_click_for_clicks_and_not_for_noise():
     audio, truth = synth.make_side(duration_s=40, seed=9, clicks_per_min=30, amp_range=(-30.0, -12.0))
     clicks = np.array([c["t"] for c in truth.clicks if c["kind"] == "click"])
@@ -30,7 +30,6 @@ def test_net_says_click_for_clicks_and_not_for_noise():
     assert second_opinion.opinion(audio, SR, np.zeros(0)).size == 0
 
 
-@needs_torch
 def test_analysis_carries_second_opinion_and_cache():
     audio, _ = synth.make_side(duration_s=40, seed=5, clicks_per_min=30)
     res = analysis.analyze(audio, SR)
@@ -69,3 +68,20 @@ def test_labels_change_counts_and_survive_reanalysis():
     assert res2["metrics"]["counts"]["quiet"] == res["metrics"]["counts"]["quiet"] - 1
     assert analysis.labels_for(np.array([1.0, 2.0]), {1.0021: "music"}).tolist() == ["music", None]
     assert analysis.labels_for(np.array([1.0]), None).tolist() == [None]
+
+
+@needs_torch
+def test_numpy_backend_matches_pytorch(monkeypatch):
+    """The grade must not depend on PyTorch being installed: both backends give the same probabilities."""
+    audio, truth = synth.make_side(duration_s=60, seed=19, clicks_per_min=60, amp_range=(-36.0, -10.0))
+    rng = np.random.default_rng(2)
+    clicks = np.array([c["t"] for c in truth.clicks if c["kind"] == "click"])
+    a, b = truth.music[0]
+    times = np.concatenate([clicks, rng.uniform(a + 1, b - 1, 40)])
+    p_torch = second_opinion.opinion(audio, SR, times)
+    monkeypatch.setattr(second_opinion, "torch", None)
+    monkeypatch.setattr(second_opinion, "_state", {})
+    assert second_opinion.backend() == "numpy"
+    p_np = second_opinion.opinion(audio, SR, times)
+    assert np.max(np.abs(p_torch - p_np)) < 1e-4, np.max(np.abs(p_torch - p_np))
+    assert np.array_equal(p_torch >= second_opinion.THRESHOLD, p_np >= second_opinion.THRESHOLD)

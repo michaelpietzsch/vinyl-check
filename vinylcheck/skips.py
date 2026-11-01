@@ -91,6 +91,16 @@ def position(t: float, groove: tuple[float, float], music_end: float | None, rpm
     return out
 
 
+def radius_mm(times, groove: tuple[float, float], music_end: float | None, rpm: float) -> list[int | None]:
+    """position()["radius_mm"] for many times at once (None at 45 rpm, where the record size is unknown)."""
+    if abs(rpm - 100 / 3) >= 1:
+        return [None] * len(times)
+    g0 = groove[0]
+    g1 = music_end if music_end and music_end > g0 else groove[1]
+    frac = np.clip((np.asarray(times, float) - g0) / max(g1 - g0, 1e-6), 0, 1)
+    return [int(v) for v in np.round(LP_OUTER_MM - (LP_OUTER_MM - LP_INNER_MM) * frac)]
+
+
 def find_repeats(audio: np.ndarray, sr: int, rpm: float = 100 / 3, groove: tuple[float, float] | None = None,
                  music_end: float | None = None, y: np.ndarray | None = None) -> list[dict]:
     """Skips back (a groove repeats) and the run-out groove. Times in seconds of the recording.

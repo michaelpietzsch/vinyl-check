@@ -45,7 +45,7 @@ from starlette.requests import HTTPConnection
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion
+from . import __version__, analysis, capture, compare, discogs, grading, alignment, i18n, learning, report_pdf, spectro, second_opinion, skips
 from . import audio_settings, licenses, network, onboarding, storage, testrecords, tls, updates, vinylmind
 from .config import Config, config_file, load
 from .db import DB, copy_key, error_key
@@ -133,6 +133,7 @@ class RecordIn(BaseModel):
     discogs_release_id: int | None = None
     discogs_media_condition: str | None = None
     notes: str = ""
+    mono: bool | None = None                           # a mono record: its sides are analysed as L+R
 
 
 class TrackIn(BaseModel):
@@ -149,6 +150,7 @@ class RecordPatch(BaseModel):
     notes: str | None = None
     tracks: dict[str, list[TrackIn]] | None = None    # hand-entered track list (record not on Discogs), {"A": [...]}
     repeat_rule: str | None = None                     # "auto" | "on" | "off": clicks that repeat with the music
+    mono: bool | None = None                           # analyse the sides as L+R (mono record on a stereo cartridge)
 
 
 class StartIn(BaseModel):
@@ -700,10 +702,11 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     def acfg_for(rec_id: int) -> analysis.AnalysisConfig:
         """The analysis settings for counting a recording: the configuration, with the record's own repeat rule
         (records.repeat_rule, set by the user) in place of the configured one."""
-        row = db.one("SELECT rc.repeat_rule FROM recordings r JOIN records rc ON rc.id = r.record_id WHERE r.id = ?",
-                     (rec_id,)) or {}
+        row = db.one("SELECT rc.repeat_rule, rc.mono FROM recordings r JOIN records rc ON rc.id = r.record_id "
+                     "WHERE r.id = ?", (rec_id,)) or {}
         rule = row.get("repeat_rule")
-        return replace(cfg.analysis, repeat_rule=rule) if rule in analysis.REPEAT_RULES else cfg.analysis
+        return replace(cfg.analysis, repeat_rule=rule if rule in analysis.REPEAT_RULES else cfg.analysis.repeat_rule,
+                       mono=bool(row.get("mono")))
 
     def learn_recount(rec_id: int, r: dict | None = None) -> tuple[dict, dict] | None:
         """Recount a stored analysis with event judgments, skip judgments and the current learned model, and save it."""
@@ -1152,7 +1155,12 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
 
     @app.post("/api/records")
     def add_record(r: RecordIn):
-        return {"id": db.add_record(**r.model_dump())}
+        body = r.model_dump()
+        if body["mono"] is None and r.discogs_release_id and dc.enabled:
+            # Discogs marks mono pressings in the format ("LP, Album, Mono"): such a record starts as mono
+            e = dc.entry(r.discogs_release_id, r.artist, r.title) or {}
+            body["mono"] = True if "mono" in str(e.get("format") or "").lower() else None
+        return {"id": db.add_record(**body)}
 
     @app.get("/api/records/{rid}")
     def get_record(rid: int):
@@ -1789,9 +1797,19 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             fields.update(tracks=json.dumps(tracks), sides=json.dumps(side_lengths(tracks)))
         if p.repeat_rule is not None and p.repeat_rule not in analysis.REPEAT_RULES:
             raise HTTPException(422, i18n.msg("api.repeat_rule_invalid", allowed=", ".join(analysis.REPEAT_RULES)))
-        before = (db.record(rid) or {}).get("repeat_rule")
+        before = db.record(rid) or {}
+        if p.mono is not None:
+            fields["mono"] = int(p.mono)
         db.update_record(rid, **fields)
-        if p.repeat_rule is not None and p.repeat_rule != (before or "auto"):
+        if p.mono is not None and p.mono != bool(before.get("mono")):
+            # mono changes what the detector sees (L+R instead of two channels): every side with its audio still
+            # there is analysed again; sides without audio keep their stereo analysis
+            for rec in db.recordings(rid):
+                r = get_recording(rec["id"])
+                if r["audio_available"] and r["status"] in ("analyzed", "error") and r["kind"] in CHECK_KINDS:
+                    worker.analyze(rec["id"])
+            ref_cache["key"] = None
+        elif p.repeat_rule is not None and p.repeat_rule != (before.get("repeat_rule") or "auto"):
             # the rule changes what counts: every analysed side of the record is counted and graded again
             for rec in db.recordings(rid):
                 learn_recount(rec["id"])
@@ -2124,23 +2142,29 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     def events(rec_id: int, order: str = "strength", limit: int = 200):
         """The detections, each with `why` it does not count ("label", "rule", "group" or null), `grp` (the number
         of impulses of its audible group, on the representative) and `grp_of` (the representative's time, on the
-        other members); `lp` is the learned model's estimate."""
+        other members); `lp` is the learned model's estimate; `r_mm` the estimated groove radius (33⅓ only)."""
         evs = db.events(rec_id, limit=min(limit, 20000), order=order)
         if not evs:
             return evs
         all_evs = db.events(rec_id)                 # grouping, counting and the "density" feature need every event
         ea = analysis.event_arrays(all_evs)
         acfg = acfg_for(rec_id)
-        span = db.one("SELECT json_extract(metrics, '$.music_start_s') AS ms, json_extract(metrics, '$.music_end_s') AS me "
-                      "FROM analyses WHERE recording_id = ?", (rec_id,)) or {}
+        span = db.one("SELECT json_extract(metrics, '$.music_start_s') AS ms, json_extract(metrics, '$.music_end_s') AS me, "
+                      "json_extract(metrics, '$.groove_end_s') AS ge, json_extract(metrics, '$.groove_s') AS gs, "
+                      "json_extract(metrics, '$.rpm') AS rpm FROM analyses WHERE recording_id = ?", (rec_id,)) or {}
         region = analysis.music_region(ea["region"], ea["t"], (span.get("ms"), span.get("me")))
+        if span.get("ge") is not None and span.get("gs") is not None:        # place on the record, like a skip's
+            radius = skips.radius_mm(ea["t"], (span["ge"] - span["gs"], span["ge"]), span.get("me"), span.get("rpm") or 100 / 3)
+        else:
+            radius = [None] * len(all_evs)
         _c, _r, why, _i = analysis.count_mask(ea["kind"], region, ea["label"], ea["rep"], ea["t"],
                                               ea["strength"], acfg, shk=ea["shock"])
         rep_of = analysis.group_impulses(ea["t"], region, ea["kind"], ea["strength"], acfg.click_group_ms)
         size = np.bincount(rep_of, minlength=len(all_evs))
         extra = {round(e["t"], 5): {"why": why[i], "grp": int(size[i]) if size[i] > 1 else None,
                                     "grp_of": None if rep_of[i] == i else all_evs[rep_of[i]]["t"],
-                                    "region": str(region[i])}                # lead-in/run-out clicks: quiet, not music
+                                    "region": str(region[i]),                # lead-in/run-out clicks: quiet, not music
+                                    "r_mm": radius[i]}
                  for i, e in enumerate(all_evs)}
         model = learn_model()
         lp = {}
@@ -2150,7 +2174,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             _, p = learning.estimate(all_evs, model, r.get("ref"), learn_zp(r))
             lp = {round(e["t"], 5): (None if p[i] != p[i] else round(float(p[i]), 3)) for i, e in enumerate(all_evs)}
         for e in evs:
-            e.update(extra.get(round(e["t"], 5)) or {"why": None, "grp": None, "grp_of": None, "region": e["region"]})
+            e.update(extra.get(round(e["t"], 5)) or {"why": None, "grp": None, "grp_of": None, "region": e["region"], "r_mm": None})
             if model:
                 e["lp"] = lp.get(round(e["t"], 5))
         return evs

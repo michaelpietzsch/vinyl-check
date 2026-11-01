@@ -12,7 +12,7 @@
   "after": "after",
   "m_clicks_quiet": "Clicks/min quiet",
   "m_ticks_quiet": "Crackle/min quiet",
-  "m_clicks_music": "Clicks/min music",
+  "m_clicks_music": "Clicks+pops/min music",
   "m_pops": "Pops/min",
   "m_noise": "Noise dBFS",
   "m_noise_a": "Noise A dBFS",

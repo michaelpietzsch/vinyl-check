@@ -70,6 +70,10 @@ list of comparisons.
 - **Cover.** Click the cover to upload your own image (JPEG, PNG or WebP). The browser scales it to 1200 px.
   This helps with test pressings and records that are not on Discogs. *Remove own cover* restores the Discogs
   cover.
+- **Mono record.** A checkbox below the condition block. A mono record is analysed as L+R, what a mono switch or a
+  mono cartridge hears: vertical noise and damage do not count, and the grade describes mono playback. Records
+  taken over from a Discogs release whose format says *Mono* start with it on. Switching analyses every side
+  whose audio is still there again. The ⓘ next to it explains why.
 - **Side lengths and tracks.** Side lengths come from earlier recordings of the same side, otherwise from the
   Discogs tracklist. They drive the *side probably finished* notice during recording and the per-track table in
   the report. Records without Discogs data can get a tracklist through the API (`PATCH /api/records/{id}` with
@@ -108,10 +112,14 @@ re-analyse (↻) and delete (✕).
 
 *Report* opens the analysis of one recording as a full page (*Back to record* returns).
 
-- **Grade tile** with score, sticker and the note explaining it, plus key figures: clicks per minute in the music
-  (raw, confirmed by the second opinion, estimated real), clicks and crackle in pauses, pops per minute and noise.
+- **Grade tile** with score, sticker and the note explaining it, plus key figures: clicks and pops per minute in
+  the music (raw, confirmed by the second opinion, estimated real), clicks and crackle in pauses, pops per minute
+  on their own and noise.
 - **Clicks chart**: detections per 2 seconds (pops red, clicks yellow, crackle grey). Lead-in and run-out are
   drawn below the axis and are not counted.
+- **Where to look on the record**: recurring scratches (a click every revolution) and the five strongest counted
+  clicks of the music, each with a play button, the track and the time within it, and the estimated distance from
+  the centre (r, assuming an even groove pitch, about ±5 mm). The list follows your verdicts.
 - **Level chart**: level over time with lines for groove silence, the music reference and the chain noise. Zones
   with the stylus up are grey.
 - **Spectrogram**: time against frequency (20 Hz–16 kHz, logarithmic), in colour or greyscale. Clicks are
@@ -139,8 +147,8 @@ turntable profile and overridden per recording. Changing it re-analyses the reco
 vinyl-check grades on the Goldmine scale: **NM, VG+, VG, G+, G, F**. *Mint* is never given, because it needs a
 visual inspection.
 
-- The grade of a side comes from the **music**: clicks per minute while music plays (confirmed by the second
-  opinion when available) and pops per minute of music, weighted 90 % and 10 %. Clicks and crackle in pauses are
+- The grade of a side comes from the **music**: clicks and pops per minute while music plays (confirmed by the
+  second opinion) and, counted once more on their own, pops per minute of music, weighted 90 % and 10 %. Clicks and crackle in pauses are
   shown for information only.
 - **F only for skips.** A side that plays through ends at G at worst. When the stylus jumps back, the side is F.
 - **No grade** when more than 500 samples in the groove are clipped. That is a recording error: lower the gain and

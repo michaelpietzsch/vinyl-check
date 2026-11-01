@@ -500,3 +500,6 @@ details.guide li { margin: .25rem 0; }
 tr.rule-row td { opacity: .55; }
 tr.grp-row td { opacity: .4; font-style: italic; }
 select.inline { width: auto; display: inline-block; margin-left: .3rem; vertical-align: middle; }
+/* Where to look on the record: scratches and the strongest counted clicks with their place */
+ul.spots { margin: .2rem 0 .8rem; padding-left: 1.2rem; }
+ul.spots li { margin: .15rem 0; }

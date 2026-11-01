@@ -180,9 +180,9 @@ def test_grade_weighted_90_clicks_10_pops():
     assert w["per_metric"]["clicks_music_per_min"]["grade"] == "VG+" and w["per_metric"]["pops_per_min"]["grade"] == "G+"
     hint = _en(w["explanation"])
     assert w["grade"] == "VG+" and "grading.weighted" in _hint_keys(w)
-    assert "Weighted: Clicks/min in the music 90%, Pops/min in the music 10% (the worst single grade would be G+)" \
+    assert "Weighted: Clicks and pops/min in the music 90%, Pops/min in the music 10% (the worst single grade would be G+)" \
         in hint
-    assert "Gewichtet: Clicks/min in der Musik 90 %, Pops/min in der Musik 10 % (schlechteste Einzelnote wäre G+)" \
+    assert "Gewichtet: Clicks und Pops/min in der Musik 90 %, Pops/min in der Musik 10 % (schlechteste Einzelnote wäre G+)" \
         in i18n.render(w["explanation"], "de")
     assert w["per_metric"]["clicks_music_per_min"]["weight"] == 0.9 and w["per_metric"]["pops_per_min"]["weight"] == 0.1
     s_c, s_p = w["per_metric"]["clicks_music_per_min"]["score"], w["per_metric"]["pops_per_min"]["score"]
