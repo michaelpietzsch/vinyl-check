@@ -42,6 +42,9 @@ jobs:
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }}${{ matrix.ml && ', torch' || '' }})
     runs-on: ${{ matrix.os }}
+    # the tests take about 7 minutes; a run that does not end (orphan worker process after a green run on macOS,
+    # 2026-11-01) is cut off here instead of after the default six hours
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
