@@ -150,6 +150,23 @@ def group_impulses(t: np.ndarray, region: np.ndarray, kind: np.ndarray, strength
     return rep_of
 
 
+def music_region(region: np.ndarray, t: np.ndarray, music_span: tuple | None) -> np.ndarray:
+    """Region per event with the music span applied: a detection in the "music" region before the music starts or
+    after it ends sits in the lead-in or run-out groove and counts as "quiet" (the grade is made of the music, the
+    quiet passages are information). Returns a copy; None or missing bounds leave the regions as they are."""
+    if not music_span:
+        return region
+    ms, me = music_span
+    out = np.array(region, dtype=object)
+    outside = np.zeros(len(out), bool)
+    if ms is not None:
+        outside |= t < float(ms)
+    if me is not None:
+        outside |= t > float(me)
+    out[outside & (out == "music")] = "quiet"
+    return out
+
+
 def count_mask(kind: np.ndarray, region: np.ndarray, label: np.ndarray, rep: np.ndarray | None, t: np.ndarray,
                strength: np.ndarray, cfg: "AnalysisConfig") -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     """Which detections count. In this order: the audible grouping (group_impulses: only the representative of a
@@ -381,7 +398,8 @@ def recount(metrics: dict, events: list[dict], gcfg: GradingConfig = GradingConf
     the repeat rule and the audible grouping (count_mask), by default the built-in values."""
     acfg = acfg or AnalysisConfig()
     ea = event_arrays(events)
-    kind, region, gc, rep = ea["kind"], ea["region"], ea["gc"], ea["rep"]
+    kind, gc, rep = ea["kind"], ea["gc"], ea["rep"]
+    region = music_region(ea["region"], ea["t"], (metrics.get("music_start_s"), metrics.get("music_end_s")))
     counted, raw, _why, info = count_mask(kind, region, ea["label"], rep, ea["t"], ea["strength"], acfg)
     quiet_min = (metrics.get("quiet_s") or 0) / 60
     groove_min = (metrics.get("groove_s") or 0) / 60
@@ -693,6 +711,23 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
         rep = np.full(len(ev), np.nan)
         if sel.size:
             rep[sel] = repeats.count(audio, sr, ev["t"][sel], ev["ch"][sel], rpm=rpm)
+    # End of the music = first quiet passage after which no more music follows. Taking the start of the last quiet
+    # passage that reaches the end of the groove failed when a click split the run-out groove into two passages:
+    # the run-out groove then lay before the "end of the music" and counted as a skip back.
+    music_end = _music_end(levels_db, HOP_S, ge, seg["music_ref_db"], quiet)
+    # Start of the music: first frame in the groove from which the smoothed level stays above the groove
+    # silence for 1 s
+    sm_lv = ndimage.median_filter(levels_db, size=11, mode="nearest")
+    thr = seg["music_ref_db"] - 25.0
+    music_start = None
+    need = int(round(1.0 / HOP_S))
+    for s0, e0 in _runs(sm_lv[gs:ge] >= thr):
+        if e0 - s0 >= need:
+            music_start = (gs + s0) * HOP_S
+            break
+    # Clicks before the music starts or after it ends lie in the lead-in or run-out groove: they belong to the quiet
+    # passages, not to the music the grade is made of
+    region = music_region(region, ev["t"].astype(float), (music_start, music_end))
     # What counts: audible grouping, verdicts, repeat rule (count_mask)
     counted, raw, _why, count_info = count_mask(kind, region, label, rep, ev["t"].astype(float),
                                                 ev["strength"].astype(float), cfg)
@@ -730,20 +765,6 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
     metrics["detect"] = {"threshold": cfg.detect.threshold, "stripe_db": cfg.detect.stripe_db, "stripe_ms": cfg.detect.stripe_ms}
     # Groove skips
     groove_s = (gs * HOP_S, ge * HOP_S)
-    # End of the music = first quiet passage after which no more music follows. Taking the start of the last quiet
-    # passage that reaches the end of the groove failed when a click split the run-out groove into two passages:
-    # the run-out groove then lay before the "end of the music" and counted as a skip back.
-    music_end = _music_end(levels_db, HOP_S, ge, seg["music_ref_db"], quiet)
-    # Start of the music: first frame in the groove from which the smoothed level stays above the groove
-    # silence for 1 s
-    sm_lv = ndimage.median_filter(levels_db, size=11, mode="nearest")
-    thr = seg["music_ref_db"] - 25.0
-    music_start = None
-    need = int(round(1.0 / HOP_S))
-    for s0, e0 in _runs(sm_lv[gs:ge] >= thr):
-        if e0 - s0 >= need:
-            music_start = (gs + s0) * HOP_S
-            break
     metrics_music = {"music_start_s": None if music_start is None else round(music_start, 2),
                      "music_end_s": None if music_end is None else round(music_end, 2),
                      "music_len_s": None if (music_start is None or music_end is None) else round(music_end - music_start, 1)}

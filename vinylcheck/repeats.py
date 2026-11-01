@@ -36,7 +36,9 @@ SPIKE_TOL_BINS = 2      # … and the spike must sit within ±2 bins (±5.3 ms a
 SPIKE_DB_TOL = 8.0      # with a jump above its surroundings within this many dB of the candidate's …
 SPIKE_REL = 0.6         # … and at least this share of it …
 SPIKE_MIN_DB = 6.0      # … and at least this much: dense music has small jumps everywhere
-MIN_REPEATS = 2         # from this many repeats a detection repeats with the music
+MIN_REPEATS = 1         # from this many repeats a detection repeats with the music. Verdicts by ear on five sides:
+                        # defects came back 0 times in 26 of 30 cases, music often exactly once; at 1 the filter was
+                        # right in 95 % of the cases where it said music (at 2: 94 %) and caught 11 more hits
 REV_TOL_S = 0.03        # lags this close to a multiple of one revolution do not count
 BG_HALF_MS = 60.0       # surroundings whose median is the reference of a spike's jump (as in detect.stripe_mask)
 BG_GUARD_MS = 2.7

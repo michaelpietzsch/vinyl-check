@@ -2131,12 +2131,16 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         all_evs = db.events(rec_id)                 # grouping, counting and the "density" feature need every event
         ea = analysis.event_arrays(all_evs)
         acfg = acfg_for(rec_id)
-        _c, _r, why, _i = analysis.count_mask(ea["kind"], ea["region"], ea["label"], ea["rep"], ea["t"],
+        span = db.one("SELECT json_extract(metrics, '$.music_start_s') AS ms, json_extract(metrics, '$.music_end_s') AS me "
+                      "FROM analyses WHERE recording_id = ?", (rec_id,)) or {}
+        region = analysis.music_region(ea["region"], ea["t"], (span.get("ms"), span.get("me")))
+        _c, _r, why, _i = analysis.count_mask(ea["kind"], region, ea["label"], ea["rep"], ea["t"],
                                               ea["strength"], acfg)
-        rep_of = analysis.group_impulses(ea["t"], ea["region"], ea["kind"], ea["strength"], acfg.click_group_ms)
+        rep_of = analysis.group_impulses(ea["t"], region, ea["kind"], ea["strength"], acfg.click_group_ms)
         size = np.bincount(rep_of, minlength=len(all_evs))
         extra = {round(e["t"], 5): {"why": why[i], "grp": int(size[i]) if size[i] > 1 else None,
-                                    "grp_of": None if rep_of[i] == i else all_evs[rep_of[i]]["t"]}
+                                    "grp_of": None if rep_of[i] == i else all_evs[rep_of[i]]["t"],
+                                    "region": str(region[i])}                # lead-in/run-out clicks: quiet, not music
                  for i, e in enumerate(all_evs)}
         model = learn_model()
         lp = {}
@@ -2146,7 +2150,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             _, p = learning.estimate(all_evs, model, r.get("ref"), learn_zp(r))
             lp = {round(e["t"], 5): (None if p[i] != p[i] else round(float(p[i]), 3)) for i, e in enumerate(all_evs)}
         for e in evs:
-            e.update(extra.get(round(e["t"], 5)) or {"why": None, "grp": None, "grp_of": None})
+            e.update(extra.get(round(e["t"], 5)) or {"why": None, "grp": None, "grp_of": None, "region": e["region"]})
             if model:
                 e["lp"] = lp.get(round(e["t"], 5))
         return evs

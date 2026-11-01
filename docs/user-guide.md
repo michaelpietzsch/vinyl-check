@@ -171,6 +171,8 @@ zoomed clicks chart), listen with ▶ and decide:
 For skips, the choices are *run-out groove* (no damage) and *no skip* (rhythm or a loop). Judgements are applied
 immediately, survive re-analysis and are the training data for the [learning](measurement.md#learning) model.
 
+By default the list holds what the grade is made of: clicks and pops in the music. *Show everything* adds crackle,
+the pauses and the lead-in and run-out groove, which only feed the information metrics; judge the music first.
 Judged rows disappear from the list so that you can work through the rest. *Show judged* brings them back for
 corrections and shows how many are hidden. The charts always show every detection, with false alarms in grey.
 

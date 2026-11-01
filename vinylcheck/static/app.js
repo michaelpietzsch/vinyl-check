@@ -1091,6 +1091,14 @@ const EV_DEFAULT_SORT = { key: "t", dir: 1 };
 // out, "click" puts it back (unless it is a weaker impulse of an audible group, which never counts on its own).
 const whyOf = (e) => (e.skip ? null : e.label === "music" ? "label" : e.label === "defect" ? (e.why === "group" ? "group" : null) : e.why === "label" ? null : e.why || null);
 state.showImpulses = (() => { try { return localStorage.getItem("vc-show-impulses") === "1"; } catch (_) { return false; } })();
+// By default the list holds what the grade is made of: clicks and pops in the music. Crackle, the pauses and the
+// lead-in/run-out groove (information only) come in with "show everything".
+state.showAll = (() => { try { return localStorage.getItem("vc-show-all") === "1"; } catch (_) { return false; } })();
+const forGrade = (e) => e.skip || (e.region === "music" && e.kind !== "tick");
+// Rows the repeat rule took out of the count are hidden by default: the list is the work list of what still needs a
+// verdict. The list holds the strongest open spots; judging one lets the next strongest move up (no reload).
+state.showRule = (() => { try { return localStorage.getItem("vc-show-rule") === "1"; } catch (_) { return false; } })();
+state.evLimit = 60;
 // Sequenced music: the repeat rule, its state and the switch per record, plus the audible grouping, under the list
 function repeatsBlock(rec, m) {
   const rp = m.repeats;
@@ -1170,10 +1178,18 @@ function eventsTable(rows0, rec, sort) {
   const { key, dir } = sort || EV_DEFAULT_SORT;
   const m = rec.analysis?.metrics || {}, wi = wiGet(rec.id);
   rows0 = rows0.map((e) => (e.skip ? e : { ...e, label: evLabel(e, rec) }));
+  if (!state.showAll) rows0 = rows0.filter(forGrade);
   if (!state.showImpulses) rows0 = rows0.filter((e) => whyOf(e) !== "group");   // the weaker impulses of a group
+  const nRule = rows0.filter((e) => whyOf(e) === "rule" && !e.label).length;
+  if (!state.showRule) rows0 = rows0.filter((e) => whyOf(e) !== "rule" || e.label);
   const nJudged = rows0.filter((e) => e.label).length;
   if (!state.showJudged) rows0 = rows0.filter((e) => !e.label);
   const cnt = $("#ev-judged-n"); if (cnt) cnt.textContent = nJudged ? T(state.showJudged ? "recording.judged_count" : "recording.judged_count_hidden", { n: nJudged }) : "";
+  const cntR = $("#ev-rule-n"); if (cntR) cntR.textContent = nRule && !state.showRule ? T("recording.rule_hidden_count", { n: nRule }) : "";
+  // the strongest open spots first (state.evLimit of them), then the chosen order for reading
+  const skipRows = rows0.filter((e) => e.skip), open = rows0.filter((e) => !e.skip);
+  rows0 = [...open.sort((a, b) => b.strength - a.strength).slice(0, state.evLimit), ...skipRows];
+  const shown = $("#ev-shown-n"); if (shown) shown.textContent = String(open.length > state.evLimit ? state.evLimit : open.length);
   const KO = { skip: -1, pop: 0, click: 1, tick: 2 }, RO = { quiet: 0, music: 1, excluded: 2 };
   const val = (e) => (key === "kind" ? KO[e.kind] : key === "region" ? (e.region ? RO[e.region] : -1) : e[key] ?? -Infinity);
   const rows = [...rows0].sort((a, b) => ((val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * dir) || a.t - b.t);
@@ -1201,7 +1217,7 @@ function eventsTable(rows0, rec, sort) {
 }
 
 async function showRecording(id) {
-  const [rec, ov, top] = await Promise.all([api(`/api/recordings/${id}`), api(`/api/recordings/${id}/overview`), api(`/api/recordings/${id}/events?order=strength&limit=60`)]);
+  const [rec, ov, top] = await Promise.all([api(`/api/recordings/${id}`), api(`/api/recordings/${id}/overview`), api(`/api/recordings/${id}/events?order=strength&limit=20000`)]);
   const a = rec.analysis, m = a.metrics, g = a.grading;
   const v = openView();
   const so = m.second_opinion, confirmed = so?.clicks_music_confirmed_per_min;
@@ -1255,21 +1271,26 @@ async function showRecording(id) {
     ${skipNotes(m.skips, rec)}
     ${m.learned ? `<p class="hint">${T("recording.learned_hint", { clicks: num(m.learned.counts?.click ?? 0, 0), clicks_total: m.counts?.click ?? 0, ticks: num(m.learned.counts?.tick ?? 0, 0), ticks_total: m.counts?.tick ?? 0, pops: num(m.learned.counts?.pop ?? 0, 0), pops_total: m.counts?.pop ?? 0 })}${m.learned.graded ? " " + T("recording.learned_graded") : ""}</p>` : ""}
     ${repeatsBlock(rec, m)}
-    <p class="hint">${T("recording.events_hint", { n: top.length })} ${so?.available ? `${T("recording.so_summary", { quiet: pct1(so.confirmed_quiet), music: pct1(so.confirmed_music) })}${confirmed != null ? ` · ${T("recording.so_confirmed", { v: num(confirmed) })}` : ""}${so.seconds ? ` · ${num(so.seconds, 0)} s` : ""}.` : T("recording.so_unavailable")}
+    <p class="hint">${T("recording.events_hint", { n: '<span id="ev-shown-n">60</span>' })} ${T("recording.events_default")} ${so?.available ? `${T("recording.so_summary", { quiet: pct1(so.confirmed_quiet), music: pct1(so.confirmed_music) })}${confirmed != null ? ` · ${T("recording.so_confirmed", { v: num(confirmed) })}` : ""}${so.seconds ? ` · ${num(so.seconds, 0)} s` : ""}.` : T("recording.so_unavailable")}
       ${T("recording.audit_hint")}${m.counts?.labeled_music ? ` ${T("recording.audit_marked", { n: m.counts.labeled_music })}` : ""}.</p>
     <div class="row" style="gap:.6rem;align-items:center"><span class="hint">${T("recording.more_clicks")}</span>
-      <button class="link" data-ev-more="200">${T("recording.more_n", { n: 200 })}</button><button class="link" data-ev-more="1000">${T("recording.more_n", { n: 1000 })}</button>
-      <label class="hint" style="margin-left:auto" title="${esc(T("recording.show_impulses_title", { ms: Math.round(m.click_group_ms ?? 20) }))}"><input type="checkbox" id="ev-show-impulses" ${state.showImpulses ? "checked" : ""}>${T("recording.show_impulses")}</label>
+      <button class="link" data-ev-more="200">${T("recording.more_n", { n: 200 })}</button><button class="link" data-ev-more="1000">${T("recording.more_n", { n: 1000 })}</button><button class="link" data-ev-more="20000">${T("recording.more_all")}</button>
+      <label class="hint" title="${esc(T("recording.show_rule_title"))}"><input type="checkbox" id="ev-show-rule" ${state.showRule ? "checked" : ""}>${T("recording.show_rule")} <span id="ev-rule-n"></span></label>
+      <label class="hint" style="margin-left:auto" title="${esc(T("recording.show_all_title"))}"><input type="checkbox" id="ev-show-all" ${state.showAll ? "checked" : ""}>${T("recording.show_all")}</label>
+      <label class="hint" title="${esc(T("recording.show_impulses_title", { ms: Math.round(m.click_group_ms ?? 20) }))}"><input type="checkbox" id="ev-show-impulses" ${state.showImpulses ? "checked" : ""}>${T("recording.show_impulses")}</label>
       <label class="hint" title="${esc(T("recording.show_judged_title"))}"><input type="checkbox" id="ev-show-judged" ${state.showJudged ? "checked" : ""}>${T("recording.show_judged")} <span id="ev-judged-n"></span></label></div>
     <div id="wi-bar" class="wi-bar hidden" aria-live="polite"></div>
     <div class="scroll" id="ev-wrap"></div>`;
   $("#close-view").onclick = closeView;
   let evRows = top;
+  state.evLimit = 60;
   const renderEv = () => { const w = $("#ev-wrap"); if (w) w.innerHTML = eventsTable(eventRows(evRows, m.skips), rec, state.evSort); };
   state.renderEv = renderEv; renderEv();
   state.wiRefresh = () => guard(() => wiCompute(rec))();
   state.wiRefresh();                                              // restore this recording's what-if
   $("#ev-show-judged").onchange = (e) => { state.showJudged = e.target.checked; try { localStorage.setItem("vc-show-judged", state.showJudged ? "1" : "0"); } catch (_) {} renderEv(); };
+  $("#ev-show-all").onchange = (e) => { state.showAll = e.target.checked; try { localStorage.setItem("vc-show-all", state.showAll ? "1" : "0"); } catch (_) {} renderEv(); };
+  $("#ev-show-rule").onchange = (e) => { state.showRule = e.target.checked; try { localStorage.setItem("vc-show-rule", state.showRule ? "1" : "0"); } catch (_) {} renderEv(); };
   $("#ev-show-impulses").onchange = (e) => { state.showImpulses = e.target.checked; try { localStorage.setItem("vc-show-impulses", state.showImpulses ? "1" : "0"); } catch (_) {} renderEv(); };
   v.onclick = (e) => {
     if (e.target.dataset.play) return play(rec.id, +e.target.dataset.play, +(e.target.dataset.before || 0.6), +(e.target.dataset.after || 1.2));
@@ -1287,7 +1308,7 @@ async function showRecording(id) {
     const th = e.target.closest("th[data-sort]");
     if (th) { const k = th.dataset.sort, cur = state.evSort || EV_DEFAULT_SORT; state.evSort = { key: k, dir: cur.key === k ? -cur.dir : (k === "t" || k === "kind" || k === "region" ? 1 : -1) }; return renderEv(); }
     const more = e.target.closest("[data-ev-more]");
-    if (more) guard(async () => { evRows = await api(`/api/recordings/${rec.id}/events?order=strength&limit=${more.dataset.evMore}`); renderEv(); toast(T("recording.events_loaded", { n: evRows.length })); })();
+    if (more) { state.evLimit = +more.dataset.evMore; renderEv(); return; }
   };
   const pick = (t) => (!rec.audio_available ? toast(T("recording.audio_deleted_no_listen"))
     : view.zoomed ? playRange(rec.id, t, view.t0, view.t1, true) : playRange(rec.id, t, t, rec.duration_s, false));   // click = from here; zoomed: loop

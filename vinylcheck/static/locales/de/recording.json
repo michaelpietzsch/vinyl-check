@@ -70,7 +70,7 @@
   "spectrogram_head": "Spektrogramm",
   "grades_head": "Einzelnoten",
   "events_head": "Ereignisse",
-  "events_hint": "Die {n} stärksten Knackser und alle Rücksprünge in einer Liste, nach Zeit; Klick auf eine Spalte sortiert.",
+  "events_hint": "Die {n} stärksten offenen Stellen und alle Rücksprünge in einer Liste, nach Zeit; nach jedem Urteil rückt die nächste nach. Klick auf eine Spalte sortiert.",
   "events_loaded": {
     "one": "{n} Ereignis geladen",
     "other": "{n} Ereignisse geladen"
@@ -95,6 +95,13 @@
   "grp_summary": "Hörbare Knackser: {n} Impulse innerhalb von {ms} ms nach einem stärkeren zählen mit ihm als ein Knackser.",
   "show_impulses": "Einzelimpulse zeigen",
   "show_impulses_title": "Auch die schwächeren Impulse innerhalb von {ms} ms nach einem Click auflisten, die mit ihm als ein hörbarer Knackser zählen",
+  "show_all": "alles zeigen",
+  "show_all_title": "Standardmäßig steht in der Liste, woraus die Note entsteht: Clicks und Pops in der Musik. Angehakt kommen Knistern, Pausen sowie Ein- und Auslaufrille (nur Information) dazu",
+  "show_rule": "von der Regel entfernte zeigen",
+  "show_rule_title": "Clicks, die sich mit der Musik wiederholen (Sequenzer-Schläge), sind aus der Zählung und hier ausgeblendet; angehakt stehen sie grau mit „zählt nicht (Wiederholer)“ in der Liste, damit du einen doch als Knackser beurteilen kannst",
+  "rule_hidden_count": "({n} ausgeblendet)",
+  "events_default": "Gezeigt wird, woraus die Note entsteht – Clicks und Pops in der Musik; „alles zeigen“ holt Knistern, Pausen sowie Ein- und Auslaufrille dazu.",
+  "more_all": "alle",
   "wi_rule": "zählt nicht (Wiederholer)",
   "wi_rule_title": "Kommt mit derselben Musik drumherum wieder: ein Sequenzer-Schlag. Als „Knackser“ beurteilen, damit er zählt.",
   "wi_part_of": "Teil von {t}",

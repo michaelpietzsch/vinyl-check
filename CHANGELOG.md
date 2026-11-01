@@ -5,6 +5,23 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] – 2026-11-01
+
+### Changed
+
+- **One repeat is enough.** A click counts as repeating with the music from one found repeat on (two before).
+  Verdicts by ear on five sides: defects came back 0 times in 26 of 30 cases, music often exactly once; at one
+  repeat the filter was right in 95 % of the cases where it said music (94 % at two) and caught 11 more hits. Sides
+  that do not loop rose from 1–4 % to 4–7 % repeating clicks, far below the 20 % the rule needs.
+- **Lead-in and run-out groove.** A click before the music starts or after it ends counts as a quiet-passage click
+  (information), not as a click in the music the grade is made of, even where the level there had put it into the
+  music region; applies to stored analyses at the next count.
+- **The list is the work list.** By default the event list holds the 60 strongest open spots among the clicks and
+  pops in the music, i.e. what the grade is made of and still needs a verdict; judging one lets the next move up
+  without a reload, *more clicks* widens it to 200, 1000 or all. Hits the repeat rule took out are hidden and
+  counted next to *show hits the rule took out*; *show everything* adds crackle, the pauses and the lead-in and
+  run-out groove.
+
 ## [1.4.0] – 2026-11-01
 
 ### Added
@@ -539,7 +556,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.1.3...v1.2.0

@@ -70,7 +70,7 @@
   "spectrogram_head": "Spectrogram",
   "grades_head": "Individual grades",
   "events_head": "Events",
-  "events_hint": "The {n} strongest clicks and all skips in one list, by time; click a column to sort.",
+  "events_hint": "The {n} strongest open spots and all skips in one list, by time; judging one lets the next move up. Click a column to sort.",
   "events_loaded": {
     "one": "{n} event loaded",
     "other": "{n} events loaded"
@@ -95,6 +95,13 @@
   "grp_summary": "Audible clicks: {n} impulses within {ms} ms of a stronger one count with it as one click.",
   "show_impulses": "show single impulses",
   "show_impulses_title": "Also list the weaker impulses within {ms} ms of a click, which count with it as one audible click",
+  "show_all": "show everything",
+  "show_all_title": "By default the list holds what the grade is made of: clicks and pops in the music. Ticked, crackle, the pauses and the lead-in and run-out groove (information only) are listed too",
+  "show_rule": "show hits the rule took out",
+  "show_rule_title": "Clicks that repeat with the music (sequenced hits) are out of the count and hidden here; ticked, they are listed greyed with “not counted (repeats)” so you can still judge one as a click",
+  "rule_hidden_count": "({n} hidden)",
+  "events_default": "Shown: what the grade is made of – clicks and pops in the music; “show everything” adds crackle, pauses and the lead-in and run-out groove.",
+  "more_all": "all",
   "wi_rule": "not counted (repeats)",
   "wi_rule_title": "Comes back with the same music around it: a sequenced hit. Judge it as “click” to count it.",
   "wi_part_of": "part of {t}",
