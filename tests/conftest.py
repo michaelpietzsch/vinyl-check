@@ -22,3 +22,31 @@ starlette.testclient.TestClient.__init__ = _local_test_client_init
 from vinylcheck import updates  # noqa: E402
 
 updates.FIRST_AFTER_S = 10 ** 9
+
+# A test that builds an app without the lifespan (TestClient without `with`) leaves its worker and, after a heavy
+# job, the analysis child process behind; at exit the interpreter then waits for that child for good (seen on
+# macOS in CI and locally: a green run that never ended). Every worker is closed when the session ends.
+import pytest  # noqa: E402
+
+from vinylcheck import jobs  # noqa: E402
+
+_workers: list = []
+_worker_init = jobs.Worker.__init__
+
+
+def _tracked_worker_init(self, *args, **kwargs):
+    _worker_init(self, *args, **kwargs)
+    _workers.append(self)
+
+
+jobs.Worker.__init__ = _tracked_worker_init
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _close_workers_at_the_end():
+    yield
+    for w in _workers:
+        try:
+            w.close(timeout=5)
+        except Exception:  # noqa: BLE001 — teardown must not fail the run
+            pass
