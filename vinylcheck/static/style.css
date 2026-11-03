@@ -283,11 +283,14 @@ label.check input { width: auto; min-height: 0; }
 .conds { display: inline-flex; align-items: center; gap: .25rem; flex: none; }
 .conds .arrow { color: var(--muted); }
 .grade.none { color: var(--muted); font-weight: 400; }
-.condition { display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; margin-top: .7rem; }
-.cond { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: .6rem; align-items: center; }
+/* Every grade box has the same width; the note runs below it and never widens the box. The measured copies are
+   stacked, one row per copy, next to the record and collection tiles. */
+.condition { display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; margin-top: .7rem; align-items: flex-start; }
+.cond { display: grid; grid-template-columns: max-content 1fr; column-gap: .6rem; align-items: center; justify-items: start; }   /* 1fr: the spanning note widens no track */
 .cond-label { grid-column: 1 / -1; font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.cond .grade { font-size: 1.4rem; min-width: 3.2rem; padding: .15rem .45rem; }
-.cond-note { font-size: .82rem; color: var(--muted); line-height: 1.3; }
+.cond .grade { font-size: 1.4rem; width: 5rem; box-sizing: border-box; text-align: center; padding: .15rem .45rem; justify-self: start; }
+.cond-note { grid-column: 1 / -1; font-size: .82rem; color: var(--muted); line-height: 1.3; max-width: 26rem; }
+.cond-stack { display: flex; flex-direction: column; gap: .6rem; }
 .cond-diff { flex-basis: 100%; font-size: .85rem; color: var(--muted); display: flex; gap: .4rem; align-items: center; }
 #tabs { flex: 1; } #tabs .tab-settings { margin-left: auto; }
 @media (max-width: 560px) { #tabs .tab-settings { margin-left: 0; } }
