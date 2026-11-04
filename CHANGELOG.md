@@ -22,6 +22,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **The digital-silence note names the device** and points at the turntable profile's recording device, which takes
   precedence over the one under *Settings → Audio interface*: the *Test* there can succeed on one device while the
   recording uses another.
+- **Remove overhang on Windows** could fail with *Access is denied* when another process still held the recording
+  open for a moment (the analysis that had just finished with it); the replacement is now retried for up to five
+  seconds.
 
 ## [1.5.0] – 2026-11-01
 

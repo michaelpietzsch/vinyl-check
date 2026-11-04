@@ -81,7 +81,16 @@ def trim_audio(path: str, keep_s: float) -> float:
         os.chmod(tmp, os.stat(path).st_mode & 0o777)
     except OSError:
         pass
-    os.replace(tmp, path)
+    for attempt in range(25):
+        try:
+            os.replace(tmp, path)
+            break
+        except PermissionError:
+            # Windows refuses to replace a file another process still holds open (the analysis child that has just
+            # finished with it, a download in flight); the handle goes away within moments, so wait a little
+            if attempt == 24:
+                raise
+            time.sleep(0.2)
     return round(keep / rate, 2)
 
 
