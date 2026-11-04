@@ -110,7 +110,7 @@ def test_the_log_keeps_the_newest(tmp_path):
 
 
 @pytest.mark.parametrize("key", ["generic", "jobs.integrity_error", "jobs.audio_missing", "jobs.audio_deleted",
-                                 "jobs.calibration_too_loud", "jobs.worker_crashed", "api.recording_too_short",
+                                 "jobs.calibration_too_loud", "jobs.calibration_silent", "jobs.worker_crashed", "api.recording_too_short",
                                  "api.recording_interrupted", "audio.device_stalled", "audio.device_not_found"])
 def test_known_errors_are_explained(key):
     for lang in i18n.languages():

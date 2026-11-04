@@ -13,6 +13,6 @@
   "open_failed": "„{device}“ ließ sich nicht öffnen: {error}",
   "exclusive_unavailable": "Der exklusive WASAPI-Modus ist nicht verfügbar ({error}). Aufnahme im geteilten Modus über den Windows-Mixer: dessen Format prüfen und die Audioverbesserungen für dieses Gerät ausschalten.",
   "device_stalled": "„{device}“ liefert seit {s} Sekunden keinen Ton, die Aufnahme wurde beendet. Ist das Gerät noch angeschlossen?",
-  "digital_silence": "Das Gerät liefert nur digitale Stille. Gewählten Eingang, Eingangspegel in den Systemeinstellungen und Kabel prüfen.",
-  "digital_silence_mac": "Das Gerät liefert nur digitale Stille. Unter macOS vinyl-check (oder dem Terminal, in dem es läuft) den Mikrofonzugriff erlauben: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon, danach neu starten."
+  "digital_silence": "Gerät „{device}“ liefert nur digitale Stille. Prüfen, von welchem Eingang die Aufnahme kommt: Das Aufnahmegerät des aktiven Plattenspieler-Profils hat Vorrang vor dem unter Einstellungen → Audio-Interface (dessen Test ein anderes Gerät probieren kann); dann die gewählten Eingänge, den Eingangspegel in den Systemeinstellungen und die Kabel.",
+  "digital_silence_mac": "Gerät „{device}“ liefert nur digitale Stille. Unter macOS vinyl-check (oder dem Terminal, in dem es läuft) den Mikrofonzugriff erlauben: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon, danach neu starten. Ist das schon erlaubt, prüfen, von welchem Eingang die Aufnahme kommt: Das Aufnahmegerät des aktiven Plattenspieler-Profils hat Vorrang vor dem unter Einstellungen → Audio-Interface (dessen Test ein anderes Gerät probieren kann)."
 }

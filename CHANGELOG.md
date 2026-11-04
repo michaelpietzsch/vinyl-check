@@ -13,6 +13,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   findings) wraps underneath instead of widening the box. The measured copies are stacked, one row per copy, next to
   the record grade and the collection condition.
 
+### Fixed
+
+- **A silent calibration is refused.** A calibration that recorded nothing but exact zeros (the turntable profile
+  bound to a device that delivers no signal, a muted input, no microphone permission on macOS) stored a chain noise
+  of −200 dBFS and the station showed it as fine. Below −120 dBFS the calibration now ends with an error that names
+  the device and what to check, and nothing is taken over.
+- **The digital-silence note names the device** and points at the turntable profile's recording device, which takes
+  precedence over the one under *Settings → Audio interface*: the *Test* there can succeed on one device while the
+  recording uses another.
+
 ## [1.5.0] – 2026-11-01
 
 ### Added

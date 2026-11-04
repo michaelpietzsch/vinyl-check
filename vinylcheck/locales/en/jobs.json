@@ -4,6 +4,7 @@
   "audio_missing": "Audio file missing: {path}",
   "integrity_error": "Integrity error: the checksum of recording #{id} has changed since it was recorded. The file is damaged, do not use it any further.",
   "calibration_too_loud": "Chain noise of {db:.1f} dBFS is too loud (expected < {max:.0f} dBFS). The stylus was probably down; please repeat with the stylus UP.",
+  "calibration_silent": "The calibration recorded only digital silence from “{device}” ({db:.1f} dBFS): nothing to measure, so the chain noise was not taken over. Check the recording device of the turntable profile (it takes precedence over the one under Audio interface, whose Test may use a different device), the chosen inputs and, on macOS, the microphone permission; then calibrate again.",
   "no_master": "No master stored for side {side}",
   "master_file_missing": "Master file missing: {path}",
   "analyze_first": "The recording must be analyzed first",

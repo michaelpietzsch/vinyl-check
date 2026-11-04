@@ -13,6 +13,6 @@
   "open_failed": "“{device}” could not be opened: {error}",
   "exclusive_unavailable": "WASAPI exclusive mode is not available ({error}). Recording in shared mode through the Windows mixer: check its format and turn off audio enhancements for this device.",
   "device_stalled": "“{device}” has delivered no audio for {s} seconds, the recording was ended. Is the device still connected?",
-  "digital_silence": "The device delivers only digital silence. Check the selected input, the input level in the system settings and the cables.",
-  "digital_silence_mac": "The device delivers only digital silence. On macOS allow microphone access for vinyl-check (or the terminal it runs in) under System Settings → Privacy & Security → Microphone, then restart it."
+  "digital_silence": "Device “{device}” delivers only digital silence. Check which input the recording uses: the recording device of the active turntable profile takes precedence over the one under Settings → Audio interface (whose Test may try a different device); then the chosen inputs, the input level in the system settings and the cables.",
+  "digital_silence_mac": "Device “{device}” delivers only digital silence. On macOS allow microphone access for vinyl-check (or the terminal it runs in) under System Settings → Privacy & Security → Microphone, then restart it. If that is granted already, check which input the recording uses: the recording device of the active turntable profile takes precedence over the one under Settings → Audio interface (whose Test may try a different device)."
 }

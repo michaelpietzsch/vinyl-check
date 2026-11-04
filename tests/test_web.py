@@ -241,6 +241,22 @@ def test_calibration_needle_up(tmp_path):
         assert c.get("/api/status").json()["calibration"]["chain_db"] == rec["chain_db"]
 
 
+def test_calibration_rejects_digital_silence(tmp_path):
+    """Exact zeros (the profile bound to the wrong device, no microphone permission): nothing to measure, and a chain
+    noise of -200 dBFS must never be stored."""
+    wav = tmp_path / "silence.wav"
+    sf.write(wav, np.zeros((SR * 10, 2), np.float32), SR, subtype="PCM_16")
+    cfg = replace(Config(), data_dir=tmp_path / "d", state_dir=tmp_path / "s", fake_source=str(wav),
+                  fake_speed=100.0, min_free_gb=0.0)
+    with TestClient(create_app(cfg)) as c:
+        r = c.post("/api/recordings/start", json={"kind": "calibration", "side": "-"})
+        rec = _wait(c, r.json()["recording_id"])
+        assert rec["status"] == "error" and rec["error_key"] == "jobs.calibration_silent", rec.get("error")
+        assert "digital silence" in rec["error"] and rec["chain_db"] is None
+        assert c.get("/api/status").json()["calibration"] is None
+        assert c.get("/api/problems").json()[0]["key"] == "jobs.calibration_silent"
+
+
 def test_retention_deletes_audio_keeps_metrics(client):
     """The data drive is a buffer: after retention_days the audio is gone, the measurements stay."""
     rid = client.post("/api/records", json={"artist": "Old", "title": "Buffer"}).json()["id"]

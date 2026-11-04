@@ -46,6 +46,7 @@ log = logging.getLogger("vinylcheck.jobs")
 # A calibration records the chain noise with the stylus lifted. Anything louder than this means the stylus was
 # down; using that value would later make whole grooves count as "stylus up".
 CALIBRATION_MAX_DBFS = -65.0
+CALIBRATION_MIN_DBFS = -120.0   # below: digital silence (the wrong device, no permission), nothing was measured
 MASTER_KINDS = ("before", "after", "after_wet", "after_dry", "other")   # record checks, not calibration/alignment
 RETENTION_CHECK_S = 3600
 # An idle child process ends within a fraction of a second once the pool is shut down; a few seconds leave room for
@@ -314,10 +315,12 @@ class Worker:
         t0 = time.time()
         if rec["kind"] == "calibration":
             chain = analysis.chain_noise_db(rec["path"])
-            if chain > CALIBRATION_MAX_DBFS:
-                # The stylus was evidently down: with this value whole grooves would later be discarded as
-                # "stylus up", so do not take it over
-                err = i18n.msg("jobs.calibration_too_loud", db=chain, max=CALIBRATION_MAX_DBFS)
+            if chain > CALIBRATION_MAX_DBFS or chain < CALIBRATION_MIN_DBFS:
+                # Too loud: the stylus was evidently down, and with this value whole grooves would later be discarded
+                # as "stylus up". Far too quiet: exact zeros, no signal reached the recorder (a profile bound to the
+                # wrong device, a muted input, no microphone permission on macOS). Neither is taken over.
+                err = (i18n.msg("jobs.calibration_too_loud", db=chain, max=CALIBRATION_MAX_DBFS) if chain > CALIBRATION_MAX_DBFS
+                       else i18n.msg("jobs.calibration_silent", device=rec.get("device") or "?", db=chain))
                 self.db.update_recording(rec_id, status="error", error=err)
                 self.db.add_problem("analyze", rec_id, err)
                 return

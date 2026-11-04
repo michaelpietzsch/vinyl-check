@@ -26,6 +26,8 @@
   "jobs.audio_deleted.todo": "Nichts zu reparieren. Wer später neu analysieren will, hebt das Audio unter Einstellungen → Aufbewahrung länger auf.",
   "jobs.calibration_too_loud.what": "Das Kettenrauschen wird mit angehobener Nadel gemessen: nur das Rauschen der Elektronik. Der Pegel lag weit darüber, die Nadel war also wohl in der Rille, oder lautes Brummen kam am Eingang an.",
   "jobs.calibration_too_loud.todo": "Nadel anheben, Teller drehen lassen und die Kalibrierung neu starten. Bleibt es mit Nadel oben zu laut, Erdungskabel und Kabel prüfen (Brummen).",
+  "jobs.calibration_silent.what": "Die Kalibrierung misst das Rauschen der Kette bei abgehobener Nadel. Diese Aufnahme enthielt nur exakte Nullen: Vom gewählten Gerät kam kein Signal bei vinyl-check an, es gab nichts zu messen.",
+  "jobs.calibration_silent.todo": "Plattenspieler-Profil öffnen und sein Aufnahmegerät prüfen: Es hat Vorrang vor dem Gerät unter Einstellungen → Audio-Interface, und der Test dort kann ein anderes Gerät nutzen. Die gewählten Eingänge prüfen; unter macOS den Mikrofonzugriff für vinyl-check erlauben. Dann die Kalibrierung erneut starten.",
   "jobs.worker_crashed.what": "Der Rechenprozess hat sich unerwartet beendet, meist weil der Speicher ausging.",
   "jobs.worker_crashed.todo": "Die Aufnahme neu analysieren (↻). Passiert es wieder, andere Programme schließen oder die Auslastung im Reiter System ansehen.",
   "jobs.no_master.what": "Der Master-Vergleich braucht den digitalen Master dieser Seite, und es ist keiner gespeichert.",

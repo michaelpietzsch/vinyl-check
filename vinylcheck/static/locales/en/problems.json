@@ -26,6 +26,8 @@
   "jobs.audio_deleted.todo": "Nothing to repair. To analyse recordings again later, keep their audio longer under Settings → Retention.",
   "jobs.calibration_too_loud.what": "The chain noise is measured with the stylus raised: the noise of the electronics alone. The level was far above that, so the stylus was probably in the groove, or loud hum reached the input.",
   "jobs.calibration_too_loud.todo": "Raise the stylus, let the platter spin and start the calibration again. If it stays too loud with the stylus up, check the ground lead and the cables (hum).",
+  "jobs.calibration_silent.what": "A calibration measures the noise of the chain with the stylus raised. This recording held nothing but exact zeros: no signal reached vinyl-check from the chosen device, so there was nothing to measure.",
+  "jobs.calibration_silent.todo": "Open the turntable profile and check its recording device: it takes precedence over the device under Settings → Audio interface, and the Test there may use a different one. Check the chosen inputs; on macOS allow microphone access for vinyl-check. Then run the calibration again.",
   "jobs.worker_crashed.what": "The process that does the number crunching ended unexpectedly, most often because memory ran out.",
   "jobs.worker_crashed.todo": "Analyse the recording again (↻). If it happens again, close other programs or check the load on the System tab.",
   "jobs.no_master.what": "The master comparison needs the digital master of this side, and none is stored.",

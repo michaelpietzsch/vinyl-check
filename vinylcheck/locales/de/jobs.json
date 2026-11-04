@@ -4,6 +4,7 @@
   "audio_missing": "Audiodatei fehlt: {path}",
   "integrity_error": "Integritätsfehler: Prüfsumme der Aufnahme #{id} hat sich seit der Aufnahme verändert. Datei beschädigt, nicht weiterverwenden.",
   "calibration_too_loud": "Kettenrauschen {db:.1f} dBFS ist zu laut (erwartet < {max:.0f} dBFS). Nadel war wohl aufgesetzt, bitte mit Nadel OBEN wiederholen.",
+  "calibration_silent": "Die Kalibrierung hat von „{device}“ nur digitale Stille aufgenommen ({db:.1f} dBFS): nichts zu messen, das Kettenrauschen wurde nicht übernommen. Aufnahmegerät des Plattenspieler-Profils prüfen (es hat Vorrang vor dem unter Audio-Interface, dessen Test ein anderes Gerät nutzen kann), die gewählten Eingänge und unter macOS die Mikrofon-Freigabe; dann neu kalibrieren.",
   "no_master": "Kein Master für Seite {side} hinterlegt",
   "master_file_missing": "Master-Datei fehlt: {path}",
   "analyze_first": "Die Aufnahme muss zuerst analysiert sein",

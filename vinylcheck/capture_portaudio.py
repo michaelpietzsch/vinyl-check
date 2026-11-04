@@ -358,8 +358,8 @@ class SoundDeviceSource:
         self._silent += len(a)
         if self._silent >= SILENCE_S * self.rate:
             self._silent = None
-            self.notes.append(i18n.msg("audio.digital_silence_mac" if sys.platform == "darwin"
-                                       else "audio.digital_silence"))
+            self.notes.append(i18n.msg("audio.digital_silence_mac" if sys.platform == "darwin" else "audio.digital_silence",
+                                       device=self.device["id"]))
 
     def close(self) -> None:
         global _open_streams
