@@ -10,5 +10,8 @@
   "no_identity": "Discogs did not say whom the token belongs to",
   "unknown_grade": "Unknown grade '{grade}'",
   "not_in_collection": "The record is not in the collection (or the collection has not been synced yet)",
-  "instance_unknown": "Collection instance unknown: sync the collection"
+  "instance_unknown": "Collection instance unknown: sync the collection",
+  "not_in_collection_now": "The record is not in the Discogs collection (any longer): removed or never added there?",
+  "several_instances": "This release is in the collection {n} times: choose the copy to write to",
+  "instance_gone": "The chosen copy is no longer in the Discogs collection (removed or added again there): choose again"
 }

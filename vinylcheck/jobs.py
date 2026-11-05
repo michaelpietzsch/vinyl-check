@@ -248,6 +248,10 @@ class Worker:
                 log.info("%s %s interrupted by shutting down; it runs again at the next start", kind, ident)
             except Exception as e:  # noqa: BLE001
                 ok, err = False, i18n.error_message(e)       # stored as a message (db.py)
+                if kind == "analyze" and not self.db.recording(ident):
+                    # deleted while it was analysed (its file went with it): nothing to report
+                    log.info("Recording %s was deleted during its analysis", ident)
+                    continue
                 log.error("%s %s failed: %s", kind, ident, traceback.format_exc())
                 self.db.add_problem(kind, ident, err)                 # the station's error log (System tab)
                 if kind == "analyze":
@@ -262,6 +266,11 @@ class Worker:
                 self.current = None
                 self.completed += 1
                 self.q.task_done()
+
+    def _still_there(self, rec: dict) -> bool:
+        """The recording an analysis started with still exists (it may have been deleted while it was analysed)."""
+        cur = self.db.recording(rec["id"])
+        return bool(cur) and cur.get("created_at") == rec.get("created_at")
 
     # ─── Integrity ───────────────────────────────────────────────────────────
     def verify_audio(self, rec: dict) -> None:
@@ -348,13 +357,17 @@ class Worker:
             record = self.db.record(rec["record_id"]) if rec.get("record_id") else None
             acfg = replace(self.cfg.analysis, pop_dbfs=trim["pop_dbfs"], detect=dp,
                            clip_grace_s=float(self.cfg.clip_grace_s), clip_mention=int(self.cfg.clip_mention_samples),
-                           mono=bool((record or {}).get("mono")))          # a mono record is analysed as L+R
+                           mono=bool((record or {}).get("mono")),          # a mono record is analysed as L+R
+                           repeat_rule=analysis.record_repeat_rule(record, self.cfg.analysis.repeat_rule)["mode"])
             gcfg = replace(self.cfg.grading, clip_samples_max=int(self.cfg.clip_max_samples))
             res = self.run_heavy(heavy.analyze_job, rec["path"], acfg, gcfg, chain, trim["rpm"],
                                  trim["ref_dbfs"], trim["floor"], self.db.labels(rec_id), self.side_tracks(rec),
                                  self.db.skip_labels(rec_id), trim["fixed_gain"], self.db.so_cache(rec.get("sha256")))
             self.db.save_so_cache(rec.get("sha256"), res.pop("so_new", None) or {})
             res["metrics"]["profile"] = trim
+        if not self._still_there(rec):
+            log.info("Recording %s was deleted during its analysis: result discarded", rec_id)
+            return
         self.db.save_analysis(rec_id, res, __version__, time.time() - t0)
         self.db.update_recording(rec_id, status="analyzed", chain_db=chain)
         if rec["kind"] == "alignment":

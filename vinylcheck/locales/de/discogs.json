@@ -10,5 +10,8 @@
   "no_identity": "Discogs hat nicht mitgeteilt, zu welchem Konto der Token gehört",
   "unknown_grade": "Unbekannte Note '{grade}'",
   "not_in_collection": "Platte ist nicht in der Sammlung (oder Sammlung noch nicht abgeglichen)",
-  "instance_unknown": "Sammlungsinstanz unbekannt: Sammlung abgleichen"
+  "instance_unknown": "Sammlungsinstanz unbekannt: Sammlung abgleichen",
+  "not_in_collection_now": "Die Platte ist nicht (mehr) in der Discogs-Sammlung: dort entfernt oder nie hinzugefügt?",
+  "several_instances": "Diese Pressung ist {n}-mal in der Sammlung: bitte das Exemplar wählen, in das geschrieben wird",
+  "instance_gone": "Das gewählte Exemplar ist nicht mehr in der Discogs-Sammlung (dort entfernt oder neu hinzugefügt): bitte neu wählen"
 }

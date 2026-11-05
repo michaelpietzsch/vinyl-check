@@ -55,6 +55,41 @@ def test_a_recording_in_progress_is_not_analysed(tmp_path):
         assert running.recording(rid2)["status"] == "recording"
 
 
+def test_a_deleted_number_is_not_given_out_again(tmp_path):
+    db = DB(_cfg(tmp_path).db_path)
+    rec = db.add_record("A", "B")
+    a, b = (db.add_recording(record_id=rec, kind="before", side=s, status="analyzed") for s in "AB")
+    db.delete_recording(b)
+    c = db.add_recording(record_id=rec, kind="before", side="B", status="recording")
+    assert c > b                                     # SQLite alone would hand out the deleted highest id again
+    cmp = db.add_comparison(a, c)
+    db.x("DELETE FROM comparisons WHERE id = ?", (cmp,))
+    assert db.add_comparison(a, c) > cmp
+    other = db.add_record("C", "D")
+    db.x("DELETE FROM records WHERE id = ?", (other,))
+    assert db.add_record("E", "F") > other
+
+
+def test_an_analysis_of_a_deleted_recording_is_dropped(tmp_path):
+    """The recording is deleted while it is analysed and a new one is started: the result must not land anywhere."""
+    cfg = _cfg(tmp_path)
+    db = DB(cfg.db_path)
+    rid = db.add_recording(kind="after_wet", side="A", path=_wav(tmp_path / "a.wav"), status="recorded")
+    w = Worker(cfg, db)
+    new = {}
+
+    def heavy(*_a, **_k):
+        db.delete_recording(rid)
+        new["id"] = db.add_recording(kind="before", side="A", path=_wav(tmp_path / "b.wav"), status="recording")
+        return {"metrics": {"summary": {}}, "grading": {"grade": "NM", "score": 99}, "warnings": [], "overview": {},
+                "events": []}
+    w.run_heavy = heavy
+    w._analyze(rid)
+    r = db.recording(new["id"])
+    assert db.recording(rid) is None and r["status"] == "recording" and r.get("analysis") is None
+    assert db.one("SELECT COUNT(*) AS n FROM analyses")["n"] == 0 and db.problems() == []
+
+
 def test_checksums_taken_during_the_recording_are_taken_again(tmp_path):
     cfg = _cfg(tmp_path)
     db = DB(cfg.db_path)

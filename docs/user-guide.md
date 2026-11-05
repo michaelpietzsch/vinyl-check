@@ -66,7 +66,15 @@ list of comparisons.
 - **Condition block.** *In collection* is the condition stored at Discogs, and *Measured* is vinyl-check's grade
   per copy. Hover over or tap either tile to see the grading scale and the criteria. When the two differ,
   vinyl-check offers to write the measured grade to your Discogs collection (media condition only, sleeve
-  condition and notes stay untouched). Nothing is written without your confirmation.
+  condition and notes stay untouched). Nothing is written without your confirmation. Before it asks, vinyl-check
+  looks the record up on Discogs as it is now (the synced collection can be minutes old): the question shows the
+  condition Discogs holds at that moment, and a record removed there meanwhile is reported instead of written.
+  When the same release is in your collection more than once, the page asks which copy gets the grade (with the
+  date it was added, its condition and notes) and remembers the choice for that copy of yours.
+- **Fetch again.** vinyl-check takes tracks, side lengths, genre and cover of a release once and keeps them.
+  When the entry was corrected on Discogs later (durations added, tracks fixed, another image), *fetch again*
+  next to the release link takes them anew. A track list entered by hand is replaced; sides whose tracks
+  changed are analysed again.
 - **Cover.** Click the cover to upload your own image (JPEG, PNG or WebP). The browser scales it to 1200 px.
   This helps with test pressings and records that are not on Discogs. *Remove own cover* restores the Discogs
   cover.
@@ -104,9 +112,11 @@ chart how long it ran on with the stylus up and offers **Remove overhang**: the 
 the groove and analysed again.
 
 **Recording table.** Click a column heading to sort, and click again to reverse the order. *Default* restores the
-order by copy and date. Double-click (or double-tap) the side, copy or condition cell to change it after a
-confirmation. A changed side re-analyses the recording, because the tracklist differs per side. Per row: *Report*,
-re-analyse (↻) and delete (✕).
+order by copy and date. Double-click (or double-tap) the side, copy or condition cell to edit the recording: a box
+opens with all three, the clicked one selected; *Save* or Enter stores what changed, *Cancel* or Esc keeps
+everything. A changed side re-analyses the recording, because the tracklist differs per side. Per row: *Report*,
+re-analyse (↻) and delete (✕). Questions such as *Delete recording?* are asked in the page itself; for deleting,
+the focus is on *Cancel*, so Enter alone never deletes.
 
 ## The recording report
 
@@ -190,8 +200,12 @@ Electronic music is hard for any click detector: a drum-computer hit looks exact
 column says how often the same hit came back with the same music around it within ±8 s. From 20 % repeating
 clicks in the music on, the side counts as **sequenced music**: the repeating clicks are shown greyed with *not
 counted (repeats)* and left out of the grade; the line under the list says how many. Music that does not loop
-stays as it is. The selector *Rule for this record* (also on the record page) forces the rule on or off for every
-side of the record, and your own verdicts always win: *Click* on a greyed hit counts it again.
+stays as it is. The selector *Rule for this record* (also on the record page, *Sequenced music*) forces the rule
+on or off for every side of the record, and your own verdicts always win: *Click* on a greyed hit counts it again.
+Until you choose, the default follows the record's Discogs genres and styles: Hip Hop and the beat-based styles of
+Electronic (Techno, House, Electro, Synth-pop, EBM, Trance, Drum n Bass and others) switch it on, Classical
+switches it off, everything else (Ambient, Experimental, New Wave, rock with synthesizers …) stays automatic. The
+record page names the genres when the default comes from them.
 
 A particle or a scratch makes the stylus bounce, so one audible click is often two or three impulses within 20 ms.
 The list shows the strongest with a chip such as *×3* and counts the group once; *show single impulses* lists the

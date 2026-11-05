@@ -17,21 +17,41 @@ from vinylcheck.config import Config
 from vinylcheck.web import create_app
 
 
+GENRES = {777: (["Electronic"], ["Synth-pop", "Electro"]), 12345: (["Classical"], ["Baroque"]),
+          5605854: (["Rock"], ["Hard Rock"])}
+
+
 def _item(rid, inst, artist, title, media, year=1988, catno="TL 001", added="2026-09-07T10:00:00-07:00"):
+    g, st = GENRES.get(rid, ([], []))
     return {"instance_id": inst, "folder_id": 1, "date_added": added,
             "basic_information": {"id": rid, "title": title, "year": year, "artists": [{"name": artist}],
                                   "labels": [{"name": "Test Label", "catno": catno}],
                                   "formats": [{"name": "Vinyl", "descriptions": ["LP", "Album"]}],
-                                  "thumb": f"https://i.discogs.com/{rid}.jpg"},
+                                  "thumb": f"https://i.discogs.com/{rid}.jpg", "genres": g, "styles": st},
             "notes": [{"field_id": 1, "value": media}, {"field_id": 2, "value": "Good (G)"},
                       {"field_id": 3, "value": "Test note"}]}
 
 
 class FakeApi:
-    """Stand-in for api.discogs.com: a collection on two pages, writing a field."""
+    """Stand-in for api.discogs.com: a collection on two pages, the copies of one release, writing a field.
+    `twin` adds a second copy of release 12345 (another instance, another folder)."""
     def __init__(self):
         self.calls = []
-        self.media = {5605854: "Good (G)", 12345: "Near Mint (NM or M-)", 777: "Very Good (VG)"}
+        self.media = {90001: "Good (G)", 90002: "Near Mint (NM or M-)", 90003: "Very Good (VG)", 90004: "Very Good Plus (VG+)"}
+        self.twin = False
+        self.releases = 0
+        self.tracklists: dict = {}
+
+    def items(self):
+        out = [_item(5605854, 90001, "Test Artist", "First Album", self.media[90001]),
+               _item(12345, 90002, "Test Artist", "Second Album", self.media[90002], 1979, "TL 002"),
+               _item(777, 90003, "Ümlaut Bänd", "Third Album", self.media[90003], 1980, "TL 003")]
+        if self.twin:
+            t = _item(12345, 90004, "Test Artist", "Second Album", self.media[90004], 1979, "TL 002",
+                      added="2026-10-01T10:00:00-07:00")
+            t["folder_id"] = 7
+            out.append(t)
+        return out
 
     def __call__(self, req, timeout=0, context=None):
         url = req.full_url
@@ -39,15 +59,28 @@ class FakeApi:
         assert dict(req.header_items()).get("Authorization") == "Discogs token=tok123"
         if "/collection/folders/0/releases" in url:
             page = int(urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["page"][0])
-            items = {1: [_item(5605854, 90001, "Test Artist", "First Album", self.media[5605854]),
-                         _item(12345, 90002, "Test Artist", "Second Album", self.media[12345], 1979, "TL 002")],
-                     2: [_item(777, 90003, "Ümlaut Bänd", "Third Album", self.media[777], 1980, "TL 003")]}[page]
+            items = self.items()
+            items = items[:2] if page == 1 else items[2:]
             return io.BytesIO(json.dumps({"pagination": {"page": page, "pages": 2}, "releases": items}).encode())
+        if "/collection/releases/" in url:                              # the copies of one release, as they are now
+            rid = int(urllib.parse.urlparse(url).path.rsplit("/", 1)[1])
+            items = [it for it in self.items() if it["basic_information"]["id"] == rid]
+            if not items:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, io.BytesIO(b'{"message": "Not found"}'))
+            return io.BytesIO(json.dumps({"pagination": {"page": 1, "pages": 1}, "releases": items}).encode())
         if "/fields/1" in url and req.get_method() == "POST":
             rid = int(url.split("/releases/")[1].split("/")[0])
-            assert "/folders/1/" in url and f"/instances/{90001 if rid == 5605854 else 0}/" in url
-            self.media[rid] = json.loads(req.data)["value"]
+            inst = int(url.split("/instances/")[1].split("/")[0])
+            it = next(x for x in self.items() if x["instance_id"] == inst)
+            assert it["basic_information"]["id"] == rid and f"/folders/{it['folder_id']}/" in url
+            self.media[inst] = json.loads(req.data)["value"]
             return io.BytesIO(b"")
+        if "/releases/" in url and "/collection/" not in url:           # a release itself (tracks, genres)
+            rid = int(url.rsplit("/", 1)[1])
+            g, st = (["Hip Hop"], ["Boom Bap"]) if rid == 4242 else GENRES.get(rid, ([], []))
+            self.releases += rid == 4242
+            return io.BytesIO(json.dumps({"id": rid, "genres": g, "styles": st,
+                                          "tracklist": self.tracklists.get(rid, [])}).encode())
         raise AssertionError("unexpected URL " + url)
 
 
@@ -72,8 +105,8 @@ def test_sync_search_entry_and_write(tmp_path, api):
     assert [h["release_id"] for h in d.search("umlaut band")] == [777]          # found without the umlauts
     assert d.search("") == [] and d.search("zzz") == []
     out = d.set_media_condition(5605854, "VG+")
-    assert out == {"previous": "Good (G)", "current": "Very Good Plus (VG+)", "release_id": 5605854}
-    assert api.media[5605854] == "Very Good Plus (VG+)" and d.entry(5605854)["media"] == "Very Good Plus (VG+)"
+    assert out == {"previous": "Good (G)", "current": "Very Good Plus (VG+)", "release_id": 5605854, "instance_id": 90001}
+    assert api.media[90001] == "Very Good Plus (VG+)" and d.entry(5605854)["media"] == "Very Good Plus (VG+)"
     with pytest.raises(discogs.DiscogsError):
         d.set_media_condition(999, "VG")
     with pytest.raises(discogs.DiscogsError) as ei:
@@ -326,3 +359,150 @@ def test_not_set_up_texts_point_to_the_settings(tmp_path):
         assert c.get("/api/discogs/status").json()["desktop"] is True
     assert "Settings → Discogs" in en and "configuration" not in en and "restart" not in en
     assert "Einstellungen → Discogs" in de and "Konfiguration" not in de
+
+
+def test_genre_rule():
+    assert discogs.genre_rule(["Electronic"], ["Synth-pop", "Electro"]) == "on"
+    assert discogs.genre_rule(["Hip Hop"], []) == "on"
+    assert discogs.genre_rule(["Electronic"], ["Ambient"]) is None                # no beat: the share decides
+    assert discogs.genre_rule(["Rock", "Electronic"], ["New Wave"]) is None
+    assert discogs.genre_rule(["Classical"], ["Baroque"]) == "off"
+    assert discogs.genre_rule(["Classical", "Stage & Screen"], ["Score"]) == "off"
+    assert discogs.genre_rule(["Electronic", "Classical"], ["Modern Classical"]) is None
+    assert discogs.genre_rule(["Rock"], ["Hard Rock"]) is None and discogs.genre_rule(None, None) is None
+
+
+def test_record_repeat_rule_sources():
+    from vinylcheck import analysis
+    g = json.dumps({"genres": ["Electronic"], "styles": ["Techno"]})
+    assert analysis.record_repeat_rule({"genres": g})["mode"] == "on"
+    assert analysis.record_repeat_rule({"genres": g})["source"] == "genre"
+    assert analysis.record_repeat_rule({"genres": g, "repeat_rule": "off"}) == {
+        "mode": "off", "source": "record", "genres": ["Electronic"], "styles": ["Techno"]}
+    assert analysis.record_repeat_rule({"genres": "{}"}, "on") == {"mode": "on", "source": "default", "genres": [], "styles": []}
+    assert analysis.record_repeat_rule(None)["mode"] == "auto"
+
+
+def test_repeat_rule_default_from_the_discogs_genres(tmp_path, api):
+    cfg = replace(Config(), data_dir=tmp_path / "data", state_dir=tmp_path / "state", min_free_gb=0.0,
+                  discogs_token="tok123", discogs_username="testuser")
+    (tmp_path / "state").mkdir(parents=True)
+    with TestClient(create_app(cfg)) as c:
+        # added before the collection was synced: the next sync brings its genres
+        early = c.post("/api/records", json={"artist": "Ümlaut Bänd", "title": "Third Album", "discogs_release_id": 777}).json()["id"]
+        c.post("/api/discogs/sync")
+        eff = c.get(f"/api/records/{early}").json()["repeat_rule_effective"]
+        assert eff == {"mode": "on", "source": "genre", "genres": ["Electronic"], "styles": ["Synth-pop", "Electro"]}
+        classical = c.post("/api/records", json={"artist": "Test Artist", "title": "Second Album", "discogs_release_id": 12345}).json()["id"]
+        assert c.get(f"/api/records/{classical}").json()["repeat_rule_effective"]["mode"] == "off"
+        rock = c.post("/api/records", json={"artist": "Test Artist", "title": "First Album", "discogs_release_id": 5605854}).json()["id"]
+        assert c.get(f"/api/records/{rock}").json()["repeat_rule_effective"] == {
+            "mode": "auto", "source": "default", "genres": ["Rock"], "styles": ["Hard Rock"]}
+        # not in the collection: the release itself is asked once
+        other = c.post("/api/records", json={"artist": "X", "title": "Y", "discogs_release_id": 4242}).json()["id"]
+        assert c.get(f"/api/records/{other}").json()["repeat_rule_effective"]["mode"] == "on"
+        n = api.releases
+        c.get(f"/api/records/{other}")
+        assert api.releases == n                                         # kept on the record, not asked again
+        # the record's own choice wins, also when it is "automatic"
+        r = c.patch(f"/api/records/{early}", json={"repeat_rule": "auto"}).json()
+        assert r["repeat_rule_effective"]["mode"] == "auto" and r["repeat_rule_effective"]["source"] == "record"
+        # without a release no genres and no request
+        plain = c.post("/api/records", json={"artist": "A", "title": "B"}).json()["id"]
+        assert c.get(f"/api/records/{plain}").json()["repeat_rule_effective"]["source"] == "default"
+
+
+def test_writing_asks_discogs_first_and_finds_the_right_copy(tmp_path, api):
+    d = discogs.Discogs("tok123", "testuser", tmp_path / "coll.json", "test")
+    d.sync()
+    # changed on Discogs after the sync: "previous" is what Discogs held, not the stale cache
+    api.media[90003] = "Mint (M)"
+    assert d.set_media_condition(777, "VG")["previous"] == "Mint (M)"
+    # a second copy of the release added on Discogs, in another folder: the write must say which one
+    api.twin = True
+    with pytest.raises(discogs.DiscogsError) as ei:
+        d.set_media_condition(12345, "VG")
+    assert ei.value.message["$t"] == "discogs.several_instances" and [e["instance_id"] for e in ei.value.instances] == [90002, 90004]
+    assert len([e for e in d.releases() if e["release_id"] == 12345]) == 2               # the cache knows both now
+    out = d.set_media_condition(12345, "G+", instance_id=90004)
+    assert out["instance_id"] == 90004 and api.media[90004] == "Good Plus (G+)" and api.media[90002] == "Near Mint (NM or M-)"
+    with pytest.raises(discogs.DiscogsError) as ei:
+        d.set_media_condition(12345, "G+", instance_id=55555)                            # gone on Discogs
+    assert ei.value.message["$t"] == "discogs.instance_gone" and len(ei.value.instances) == 2
+    # removed from the collection on Discogs: an error, and the cache drops it
+    with pytest.raises(discogs.DiscogsError) as ei:
+        d.set_media_condition(999, "VG")
+    assert ei.value.message["$t"] == "discogs.not_in_collection_now"
+    # a sync that was already fetching when the condition was written keeps the written value
+    api.twin = False
+    real = api.__call__
+
+    def slow(req, timeout=0, context=None):
+        if "/collection/folders/0/releases" in req.full_url and "page=2" in req.full_url and not slow.done:
+            slow.done = True
+            api.media[90001] = "Fair (F)"                                # what Discogs answered before the write
+            d._written[90001] = (time.time() + 1, "Very Good (VG)")       # the write lands while the sync runs
+        return real(req, timeout, context)
+    slow.done = False
+    discogs.urllib.request.urlopen = slow
+    d.sync()
+    assert d.entry(5605854)["media"] == "Very Good (VG)"
+
+
+def test_web_remembers_which_copy_is_which(tmp_path, api):
+    cfg = replace(Config(), data_dir=tmp_path / "data", state_dir=tmp_path / "state", min_free_gb=0.0,
+                  discogs_token="tok123", discogs_username="testuser")
+    (tmp_path / "state").mkdir(parents=True)
+    api.twin = True
+    with TestClient(create_app(cfg)) as c:
+        c.post("/api/discogs/sync")
+        rid = c.post("/api/records", json={"artist": "Test Artist", "title": "Second Album", "discogs_release_id": 12345}).json()["id"]
+        coll = c.get(f"/api/records/{rid}/collection", params={"copy": "Copy 2"}).json()
+        assert [x["instance_id"] for x in coll["copies"]] == [90002, 90004] and coll["suggested"] is None
+        api.media[90004] = "Fair (F)"
+        live = c.get(f"/api/records/{rid}/collection", params={"live": True, "copy": "Copy 2"}).json()
+        assert live["live"] and [x["media"] for x in live["copies"]] == ["Near Mint (NM or M-)", "Fair (F)"]
+        assert c.post(f"/api/records/{rid}/condition", json={"copy": "Copy 2", "instance_id": 90004}).status_code == 409   # no grade yet
+        from vinylcheck.db import DB
+        db = DB(cfg.db_path)
+        x = db.add_recording(record_id=rid, kind="before", side="A", copy_label="Copy 2", status="analyzed")
+        db.save_analysis(x, {"metrics": {"summary": {}}, "grading": {"grade": "VG", "score": 60}, "warnings": [],
+                             "overview": {}, "events": []}, "test", 1.0)
+        r = c.post(f"/api/records/{rid}/condition", json={"copy": "Copy 2"})
+        assert r.status_code == 409 and "2" in r.json()["detail"]                      # which of the two?
+        r = c.post(f"/api/records/{rid}/condition", json={"copy": "Copy 2", "instance_id": 90004}).json()
+        assert r["instance_id"] == 90004 and r["previous"] == "Fair (F)" and api.media[90004] == "Very Good (VG)"
+        assert c.get(f"/api/records/{rid}/collection", params={"copy": "copy  2"}).json()["suggested"] == 90004
+        api.media[90004] = "Poor (P)"
+        r = c.post(f"/api/records/{rid}/condition", json={"copy": "Copy 2"}).json()        # remembered
+        assert r["instance_id"] == 90004 and r["previous"] == "Poor (P)" and api.media[90002] == "Near Mint (NM or M-)"
+        api.twin = False                                     # that copy was removed on Discogs: the one left is meant
+        r = c.post(f"/api/records/{rid}/condition", json={"copy": "Copy 2"}).json()
+        assert r["instance_id"] == 90002 and api.media[90002] == "Very Good (VG)"
+        assert c.get(f"/api/records/{rid}").json()["discogs_media_condition"] == "Very Good (VG)"
+
+
+def test_fetching_the_release_again(tmp_path, api):
+    """Tracks, side lengths and genres are taken once; "fetch again" brings what was corrected on Discogs since."""
+    cfg = replace(Config(), data_dir=tmp_path / "data", state_dir=tmp_path / "state", min_free_gb=0.0,
+                  discogs_token="tok123", discogs_username="testuser")
+    (tmp_path / "state").mkdir(parents=True)
+    with TestClient(create_app(cfg)) as c:
+        c.post("/api/discogs/sync")
+        rid = c.post("/api/records", json={"artist": "Test Artist", "title": "First Album", "discogs_release_id": 5605854}).json()["id"]
+        r = c.get(f"/api/records/{rid}").json()
+        assert r["tracks"] == {} and r["repeat_rule_effective"]["mode"] == "auto"
+        api.tracklists[5605854] = [{"position": "A1", "title": "One", "duration": "3:00"},
+                                   {"position": "A2", "title": "Two", "duration": "4:30"}]
+        GENRES[5605854] = (["Electronic"], ["Techno"])                  # reclassified on Discogs
+        try:
+            r = c.post(f"/api/records/{rid}/discogs-refresh").json()
+        finally:
+            GENRES[5605854] = (["Rock"], ["Hard Rock"])
+        assert r["refreshed"] == {"tracks": True, "rule": True, "reanalyzing": 0}
+        assert [t["title"] for t in r["tracks"]["A"]] == ["One", "Two"] and r["side_lengths"]["A"]["s"] == 450
+        assert r["repeat_rule_effective"] == {"mode": "on", "source": "genre", "genres": ["Electronic"], "styles": ["Techno"]}
+        r = c.post(f"/api/records/{rid}/discogs-refresh").json()
+        assert r["refreshed"]["tracks"] is False
+        plain = c.post("/api/records", json={"artist": "A", "title": "B"}).json()["id"]
+        assert c.post(f"/api/records/{plain}/discogs-refresh").status_code == 409

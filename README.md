@@ -61,7 +61,8 @@ spot, re-analyse with a different sensitivity and compare recordings later.
   the detected clicks to check them by ear.
 - Sequenced music: every click in the music carries how often the same hit comes back with the same music around
   it (a drum machine repeats, a defect does not). From 20 % repeating clicks on, the side counts as sequenced and
-  the repeating hits are left out of the grade; a switch per record overrides that, and your own verdicts always win.
+  the repeating hits are left out of the grade; a switch per record overrides that (its default follows the
+  record's Discogs genre: Electronic with a beat and Hip Hop on, Classical off), and your own verdicts always win.
 - Audible clicks: impulses within 20 ms of a stronger one (the stylus bouncing off a particle) count as one click,
   as the ear hears them. Small ⓘ circles in the interface explain each of these features on hover.
 - A second opinion on every click candidate from a small neural network, on every installation: it runs in NumPy,

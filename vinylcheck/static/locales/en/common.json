@@ -49,5 +49,8 @@
   "back_to_record": "Back to the record",
   "listen": "listen",
   "info": "What is this?",
-  "profile_sensitivity_saved": "Sensitivity saved. The deck baseline is measured again from side 2 of the test record."
+  "profile_sensitivity_saved": "Sensitivity saved. The deck baseline is measured again from side 2 of the test record.",
+  "ok": "OK",
+  "cancel": "Cancel",
+  "save": "Save"
 }

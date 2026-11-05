@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS records (
     sides TEXT,
     tracks TEXT,
     repeat_rule TEXT,
+    genres TEXT,
+    discogs_instances TEXT,
     mono INTEGER,
     created_at REAL NOT NULL
 );
@@ -180,6 +182,8 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY, value TEXT NOT NULL, changed_at REAL NOT NULL);
+-- highest id ever given out per table (see DB._next_id): SQLite hands out a deleted highest id again
+CREATE TABLE IF NOT EXISTS id_marks (tbl TEXT PRIMARY KEY, last_id INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS problems (
     id INTEGER PRIMARY KEY,
     at REAL NOT NULL,
@@ -363,6 +367,10 @@ class DB:
             self.conn.execute("ALTER TABLE records ADD COLUMN tracks TEXT")
         if "repeat_rule" not in rec_cols:                                              # 1.4.0: repeat rule per record
             self.conn.execute("ALTER TABLE records ADD COLUMN repeat_rule TEXT")
+        if "genres" not in rec_cols:                    # 1.6.0: Discogs genres and styles (default of the repeat rule)
+            self.conn.execute("ALTER TABLE records ADD COLUMN genres TEXT")
+        if "discogs_instances" not in rec_cols:         # 1.6.0: which copy in the Discogs collection a copy is
+            self.conn.execute("ALTER TABLE records ADD COLUMN discogs_instances TEXT")
         if "mono" not in rec_cols:                                                     # 1.5.0: mono record (L+R)
             self.conn.execute("ALTER TABLE records ADD COLUMN mono INTEGER")
         if "profile_id" in rcols and "profile_id" in scols:
@@ -542,13 +550,30 @@ class DB:
             cur = self.conn.execute(sql, args)
             return cur.lastrowid
 
+    NEVER_REUSED = ("records", "recordings", "comparisons")
+
+    def _next_id(self, table: str) -> int:
+        """The id of a new row: above every id the table ever had. With INTEGER PRIMARY KEY (no AUTOINCREMENT) SQLite
+        hands out a deleted highest id again, and whatever still holds the old id (an analysis that was running when
+        its recording was deleted, an open browser window, a queued job) then writes to or shows the new row. Call
+        under the lock, together with the INSERT."""
+        assert table in self.NEVER_REUSED
+        top = self.conn.execute(f"SELECT MAX(id) FROM {table}").fetchone()[0] or 0
+        mark = self.conn.execute("SELECT last_id FROM id_marks WHERE tbl = ?", (table,)).fetchone()
+        nid = max(top, mark[0] if mark else 0) + 1
+        self.conn.execute("INSERT INTO id_marks (tbl, last_id) VALUES (?, ?) "
+                          "ON CONFLICT(tbl) DO UPDATE SET last_id = excluded.last_id", (table, nid))
+        return nid
+
     # ─── Records ────────────────────────────────────────────────────────────
     def add_record(self, artist: str, title: str, discogs_release_id=None,
-                   discogs_media_condition=None, notes: str = "", mono: bool | None = None) -> int:
-        return self.x("INSERT INTO records (artist, title, discogs_release_id, discogs_media_condition,"
-                      " notes, mono, created_at) VALUES (?,?,?,?,?,?,?)",
-                      (artist, title, discogs_release_id, discogs_media_condition, notes,
-                       None if mono is None else int(bool(mono)), time.time()))
+                   discogs_media_condition=None, notes: str = "", mono: bool | None = None,
+                   genres: str | None = None) -> int:
+        with self.lock:
+            return self.x("INSERT INTO records (id, artist, title, discogs_release_id, discogs_media_condition,"
+                          " notes, mono, genres, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                          (self._next_id("records"), artist, title, discogs_release_id, discogs_media_condition, notes,
+                           None if mono is None else int(bool(mono)), genres, time.time()))
 
     def copy_grades(self, rid: int | None = None) -> dict[int, list[dict]]:
         """Record grade per record and copy: per side the most recent graded recording, combined into the side
@@ -597,7 +622,7 @@ class DB:
 
     def update_record(self, rid: int, **fields) -> None:
         allowed = {"artist", "title", "discogs_release_id", "discogs_media_condition", "notes", "sides", "tracks",
-                   "repeat_rule", "mono"}
+                   "repeat_rule", "mono", "genres", "discogs_instances"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if sets:
             self.x(f"UPDATE records SET {', '.join(f'{k} = ?' for k in sets)} WHERE id = ?",
@@ -669,8 +694,9 @@ class DB:
                 "notes", "path", "device", "samplerate", "channels", "format", "chain_db", "status"]
         cols = [c for c in cols if f.get(c) is not None]          # otherwise the column default applies
         vals = [f[c] for c in cols]
-        return self.x(f"INSERT INTO recordings ({', '.join(cols)}, created_at) "
-                      f"VALUES ({', '.join('?' * len(cols))}, ?)", (*vals, time.time()))
+        with self.lock:
+            return self.x(f"INSERT INTO recordings (id, {', '.join(cols)}, created_at) "
+                          f"VALUES (?, {', '.join('?' * len(cols))}, ?)", (self._next_id("recordings"), *vals, time.time()))
 
     def update_recording(self, rec_id: int, **fields) -> None:
         if fields:
@@ -915,8 +941,9 @@ class DB:
 
     # ─── Comparisons ────────────────────────────────────────────────────────
     def add_comparison(self, a_id: int, b_id: int) -> int:
-        return self.x("INSERT INTO comparisons (a_id, b_id, created_at) VALUES (?,?,?)",
-                      (a_id, b_id, time.time()))
+        with self.lock:
+            return self.x("INSERT INTO comparisons (id, a_id, b_id, created_at) VALUES (?,?,?,?)",
+                          (self._next_id("comparisons"), a_id, b_id, time.time()))
 
     # ─── Masters (engineer mode) ────────────────────────────────────────────
     def set_master(self, record_id: int, side: str, **f) -> int:

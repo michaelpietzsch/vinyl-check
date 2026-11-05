@@ -100,6 +100,34 @@ def tracks_by_side(tracklist: list[dict]) -> dict[str, list[dict]]:
     return out
 
 
+# Sequenced music by its Discogs classification: the default of the repeat rule (analysis.record_repeat_rule) when
+# nobody set one for the record. "on" where drum machines, sequencers or loops carry the music (Hip Hop as a genre,
+# the beat-based styles of Electronic), "off" for Classical alone (and Stage & Screen beside it), everything else
+# (Ambient, Experimental, New Wave, Disco, Rock with synthesizers …) stays automatic: the share of repeating clicks
+# decides there.
+SEQUENCED_GENRES = {"hip hop"}
+SEQUENCED_STYLES = {
+    "acid", "acid house", "bass music", "berlin-school", "big beat", "boom bap", "breakbeat", "breaks", "chiptune",
+    "deep house", "downtempo", "drum n bass", "dubstep", "ebm", "electro", "electro house", "electroclash",
+    "electronica", "euro house", "euro-disco", "eurodance", "freestyle", "gabber", "garage house", "happy hardcore",
+    "hard trance", "hardcore", "hi nrg", "house", "idm", "industrial", "italo-disco", "jungle", "miami bass",
+    "minimal", "new beat", "nu-disco", "progressive house", "speed garage", "synth-pop", "synthwave", "tech house",
+    "techno", "trance", "trip hop", "uk garage", "vaporwave"}
+UNSEQUENCED_GENRES = {"classical"}
+ALONGSIDE_UNSEQUENCED = {"stage & screen"}
+
+
+def genre_rule(genres: list[str] | None, styles: list[str] | None) -> str | None:
+    """The repeat rule the Discogs genres and styles of a release suggest: "on", "off" or None (automatic)."""
+    g = {str(x).strip().lower() for x in genres or []}
+    st = {str(x).strip().lower() for x in styles or []}
+    if g & SEQUENCED_GENRES or st & SEQUENCED_STYLES:
+        return "on"
+    if g & UNSEQUENCED_GENRES and not g - UNSEQUENCED_GENRES - ALONGSIDE_UNSEQUENCED:
+        return "off"
+    return None
+
+
 def _norm(s: str) -> str:
     """Search normalization: ASCII, lower case, words separated by single spaces
     ("Café Señor-Tango" → "cafe senor tango")."""
@@ -108,7 +136,10 @@ def _norm(s: str) -> str:
 
 
 class DiscogsError(i18n.MessageError):
-    """A Discogs failure the user should see (an i18n message, see i18n.MessageError)."""
+    """A Discogs failure the user should see (an i18n message, see i18n.MessageError). `code`: the HTTP status of
+    Discogs' answer, if there was one; `instances`: the copies to choose from (several copies of one release)."""
+    code: int | None = None
+    instances: list | None = None
 
 
 class Discogs:
@@ -122,6 +153,8 @@ class Discogs:
         self._lock = threading.Lock()
         self.state: dict = {"releases": [], "synced_at": None, "syncing": False, "error": None}
         self._owner = ""                    # account the cached collection belongs to ("" = unknown, older caches)
+        self.on_synced = None               # called after every successful sync (web.py: genres of the records)
+        self._written: dict = {}            # instance id → (time, condition) written here: survives a running sync
         try:
             d = json.loads(self.cache_file.read_text())
             self.state["releases"], self.state["synced_at"] = d.get("releases", []), d.get("synced_at")
@@ -198,7 +231,9 @@ class Discogs:
                 reason = i18n.msg("discogs.token_invalid")
             elif e.code == 429:
                 reason = i18n.msg("discogs.rate_limited")
-            raise DiscogsError(i18n.msg("discogs.http_error", code=e.code, reason=reason)) from e
+            err = DiscogsError(i18n.msg("discogs.http_error", code=e.code, reason=reason))
+            err.code = e.code
+            raise err from e
         except OSError as e:
             raise DiscogsError(i18n.msg("discogs.unreachable", error=str(e))) from e
 
@@ -262,7 +297,8 @@ class Discogs:
                 "label": ", ".join(dict.fromkeys(x.get("name", "") for x in labels)), "catno": ", ".join(dict.fromkeys(x.get("catno", "") for x in labels)),
                 "format": ", ".join(f"{f.get('name', '')} ({', '.join(f.get('descriptions') or [])})" if f.get("descriptions") else f.get("name", "") for f in fmt),
                 "media": fields.get(FIELD_MEDIA) or None, "sleeve": fields.get(FIELD_SLEEVE) or None, "notes": fields.get(FIELD_NOTES) or "",
-                "date_added": item.get("date_added"), "thumb": bi.get("thumb") or "", "cover": bi.get("cover_image") or ""}
+                "date_added": item.get("date_added"), "thumb": bi.get("thumb") or "", "cover": bi.get("cover_image") or "",
+                "genres": list(bi.get("genres") or []), "styles": list(bi.get("styles") or [])}
 
     def sync(self) -> dict:
         """Fetch the whole collection (folder 0 = all) and write the cache. Blocks; see sync_async()."""
@@ -270,7 +306,7 @@ class Discogs:
             raise DiscogsError(i18n.msg("discogs.not_configured"))
         with self._lock:
             self.state["syncing"], self.state["error"] = True, None
-            user = self.username
+            user, started = self.username, time.time()
         try:
             out, page = [], 1
             while True:
@@ -282,9 +318,19 @@ class Discogs:
                     break
                 page += 1
             with self._lock:
-                if self.username == user:          # the account was not switched meanwhile (configure)
+                fresh = self.username == user      # the account was not switched meanwhile (configure)
+                for e in out:                      # written while the pages were fetched: the write is newer
+                    w = self._written.get(e.get("instance_id"))
+                    if w and w[0] >= started:
+                        e["media"] = w[1]
+                if fresh:
                     self.state["releases"], self.state["synced_at"], self._owner = out, time.time(), user
                     self._save()
+            if fresh and self.on_synced:
+                try:
+                    self.on_synced()
+                except Exception:  # noqa: BLE001 — a follow-up of the caller must not fail the sync
+                    pass
         except DiscogsError as e:
             with self._lock:
                 self.state["error"] = e.message            # rendered in the reader's language by the API
@@ -364,6 +410,15 @@ class Discogs:
             out = side_lengths(master.get("tracklist") or [])
         return out
 
+    def release_genres(self, release_id: int, fresh: bool = False) -> dict:
+        """Genres and styles of a release ({"genres": [...], "styles": [...]}); from the cached collection when the
+        release is in it (not with `fresh`), else from the release itself (public data, one request)."""
+        e = None if fresh else self.entry(release_id)
+        if e and "genres" in e:                       # caches written before 1.6.0 do not have them yet
+            return {"genres": e["genres"], "styles": e.get("styles") or []}
+        rel = self._public_or_auth(f"{API}/releases/{int(release_id)}")
+        return {"genres": list(rel.get("genres") or []), "styles": list(rel.get("styles") or [])}
+
     def release_tracks(self, release_id: int) -> dict[str, list[dict]]:
         """Tracks per side of a release; missing durations come from the master release where possible
         (same position)."""
@@ -396,16 +451,53 @@ class Discogs:
             raise DiscogsError(i18n.msg("discogs.unreachable", error=str(e))) from e
 
     # ─── Writing ─────────────────────────────────────────────────────────────
-    def set_media_condition(self, release_id: int, grade: str) -> dict:
-        """Set the media condition (field 1) of the collection instance; sleeve condition and notes stay untouched.
-        `grade` is a Goldmine grade ("VG+") or a full Discogs condition. Returns the condition before and after
-        (keys "previous"/"current") and the release id."""
+    def instances(self, release_id: int) -> list[dict]:
+        """The copies of a release in the collection as Discogs has them now (one request), each as a collection
+        entry (see _entry). The cache is brought up to date for this release: copies added, changed (condition,
+        folder) or removed on Discogs since the last sync show at once. [] if the release is not (any longer) in the
+        collection."""
+        if not self.enabled:
+            raise DiscogsError(i18n.msg("discogs.not_configured"))
+        rid = int(release_id)
+        try:
+            d = self._req(f"{API}/users/{urllib.parse.quote(self.username)}/collection/releases/{rid}?per_page=100")
+            live = [self._entry(it) for it in d.get("releases", [])]
+        except DiscogsError as e:
+            if e.code != 404:
+                raise
+            live = []                                  # Discogs answers 404 for a release that is not in the collection
+        with self._lock:
+            rest = [e for e in self.state["releases"] if e.get("release_id") != rid]
+            if len(rest) != len(self.state["releases"]) or live:
+                self.state["releases"] = rest + live
+                self._save()
+        return live
+
+    def set_media_condition(self, release_id: int, grade: str, instance_id: int | None = None) -> dict:
+        """Set the media condition (field 1) of a copy in the collection; sleeve condition and notes stay untouched.
+        `grade` is a Goldmine grade ("VG+") or a full Discogs condition. The copies are asked from Discogs first, so
+        the write goes to the copy as it is now (another folder, re-added, removed) and "previous" is what Discogs
+        held, not the cache. With several copies of the release `instance_id` says which; without it the error
+        carries the copies to choose from (`instances`). Returns the condition before and after ("previous"/
+        "current"), the release and the instance id."""
         cond = GRADE_TO_CONDITION.get(grade) or (grade if grade in CONDITIONS else None)
         if not cond:
             raise DiscogsError(i18n.msg("discogs.unknown_grade", grade=str(grade)))
-        e = self.entry(release_id)
-        if not e:
-            raise DiscogsError(i18n.msg("discogs.not_in_collection"))
+        live = self.instances(release_id)
+        if not live:
+            raise DiscogsError(i18n.msg("discogs.not_in_collection_now"))
+        if instance_id is not None:
+            e = next((x for x in live if x.get("instance_id") == int(instance_id)), None)
+            if not e:
+                err = DiscogsError(i18n.msg("discogs.instance_gone"))
+                err.instances = live
+                raise err
+        elif len(live) == 1:
+            e = live[0]
+        else:
+            err = DiscogsError(i18n.msg("discogs.several_instances", n=len(live)))
+            err.instances = live
+            raise err
         if not e.get("instance_id") or e.get("folder_id") is None:
             raise DiscogsError(i18n.msg("discogs.instance_unknown"))
         url = (f"{API}/users/{urllib.parse.quote(self.username)}/collection/folders/{e['folder_id']}/releases/{int(release_id)}"
@@ -413,6 +505,9 @@ class Discogs:
         self._req(url, method="POST", data={"value": cond})
         before = e.get("media")
         with self._lock:
-            e["media"] = cond
+            for x in self.state["releases"]:
+                if x.get("instance_id") == e["instance_id"]:
+                    x["media"] = cond
+            self._written[e["instance_id"]] = (time.time(), cond)
             self._save()
-        return {"previous": before, "current": cond, "release_id": int(release_id)}
+        return {"previous": before, "current": cond, "release_id": int(release_id), "instance_id": e["instance_id"]}

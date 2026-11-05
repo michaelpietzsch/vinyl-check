@@ -5,6 +5,44 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] – 2026-11-05
+
+### Added
+
+- **Sequenced music by genre.** Until a record has its own choice, the repeat rule follows its Discogs genres and
+  styles: Hip Hop and the beat-based styles of Electronic (Techno, House, Electro, Synth-pop, EBM, Trance, Drum n
+  Bass …) on, Classical off, everything else automatic as before. Genres and styles are kept on the record
+  (taken from the collection when the record is added, after each sync, or from the release once); the record
+  page names them next to the switch, which now reads *Sequenced music (electronic music)*. The analysis itself
+  now counts with the record's rule too, not only the recount after it.
+- **Writing the condition checks Discogs first.** Before the measured grade is written, the copies of the release
+  are asked from Discogs as they are now: the question shows the condition Discogs holds at that moment (not the
+  synced collection, which can be minutes old), the write goes to the copy's current folder, and a record removed
+  on Discogs is reported instead of written. With the same release in the collection more than once, the page
+  asks which copy gets the grade and remembers it per copy of yours (`instance_id` on
+  `POST /api/records/{id}/condition`; `GET /api/records/{id}/collection?live=true` lists the copies). A sync that
+  was running while a condition was written keeps the written value. The condition shown in the record list
+  follows Discogs after every sync.
+- **Fetch again from Discogs** on the record page (`POST /api/records/{id}/discogs-refresh`): tracks, side lengths,
+  genres and cover are taken anew, for an entry corrected on Discogs since; sides whose tracks changed are analysed
+  again.
+
+### Changed
+
+- **Editing a recording in the page.** A double-click on the side, copy or condition cell opens a box with all
+  three and *Save*/*Cancel*, instead of the browser's question followed by an editor inside the cell. The system's
+  double-click speed counts as well, so a slow double-click no longer does nothing.
+- **Questions in the page.** Every confirmation (deleting, moving the storage, connecting, …) is asked in a box of
+  the interface instead of the browser's own dialog; for deleting, the focus is on *Cancel*.
+
+### Fixed
+
+- **A deleted recording's analysis could land on the next recording.** SQLite hands out a deleted highest id again:
+  deleting a recording while it was analysed and starting a new one gave the new one the same number, and the
+  finished analysis of the deleted one was stored on it (a grade for a side still being recorded). Records,
+  recordings and comparisons now never get a number twice, and an analysis whose recording was deleted meanwhile
+  is dropped without an entry in the error log.
+
 ## [1.5.1] – 2026-11-03
 
 ### Changed
@@ -620,7 +658,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0
 [1.4.2]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0

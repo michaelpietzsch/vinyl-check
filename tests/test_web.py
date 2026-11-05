@@ -842,11 +842,11 @@ def test_measured_grade_can_be_written_to_collection(tmp_path, monkeypatch):
 
     def fake_urlopen(req, timeout=0, context=None):
         url = req.full_url
-        if "/collection/folders/0/releases" in url:
-            item = {"instance_id": 42, "folder_id": 1, "date_added": "2026-09-07T10:00:00-07:00",
-                    "basic_information": {"id": 1234567, "title": "Test Album", "year": 1988,
-                                          "artists": [{"name": "Test Artist"}], "labels": [], "formats": []},
-                    "notes": [{"field_id": 1, "value": "Good (G)"}]}
+        item = {"instance_id": 42, "folder_id": 1, "date_added": "2026-09-07T10:00:00-07:00",
+                "basic_information": {"id": 1234567, "title": "Test Album", "year": 1988,
+                                      "artists": [{"name": "Test Artist"}], "labels": [], "formats": []},
+                "notes": [{"field_id": 1, "value": written.get("value", "Good (G)")}]}
+        if "/collection/folders/0/releases" in url or "/collection/releases/1234567" in url:
             return io.BytesIO(json.dumps({"pagination": {"pages": 1}, "releases": [item]}).encode())
         if "/fields/1" in url:
             written["url"] = url; written["value"] = json.loads(req.data)["value"]
@@ -871,7 +871,8 @@ def test_measured_grade_can_be_written_to_collection(tmp_path, monkeypatch):
         assert grade
         r = c.post(f"/api/records/{rid}/condition", json={"recording_id": rec["id"]})
         assert r.status_code == 200, r.text
-        assert r.json() == {"ok": True, "grade": grade, "previous": "Good (G)", "current": web.GRADE_TO_DISCOGS[grade]}
+        assert r.json() == {"ok": True, "grade": grade, "previous": "Good (G)", "current": web.GRADE_TO_DISCOGS[grade],
+                            "instance_id": 42}
         assert "/folders/1/releases/1234567/instances/42/fields/1" in written["url"]
         assert written["value"] == web.GRADE_TO_DISCOGS[grade]
         assert c.get(f"/api/records/{rid}").json()["discogs_media_condition"] == web.GRADE_TO_DISCOGS[grade]

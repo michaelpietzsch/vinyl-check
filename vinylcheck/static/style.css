@@ -449,6 +449,14 @@ canvas.ap-sg { display: block; width: 100%; height: 170px; border-radius: 4px; }
 dialog.dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 1rem 1.2rem; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 dialog.dialog::backdrop { background: rgba(0,0,0,.45); }
 dialog.dialog h2 { margin-top: 0; display: flex; align-items: center; gap: .4rem; }
+/* Questions in the page (ask() in app.js) and the edit box of a recording */
+dialog.ask { width: min(420px, calc(100vw - 32px)); }
+.ask-text { white-space: pre-line; margin: .2rem 0 0; }
+.ask-choices { display: grid; gap: .35rem; margin-top: .7rem; }
+.ask-choices label { display: flex; gap: .45rem; align-items: baseline; }
+form.rec-edit { display: grid; gap: .7rem; }
+form.rec-edit label { display: grid; gap: .25rem; }
+form.rec-edit .hint { margin: 0; }
 .dialog-actions { margin-top: 1rem; align-items: center; }
 .dialog-actions .grow { flex: 1; }
 .tour-outline { padding-left: 1.3rem; margin: .4rem 0; }

@@ -203,9 +203,16 @@ matters for the one that comes during the music and for the event list.
 **The repeat rule** (`analysis.count_mask`, `[analysis] repeat_rule`). From `repeat_rule_share` (20 %) repeating
 clicks in the music on, the side counts as sequenced music and the repeating clicks are left out of the count and
 the grade (`auto`); on music that does not loop the rule never applies, so nothing changes there. Per record the
-user can force the rule `on` or `off` (*records.repeat_rule*), which recounts every side of the record at once. A
-verdict always wins: *click* on a repeating hit counts it again, *false alarm* takes any click out. The metrics
-carry the state (`repeats.rule`: mode, active, share, removed) and the counts what was taken out (`counts.rule_music`).
+user can force the rule `on` or `off` (*records.repeat_rule*), which recounts every side of the record at once.
+Without such a choice the record's Discogs classification gives the default (`analysis.record_repeat_rule`,
+`discogs.genre_rule`): Hip Hop as a genre or a beat-based style of Electronic (Techno, House, Electro, Synth-pop,
+EBM, Trance, Drum n Bass, Breakbeat, IDM, Berlin-School …) → `on`, Classical alone (or beside Stage & Screen) →
+`off`, anything else → the configured default. Ambient, Experimental, New Wave or Disco stay automatic on purpose:
+whether they loop is a question of the record, and the share answers it. The genres are stored on the record
+(`records.genres`); when they arrive later (after a sync, or *fetch again*) and change the rule, the sides are
+recounted. A verdict always wins: *click* on a repeating hit counts it again, *false alarm* takes any click out.
+The metrics carry the state (`repeats.rule`: mode, active, share, removed) and the counts what was taken out
+(`counts.rule_music`).
 
 **Audible clicks** (`analysis.group_impulses`, `[analysis] click_group_ms`). The detector resolves impulses 1.5 ms
 apart and counts each one; a particle or a scratch makes the stylus bounce, so one audible click is often two or

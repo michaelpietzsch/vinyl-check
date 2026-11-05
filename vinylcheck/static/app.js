@@ -93,6 +93,38 @@ async function api(path, opts = {}) {
 // Wraps an async handler: any error ends up in a toast instead of an unhandled rejection
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, 6000); } };
 
+// A question in the page itself instead of the browser's confirm(): resolves true for the confirming button, false
+// for Cancel, Esc or a click beside the box. `danger` marks the confirming button for deleting and puts the focus on
+// Cancel, so that Enter alone never deletes.
+let askResolve = null;
+function ask(text, { ok = T("common.ok"), cancel = T("common.cancel"), danger = false } = {}) {
+  const d = $("#ask");
+  askResolve?.(false);                                             // a question still open counts as cancelled
+  d.innerHTML = `<p class="ask-text"></p><div class="row dialog-actions"><span class="grow"></span>
+    <button type="button" class="secondary" value="0">${esc(cancel)}</button><button type="button" value="1"${danger ? ' class="danger"' : ""}>${esc(ok)}</button></div>`;
+  $(".ask-text", d).textContent = text;
+  d.returnValue = "";
+  if (!d.open) d.showModal();
+  $(`button[value="${danger ? 0 : 1}"]`, d).focus();
+  return new Promise((resolve) => { askResolve = resolve; });
+}
+// The same box with a choice: resolves the chosen value, or null when cancelled
+async function askChoice(text, choices, selected, opts = {}) {
+  const p = ask(text, opts), d = $("#ask");
+  const list = document.createElement("div");
+  list.className = "ask-choices";
+  list.innerHTML = choices.map((c, i) => `<label><input type="radio" name="ask-pick" value="${esc(c.value)}" ${c.value === selected || (!selected && !i) ? "checked" : ""}> ${esc(c.label)}</label>`).join("");
+  $(".ask-text", d).after(list);
+  return (await p) ? $('input[name="ask-pick"]:checked', d)?.value ?? null : null;
+}
+$("#ask").addEventListener("close", () => { const r = askResolve; askResolve = null; r?.($("#ask").returnValue === "1"); });
+$("#ask").addEventListener("click", (e) => {
+  const d = $("#ask"), b = e.target.closest("button[value]");
+  if (b) return d.close(b.value);
+  const r = d.getBoundingClientRect();
+  if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close("0");
+});
+
 // ─── Grade popup: all grading criteria of a recording on hover ───────────────
 const gradeCache = new Map();
 const GRADE_SCALE = T("grade.scale_points");
@@ -522,50 +554,50 @@ async function openRecord(id) {
   try { await loadProfilesById(); } catch (_) {}
   renderRecord(); loadRecords();
 }
-// Edit side, copy and condition in the recordings table: double-click (double-tap on touch) → confirmation → the cell
-// becomes an input; Enter or a selection saves, Esc or clicking elsewhere cancels. A new side re-analyzes the
-// recording (the track list is per side), a new condition does not.
+// Edit side, copy and condition of a recording: a double-click (double tap on touch) on one of the three cells in the
+// recordings table opens a box in the page with all three, the clicked one focused; Save or Enter stores what
+// changed, Cancel or Esc keeps everything. A new side re-analyzes the recording (the track list is per side), a new
+// copy or condition does not. The browser's own double-click event counts as well as two clicks within 450 ms, so a
+// slow double-click setting of the system works too.
 const tapState = { el: null, t: 0 };
 function doubleTap(el) {
   const now = Date.now(), hit = tapState.el === el && now - tapState.t < 450;
   tapState.el = hit ? null : el; tapState.t = now;
   return hit;
 }
-function editCell(td, r) {
-  const id = +td.dataset.rec, field = td.dataset.edit, x = (r.recordings || []).find((y) => y.id === id);
-  if (!x) return;
-  const what = field === "side" ? T("records.edit_what_side", { value: x.side })
-    : field === "copy_label" ? T("records.edit_what_copy", { value: x.copy_label || T("records.edit_none") })
-    : T("records.edit_what_kind", { value: KIND[x.kind] || x.kind });
-  if (!confirm(T("records.edit_confirm", { id, what }))) return;
-  const old = td.innerHTML;
+function editRecording(r, id, field) {
+  const x = (r.recordings || []).find((y) => y.id === id), d = $("#rec-edit");
+  if (!x || d.open) return;
   const kinds = CHECK_KINDS.filter((k) => k !== "after" || x.kind === "after");          // plain "after" only for old recordings
   const copies = [...new Set((r.recordings || []).map((y) => (y.copy_label || "").trim()).filter(Boolean))];
-  td.innerHTML = field === "side"
-    ? `<input class="cell-edit" maxlength="8" value="${esc(x.side)}" aria-label="${esc(T("common.col_side"))}">`
-    : field === "copy_label"
-    ? `<input class="cell-edit" maxlength="40" list="copy-edit-list" value="${esc(x.copy_label || "")}" placeholder="${esc(T("records.copy_placeholder_short"))}" aria-label="${esc(T("common.col_copy"))}"><datalist id="copy-edit-list">${copies.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>`
-    : `<select class="cell-edit" aria-label="${esc(T("common.col_condition"))}">${kinds.map((k) => `<option value="${k}" ${k === x.kind ? "selected" : ""}>${KIND[k]}</option>`).join("")}</select>`;
-  const inp = td.querySelector(".cell-edit");
-  let done = false;
-  const cancel = () => { if (done) return; done = true; td.innerHTML = old; };
-  const save = async () => {
-    if (done) return;
-    const v = field === "side" ? inp.value.trim().toUpperCase() : field === "copy_label" ? inp.value.replace(/\s+/g, " ").trim() : inp.value;
-    if (!v && field === "side") return toast(T("records.side_empty"));
-    if (v === (field === "side" ? String(x.side).trim().toUpperCase() : field === "copy_label" ? (x.copy_label || "").trim() : x.kind)) return cancel();
-    done = true;
-    try {
-      const out = await api(`/api/recordings/${id}`, { method: "PATCH", body: { [field]: v } });
-      toast(field === "side" ? T("records.edit_saved_side", { id, side: v }) + (out.reanalyzing ? ` · ${T("records.edit_reanalyzing")}` : "")
-        : T("records.edit_saved", { id, value: field === "copy_label" ? v || T("records.edit_no_copy") : KIND[v] }));
-    } catch (e) { toast(e.message); td.innerHTML = old; return; }
+  d.innerHTML = `<h2 id="rec-edit-title">${T("records.edit_title", { id })}</h2>
+    <form class="rec-edit" novalidate>
+      <label>${T("common.col_side")}<input name="side" maxlength="8" autocomplete="off" value="${esc(x.side)}"></label>
+      <label>${T("common.col_copy")}<input name="copy_label" maxlength="40" autocomplete="off" list="copy-edit-list" value="${esc(x.copy_label || "")}" placeholder="${esc(T("records.copy_placeholder_short"))}"></label>
+      <datalist id="copy-edit-list">${copies.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
+      <label>${T("common.col_condition")}<select name="kind">${kinds.map((k) => `<option value="${k}" ${k === x.kind ? "selected" : ""}>${KIND[k]}</option>`).join("")}</select></label>
+      <p class="hint">${T("records.edit_hint")}</p>
+      <div class="row dialog-actions"><span class="grow"></span><button type="button" class="secondary" data-edit-cancel>${T("common.cancel")}</button><button type="submit">${T("common.save")}</button></div>
+    </form>`;
+  const f = $("form", d);
+  $("[data-edit-cancel]", d).onclick = () => d.close();
+  f.onsubmit = guard(async (e) => {
+    e.preventDefault();
+    const side = f.side.value.trim().toUpperCase(), copy = f.copy_label.value.replace(/\s+/g, " ").trim(), kind = f.kind.value;
+    if (!side) { f.side.focus(); return toast(T("records.side_empty")); }
+    const body = {};
+    if (side !== String(x.side).trim().toUpperCase()) body.side = side;
+    if (copy !== (x.copy_label || "").trim()) body.copy_label = copy;
+    if (kind !== x.kind) body.kind = kind;
+    if (!Object.keys(body).length) return d.close();
+    const out = await api(`/api/recordings/${id}`, { method: "PATCH", body });
+    d.close();
+    toast(T("records.edit_saved_rec", { id }) + (out.reanalyzing ? ` · ${T("records.edit_reanalyzing")}` : ""));
     refreshRecord();
-  };
-  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } else if (e.key === "Escape") cancel(); });
-  if (field === "kind") inp.addEventListener("change", save);
-  inp.addEventListener("blur", () => setTimeout(() => { if (!done) (field === "kind" ? cancel() : save()); }, 150));
-  inp.focus(); if (field !== "kind") inp.select();
+  });
+  d.showModal();
+  const inp = f[field] || f.kind;
+  inp.focus(); if (inp.select) inp.select();
 }
 async function refreshRecord() {
   if (!state.record) return;
@@ -583,8 +615,10 @@ function conditionBlock(r, coll) {
   const copies = (r.copies || []).filter((c) => c.grade);                      // record grade per copy (from the server)
   const measured = copies.length ? copies.reduce((m, c) => (c.at > m.at ? c : m)) : null;   // most recently measured copy
   const collCond = coll?.media_condition ?? r.discogs_media_condition;
-  const collNote = coll ? (coll.in_collection_since ? T("records.coll_since", { date: new Date(coll.in_collection_since).toLocaleDateString(I18N.lang) }) : T("records.coll_from"))
-                        : (r.discogs_media_condition ? T("records.coll_taken_over") : T("records.not_set"));
+  const several = (coll?.copies || []).length > 1;
+  const collNote = several ? T("records.coll_copies", { n: coll.copies.length, list: coll.copies.map((c) => condShort(c.media) || "–").join(" · ") })
+    : coll ? (coll.in_collection_since ? T("records.coll_since", { date: new Date(coll.in_collection_since).toLocaleDateString(I18N.lang) }) : T("records.coll_from"))
+           : (r.discogs_media_condition ? T("records.coll_taken_over") : T("records.not_set"));
   const a = condShort(collCond), b = measured?.grade;
   const diff = a && b && a !== b;
   const P = r.pressing;
@@ -595,16 +629,32 @@ function conditionBlock(r, coll) {
     ${diff ? `<div class="cond-diff">${ico("info", 16)} ${T("records.cond_diff", { from: esc(a), to: esc(b) + (measured.copy ? `, ${esc(measured.copy)}` : "") })}${state.status?.grading_calibrated ? "" : " " + T("records.cond_uncalibrated")}
       ${state.status?.discogs_write && r.discogs_release_id && measured ? `<button class="secondary" id="cond-push" data-copy="${esc(measured.copy)}" data-from="${esc(a || "–")}" data-to="${esc(b)}">${ico("cover", 16)} ${T("records.cond_push", { grade: esc(b) })}</button>` : ""}</div>` : ""}`;
 }
+// Writing the measured grade: Discogs is asked first how the record stands there now (the synced collection can be
+// minutes old, and the condition may have been changed on Discogs meanwhile); with several copies of the release in
+// the collection the page asks which one, and remembers the choice for this copy.
+const instanceLabel = (c) => [T("records.coll_since", { date: c.date_added ? new Date(c.date_added).toLocaleDateString(I18N.lang) : "?" }),
+  condShort(c.media) || T("records.not_set"), c.notes].filter(Boolean).join(" · ");
 async function pushCondition(r, btn) {
-  const from = btn.dataset.from, to = btn.dataset.to;
-  if (!confirm(T("records.cond_push_confirm", { from, to }))) return;
-  const out = await api(`/api/records/${r.id}/condition`, { method: "POST", body: { copy: btn.dataset.copy ?? "" } });
+  const to = btn.dataset.to, copy = btn.dataset.copy ?? "";
+  let live;
+  try { live = await api(`/api/records/${r.id}/collection?live=true&copy=${encodeURIComponent(copy)}`); }
+  catch (e) { loadCondition(r); return toast(e.message, 8000); }
+  let inst = live.copies[0];
+  if (live.copies.length > 1) {
+    const v = await askChoice(T("records.cond_pick_copy", { n: live.copies.length, to }), live.copies.map((c) => ({ value: String(c.instance_id), label: instanceLabel(c) })),
+      live.suggested != null ? String(live.suggested) : "");
+    if (v == null) return loadCondition(r);
+    inst = live.copies.find((c) => String(c.instance_id) === v);
+  } else if (!(await ask(T("records.cond_push_confirm", { from: condShort(inst.media) || "–", to })))) return loadCondition(r);
+  const out = await api(`/api/records/${r.id}/condition`, { method: "POST", body: { copy, instance_id: inst.instance_id } });
   toast(T("records.cond_pushed", { from: condShort(out.previous) || "–", to: condShort(out.current) }));
   state.record = await api(`/api/records/${r.id}`); renderRecord(); loadRecords();
 }
 async function loadCondition(r) {
   if (!state.status?.discogs) return;
-  try { const c = await api(`/api/records/${r.id}/collection`); if (state.record?.id === r.id) $("#rec-condition").innerHTML = conditionBlock(r, c); } catch (_) {}
+  const copies = (r.copies || []).filter((c) => c.grade);
+  const newest = copies.length ? copies.reduce((m, c) => (c.at > m.at ? c : m)) : null;
+  try { const c = await api(`/api/records/${r.id}/collection?copy=${encodeURIComponent(newest?.copy ?? "")}`); if (state.record?.id === r.id) $("#rec-condition").innerHTML = conditionBlock(r, c); } catch (_) {}
   const b = $("#cond-push"); if (b) b.closest(".cond-diff").style.gap = ".6rem";
 }
 // Recordings table of the record view. Columns sort on click, a second click reverses; without a chosen order the
@@ -683,9 +733,9 @@ function renderRecord() {
     <div class="row" style="justify-content:space-between;align-items:start">
       <button type="button" class="cover-pick" id="cover-up" data-hint="${esc(T("records.cover_change"))}" title="${esc(T(r.cover_local ? "records.cover_replace_title" : "records.cover_upload_title"))}">${r.discogs_release_id || r.cover_local ? `<img class="cover-big hidden" id="rec-cover" alt="${esc(T("records.cover_alt"))}">` : noCoverHtml("cover-big")}</button><input type="file" id="cover-file" accept="image/jpeg,image/png,image/webp" hidden>
       <div style="flex:1"><h2 style="margin:0">${esc(r.artist)} – ${esc(r.title)}</h2>
-        <div class="hint">${r.discogs_release_id ? `<a href="https://www.discogs.com/release/${r.discogs_release_id}" target="_blank" rel="noopener">${T("records.discogs_release")}</a>` : ""}${r.cover_local ? ` <button class="link" id="cover-del">${T("records.cover_remove")}</button>` : ""}</div>
+        <div class="hint">${r.discogs_release_id ? `<a href="https://www.discogs.com/release/${r.discogs_release_id}" target="_blank" rel="noopener">${T("records.discogs_release")}</a> · <button class="link" id="discogs-refresh" title="${esc(T("records.discogs_refresh_title"))}">${T("records.discogs_refresh")}</button>` : ""}${r.cover_local ? ` <button class="link" id="cover-del">${T("records.cover_remove")}</button>` : ""}</div>
         <div class="condition" id="rec-condition">${conditionBlock(r, null)}</div>
-        <div class="hint" style="margin-top:.4rem"><label>${T("records.repeat_rule")} <span style="white-space:nowrap"><select class="inline" data-rule-record="${r.id}">${[["auto", T("recording.rule_auto", { pct: 20 })], ["on", T("recording.rule_on")], ["off", T("recording.rule_off")]].map(([v, l]) => `<option value="${v}" ${(r.repeat_rule || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select> ${info("repeat_rule")}</span></label></div>
+        <div class="hint" style="margin-top:.4rem"><label>${T("records.repeat_rule")} <span style="white-space:nowrap"><select class="inline" data-rule-record="${r.id}">${[["auto", T("recording.rule_auto", { pct: 20 })], ["on", T("recording.rule_on")], ["off", T("recording.rule_off")]].map(([v, l]) => `<option value="${v}" ${(r.repeat_rule_effective?.mode || r.repeat_rule || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select> ${info("repeat_rule")}</span></label>${ruleSourceText(r.repeat_rule_effective)}</div>
         <div class="hint" style="margin-top:.3rem"><label><input type="checkbox" data-mono-record="${r.id}" ${r.mono ? "checked" : ""}> ${T("records.mono")} ${info("mono")}</label></div>
         ${Object.keys(r.side_lengths || {}).length ? `<div class="hint" style="margin-top:.4rem">${T("records.side_lengths", { list: Object.entries(r.side_lengths).sort().map(([k, v]) => `${esc(k)} ${fmtTime(v.s)} (${esc(v.source_label || v.source)})`).join(" · ") })}</div>` : ""}
         ${Object.keys(r.tracks || {}).length ? `<div class="hint">${T("records.tracks", { list: Object.entries(r.tracks).sort().map(([s, l]) => `<b>${esc(s)}</b> ${l.map((t) => `${esc(t.title)}${t.dur_s ? " " + fmtTime(t.dur_s) : ""}`).join(", ")}`).join(" · ") })}</div>` : ""}</div>
@@ -731,7 +781,7 @@ function renderRecord() {
     let side = null;
     $("#detail").querySelectorAll("[data-master-up]").forEach((b) => (b.onclick = () => { side = b.dataset.masterUp; $("#master-file").click(); }));
     $("#detail").querySelectorAll("[data-master-del]").forEach((b) => (b.onclick = guard(async () => {
-      if (!confirm(T("records.master_delete_confirm", { side: b.dataset.masterDel }))) return;
+      if (!(await ask(T("records.master_delete_confirm", { side: b.dataset.masterDel }), { danger: true }))) return;
       await api(`/api/records/${r.id}/masters/${b.dataset.masterDel}`, { method: "DELETE" });
       refreshRecord();
     })));
@@ -743,18 +793,31 @@ function renderRecord() {
       refreshRecord();
     });
   }
+  if ($("#discogs-refresh")) $("#discogs-refresh").onclick = guard(async () => {
+    if (!(await ask(T("records.discogs_refresh_confirm")))) return;
+    const out = await api(`/api/records/${r.id}/discogs-refresh`, { method: "POST" });
+    const f = out.refreshed || {};
+    toast([T(f.tracks ? "records.discogs_refreshed_tracks" : "records.discogs_refreshed_same"),
+      f.reanalyzing ? T("records.discogs_refreshed_reanalyzing", { n: f.reanalyzing }) : "",
+      f.rule ? T("records.discogs_refreshed_rule") : ""].filter(Boolean).join(" · "), 8000);
+    coverCache.delete(r.id); state.record = out; renderRecord(); loadRecords();
+  });
   if ($("#cover-del")) $("#cover-del").onclick = guard(async () => {
-    if (!confirm(T("records.cover_remove_confirm"))) return;
+    if (!(await ask(T("records.cover_remove_confirm"), { danger: true }))) return;
     await api(`/api/records/${r.id}/cover`, { method: "DELETE" });
     coverCache.delete(r.id); await refreshRecord(); loadRecords();
   });
   loadCondition(r);
   $("#rec-condition").onclick = guard(async (e) => { const b = e.target.closest("#cond-push"); if (b) await pushCondition(r, b); });
   $("#del-record").onclick = guard(async () => {
-    if (!confirm(T("records.delete_record_confirm"))) return;
+    if (!(await ask(T("records.delete_record_confirm"), { danger: true }))) return;
     await api(`/api/records/${r.id}`, { method: "DELETE" });
     state.record = null; $("#detail").innerHTML = `<p class="empty">${T("records.select_hint")}</p>`; $("#view").classList.add("hidden"); loadRecords();
   });
+  $("#detail").ondblclick = (e) => {                               // the system's double-click (its own speed setting)
+    const ec = e.target.closest?.("td[data-edit]");
+    if (ec) { e.preventDefault(); editRecording(r, +ec.dataset.rec, ec.dataset.edit); }
+  };
   $("#detail").onclick = guard(async (e) => {
     const t = e.target;
     const cp = t.closest?.("[data-cplay]");                       // copy comparison: play this spot on this copy
@@ -764,11 +827,11 @@ function renderRecord() {
     if (rs) { const k = rs.dataset.rsort, cur = state.recSort; state.recSort = { key: k, dir: cur?.key === k ? -cur.dir : REC_FIRST_DIR[k] }; saveRecSort(); return renderRecTable(); }
     if (t.closest?.("[data-rsort-reset]")) { state.recSort = null; saveRecSort(); return renderRecTable(); }
     const ec = t.closest?.("td[data-edit]");
-    if (ec && !ec.querySelector("input, select")) { if (doubleTap(ec)) editCell(ec, r); return; }
+    if (ec) { if (doubleTap(ec)) editRecording(r, +ec.dataset.rec, ec.dataset.edit); return; }
     if (t.dataset.view) return showRecording(+t.dataset.view);
     if (t.dataset.cmp) return showComparison(+t.dataset.cmp);
     if (t.dataset.reana) { await api(`/api/recordings/${t.dataset.reana}/analyze`, { method: "POST" }); return refreshRecord(); }
-    if (t.dataset.del) { if (confirm(T("records.delete_recording_confirm"))) { await api(`/api/recordings/${t.dataset.del}`, { method: "DELETE" }); refreshRecord(); } return; }
+    if (t.dataset.del) { if ((await ask(T("records.delete_recording_confirm"), { danger: true }))) { await api(`/api/recordings/${t.dataset.del}`, { method: "DELETE" }); refreshRecord(); } return; }
     if (t.classList.contains("sel")) {
       t.checked ? state.selected.add(+t.dataset.id) : state.selected.delete(+t.dataset.id);
       setCompareBtn();
@@ -1101,6 +1164,9 @@ const forGrade = (e) => e.skip || (e.region === "music" && e.kind !== "tick");
 // verdict. The list holds the strongest open spots; judging one lets the next strongest move up (no reload).
 state.showRule = (() => { try { return localStorage.getItem("vc-show-rule") === "1"; } catch (_) { return false; } })();
 state.evLimit = 60;
+// Where the record's repeat rule comes from when nobody chose one: its Discogs genres and styles
+const ruleSourceText = (eff) => (eff?.source === "genre"
+  ? ` <small>${T("records.rule_from_genre", { list: esc([...eff.genres, ...eff.styles].join(" · ")) })}</small>` : "");
 // Sequenced music: the repeat rule, its state and the switch per record, plus the audible grouping, under the list
 function repeatsBlock(rec, m) {
   const rp = m.repeats;
@@ -1321,7 +1387,7 @@ async function showRecording(id) {
     if (e.target.dataset.mplay) return playMaster(rec.id, +e.target.dataset.mplay, +(e.target.dataset.before || 0.6), +(e.target.dataset.after || 1.2));
     if (e.target.closest("[data-master-run]")) return guard(async () => { await api(`/api/recordings/${rec.id}/master`, { method: "POST" }); loadMasterBox(rec); })();
     if (e.target.closest("[data-trim]")) return guard(async () => {
-      if (!confirm(T("recording.overhang_confirm", { at: fmtTime(m.groove_end_s), len: fmtTime(rec.overhang_s) }))) return;
+      if (!(await ask(T("recording.overhang_confirm", { at: fmtTime(m.groove_end_s), len: fmtTime(rec.overhang_s) })))) return;
       const out = await api(`/api/recordings/${rec.id}/trim`, { method: "POST" });
       toast(T("recording.overhang_done", { len: fmtTime(out.removed_s) }), 8000);
       closeView(); if (state.record) refreshRecord();
@@ -2009,8 +2075,8 @@ function renderTargets(t, mid) {
     const r = await api(`/api/targets/${id}`, { method: "PUT", body: { name, note: $("#tg-note").value, targets: collect() } });
     toast(T("targets.created", { name })); renderTargets(r, id);
   });
-  const rs = $("#tg-reset"); if (rs) rs.onclick = guard(async () => { if (!confirm(T("targets.confirm_reset", { name: m.name }))) return; const r = await api(`/api/targets/${m.id}`, { method: "DELETE" }); toast(T("targets.reset_done")); renderTargets(r, m.id); });
-  const dl = $("#tg-del"); if (dl) dl.onclick = guard(async () => { if (!confirm(T("targets.confirm_delete", { name: m.name }))) return; const r = await api(`/api/targets/${m.id}`, { method: "DELETE" }); toast(T("targets.deleted")); renderTargets(r, r.active); });
+  const rs = $("#tg-reset"); if (rs) rs.onclick = guard(async () => { if (!(await ask(T("targets.confirm_reset", { name: m.name }), { danger: true }))) return; const r = await api(`/api/targets/${m.id}`, { method: "DELETE" }); toast(T("targets.reset_done")); renderTargets(r, m.id); });
+  const dl = $("#tg-del"); if (dl) dl.onclick = guard(async () => { if (!(await ask(T("targets.confirm_delete", { name: m.name }), { danger: true }))) return; const r = await api(`/api/targets/${m.id}`, { method: "DELETE" }); toast(T("targets.deleted")); renderTargets(r, r.active); });
 }
 
 // Learning model: state per event type from /api/learn; "Retrain now" trains immediately and recounts all recordings
@@ -2128,7 +2194,7 @@ async function loadSystem() {
       + (d.desktop ? "" : `<p class="hint">${T("settings.discogs_config_alt", { file: cfgFile })}</p>`);
     const b = $("#btn-discogs-sync"); if (b) b.onclick = guard(async () => { b.disabled = true; toast(T("settings.discogs_syncing")); const r = await api("/api/discogs/sync", { method: "POST" }); toast(T("settings.discogs_synced", { n: r.count })); renderDiscogs(r); });
     const c = $("#btn-discogs-connect"); if (c) c.onclick = guard(async () => { const r = await api("/api/discogs/connect", { method: "POST" }); window.location.href = r.authorize_url; });
-    const x = $("#btn-discogs-disconnect"); if (x) x.onclick = guard(async () => { if (!confirm(T("settings.discogs_confirm_disconnect"))) return; renderDiscogs(await api("/api/discogs/disconnect", { method: "POST" })); });
+    const x = $("#btn-discogs-disconnect"); if (x) x.onclick = guard(async () => { if (!(await ask(T("settings.discogs_confirm_disconnect"), { danger: true }))) return; renderDiscogs(await api("/api/discogs/disconnect", { method: "POST" })); });
     const body = () => ({ token: $("#dc-token").value.trim(), username: $("#dc-username").value.trim() });
     const clearErrors = () => box.querySelectorAll(".err").forEach((e) => (e.textContent = ""));
     const fieldErrors = (err) => {
@@ -2156,7 +2222,7 @@ async function loadSystem() {
     });
     const rm = $("#dc-remove");
     if (rm) rm.onclick = guard(async () => {
-      if (!confirm(T(d.config_token ? "settings.discogs_remove_confirm_config" : "settings.discogs_remove_confirm"))) return;
+      if (!(await ask(T(d.config_token ? "settings.discogs_remove_confirm_config" : "settings.discogs_remove_confirm"), { danger: true }))) return;
       renderDiscogs(await api("/api/discogs/account", { method: "DELETE" }));
       toast(T("settings.discogs_removed"));
     });
@@ -2191,7 +2257,7 @@ async function loadSystem() {
   $("#btn-retention").onclick = guard(async () => {
     const d = values.retention_days;
     if (d <= 0) { toast(T("settings.retention_off")); return; }
-    if (!confirm(T("settings.retention_confirm", { n: d }))) return;
+    if (!(await ask(T("settings.retention_confirm", { n: d }), { danger: true }))) return;
     const r = await api("/api/retention/run", { method: "POST" });
     toast(r.deleted.length ? T("settings.retention_deleted", { n: r.deleted.length }) : T("settings.retention_nothing"));
   });
@@ -2235,7 +2301,7 @@ async function loadNetwork() {
   });
   const nc = $("#btn-net-code");
   if (nc) nc.onclick = guard(async () => {
-    if (!confirm(T("network.new_code_confirm"))) return;
+    if (!(await ask(T("network.new_code_confirm")))) return;
     await api("/api/network/code", { method: "POST" });
     toast(T("network.new_code_done"));
     loadNetwork();
@@ -2430,7 +2496,7 @@ function renderVinylMind(s) {
   const rs = $("#vm-url-reset"); if (rs) rs.onclick = guard(() => { vm.server = null; return put({ reset_url: true }, T("vinylmind.url_reset_done")); });
   const no = $("#vm-notice-ok"); if (no) no.onclick = guard(() => put({ dismiss_notice: true }));
   const pr = $("#vm-prior-rm"); if (pr) pr.onclick = guard(async () => {
-    if (!confirm(T("vinylmind.prior_remove_confirm"))) return;
+    if (!(await ask(T("vinylmind.prior_remove_confirm"), { danger: true }))) return;
     renderVinylMind(await api("/api/vinylmind/prior", { method: "DELETE" })); toast(T("vinylmind.prior_removed"));
   });
   const ck = $("#vm-check"); if (ck) ck.onclick = guard(async () => {
@@ -2451,7 +2517,7 @@ function renderVinylMind(s) {
   const cd = $("#vm-connect-device"); if (cd) cd.onclick = guard(() => connect("device"));
   const fd = $("#vm-flow-device"); if (fd) fd.onclick = guard(() => connect("device", s.state === "active" || s.state === "pending"));
   const rc = $("#vm-reconnect"); if (rc) rc.onclick = guard(async () => {
-    if (!confirm(T("vinylmind.reconnect_confirm"))) return;
+    if (!(await ask(T("vinylmind.reconnect_confirm")))) return;
     if (!vm.server) await vmCheckServer();
     await connect(s.browser_here ? "browser" : "device", true);
   });
@@ -2480,11 +2546,11 @@ function renderVinylMind(s) {
     } catch (e) { loadVinylMind(); throw e; }
   });
   const lv = $("#vm-leave"); if (lv) lv.onclick = guard(async () => {
-    if (!confirm(T("vinylmind.leave_confirm"))) return;
+    if (!(await ask(T("vinylmind.leave_confirm"), { danger: true }))) return;
     let r;
     try { r = await api("/api/vinylmind/leave", { method: "POST", body: {} }); }
     catch (e) {
-      if (!confirm(T("vinylmind.forget_confirm", { error: e.message }))) return;
+      if (!(await ask(T("vinylmind.forget_confirm", { error: e.message }), { danger: true }))) return;
       r = await api("/api/vinylmind/leave", { method: "POST", body: { forget: true } });
     }
     vm.server = null; renderVinylMind(r); toast(T("vinylmind.left"));
@@ -2512,10 +2578,10 @@ function renderVinylMind(s) {
     const text = await f.text();
     const { package: d } = await api("/api/vinylmind/import", { method: "POST", body: text });
     const kinds = Object.entries(d.kinds).map(([k, v]) => T("vinylmind.import_kind", { kind: EVKIND[k] || k, n: v.examples ?? "–" })).join("\n");
-    const ask = d.type === "model"
+    const question = d.type === "model"
       ? T("vinylmind.import_confirm_model", { ref: d.ref, version: d.feature_version, signature: T(`vinylmind.signature_${d.signature}`), kinds })
       : T("vinylmind.import_confirm_contribution", { ref: d.ref, version: d.feature_version, kinds });
-    if (!confirm(ask)) return;
+    if (!(await ask(question))) return;
     const r = await api("/api/vinylmind/import?confirm=true", { method: "POST", body: text });
     renderVinylMind(r.status); toast(T("vinylmind.imported"), 5000);
   });
@@ -2672,7 +2738,7 @@ function renderAudio(a) {
   });
   const rs = $("#au-reset");
   if (rs) rs.onclick = guard(async () => {
-    if (!confirm(T("audioset.reset_confirm"))) return;
+    if (!(await ask(T("audioset.reset_confirm"), { danger: true }))) return;
     await api("/api/audio", { method: "DELETE" });
     toast(T("audioset.reset_done"));
     loadSystem();
@@ -2729,7 +2795,7 @@ async function loadProblems() {
     </table></div>
     <div class="row"><button class="secondary" id="problems-clear">${T("problems.clear")}</button></div>` : `<p class="empty">${T("problems.empty")}</p>`}`;
   const c = $("#problems-clear");
-  if (c) c.onclick = guard(async () => { if (!confirm(T("problems.confirm_clear"))) return; await api("/api/problems", { method: "DELETE" }); toast(T("problems.cleared")); loadProblems(); });
+  if (c) c.onclick = guard(async () => { if (!(await ask(T("problems.confirm_clear"), { danger: true }))) return; await api("/api/problems", { method: "DELETE" }); toast(T("problems.cleared")); loadProblems(); });
   el.querySelectorAll("[data-prob-rec]").forEach((b) => (b.onclick = guard(async () => { setMode("record"); await openRecord(+b.dataset.probRec); })));
   el.querySelectorAll("[data-prob-setup]").forEach((b) => (b.onclick = guard(async () => { setMode("alignment"); await openSetup(+b.dataset.probSetup); })));
 }
@@ -2948,7 +3014,7 @@ function renderStorageSettings() {
   $("#st-check").onclick = guard(runCheck);
   $("#st-start").onclick = guard(async () => {
     const r = storageUi.checked; if (!r) return;
-    if (!confirm(T("storage.confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path }))) return;
+    if (!(await ask(T("storage.confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path })))) return;
     await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#st-delete").checked } });
     storageUi.pick = storageUi.custom = ""; storageUi.checked = null; await loadStorage();
   });
@@ -2956,13 +3022,13 @@ function renderStorageSettings() {
     if (!target()) { out.innerHTML = `<p class="bad">${ico("bad", 14)} ${T("storage.pick_first")}</p>`; return; }
     const r = await api("/api/storage/check", { method: "POST", body: { path: target(), relink: true } });
     if (!r.ok) { out.innerHTML = storageCheckHtml(r); return; }
-    if (!confirm(T("storage.relink_confirm", { path: r.path }))) return;
+    if (!(await ask(T("storage.relink_confirm", { path: r.path })))) return;
     storageUi.info = await api("/api/storage/relink", { method: "POST", body: { path: r.path } });
     storageUi.pick = storageUi.custom = ""; toast(T("storage.relinked", { path: r.path })); renderStorageSettings(); renderStorageStatus();
   });
   const rn = $("#st-rename");
   if (rn) rn.onclick = guard(async () => {
-    if (!confirm(T("storage.rename_confirm", { n: I.names.pending }))) return;
+    if (!(await ask(T("storage.rename_confirm", { n: I.names.pending })))) return;
     const r = await api("/api/storage/rename", { method: "POST" });
     storageUi.info = r;
     toast(T("storage.renamed", { n: r.result.renamed }) + (r.result.kept ? " " + T("storage.rename_kept", { n: r.result.kept }) : ""), 6000);
@@ -2972,7 +3038,7 @@ function renderStorageSettings() {
   if (ga) ga.onclick = guard(async () => {
     const r = await api("/api/storage/check", { method: "POST", body: { path: d.path } });
     if (!r.ok) { toast(r.problems.join(" "), 8000); return; }
-    if (!confirm(T("storage.gather_confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path }))) return;
+    if (!(await ask(T("storage.gather_confirm", { files: r.files, gb: gbOf(r.bytes), path: r.path })))) return;
     await api("/api/storage/move", { method: "POST", body: { path: r.path, delete_originals: $("#st-gather-delete").checked } });
     await loadStorage();
   });
@@ -3023,7 +3089,7 @@ function updateStorageMove(mv, drawn = false) {
     const edit = !!el.dataset.edit;
     el.innerHTML = storageMoveHtml(mv, edit);
     const c = el.querySelector("[data-storage-cancel]");
-    if (c) c.onclick = guard(async () => { if (confirm(T("storage.cancel_confirm"))) await api("/api/storage/move/cancel", { method: "POST" }); });
+    if (c) c.onclick = guard(async () => { if ((await ask(T("storage.cancel_confirm"), { danger: true }))) await api("/api/storage/move/cancel", { method: "POST" }); });
     const x = el.querySelector("[data-storage-dismiss]");
     if (x) x.onclick = guard(async () => { storageUi.info = await api("/api/storage/move/dismiss", { method: "POST" }); renderStorageStatus(); renderStorageSettings(); });
   });
@@ -3440,7 +3506,7 @@ $("#setup-detail").addEventListener("click", guard(async (e) => {
   if (w === "edit") return renderProfileForm(p);
   if (w === "activate") { await api(`/api/profiles/${p.id}/activate`, { method: "POST" }); toast(T("profiles.now_active", { name: p.name })); return refreshProfile(); }
   if (w === "delete") {
-    if (!confirm(T("profiles.confirm_delete", { name: p.name }))) return;
+    if (!(await ask(T("profiles.confirm_delete", { name: p.name }), { danger: true }))) return;
     await api(`/api/profiles/${p.id}`, { method: "DELETE" }); state.profileId = null; state.profile = null;
     $("#setup-detail").innerHTML = `<p class="empty">${T("profiles.select_or_add")}</p>`; return loadSetups();
   }
@@ -3456,7 +3522,7 @@ $("#setup-detail").addEventListener("click", guard(async (e) => {
     toast(T("profiles.toast_go")); await loadSetups(); return refreshProfile();
   }
   if (w === "accept") {
-    if (VERDICT_OPEN.has(p.readiness?.verdict) && !confirm(T("tour.accept_anyway_confirm"))) return;
+    if (VERDICT_OPEN.has(p.readiness?.verdict) && !(await ask(T("tour.accept_anyway_confirm")))) return;
     const verdict = p.readiness?.verdict;
     state.profile = await api(`/api/profiles/${p.id}/accept`, { method: "POST", body: {} }); toast(T("profiles.toast_accepted"));
     loadProfiles(); loadOnboarding({ quiet: true });
@@ -3643,7 +3709,7 @@ $("#setup-detail").addEventListener("click", guard(async (e) => {
   if (d.tourEdit) return tourGo("custom", { edit: d.tourEdit });
   if (d.tourDel) {
     const r = state.testrecords?.records.find((x) => x.id === d.tourDel);
-    if (!confirm(T("tour.custom_confirm_delete", { name: r?.name || d.tourDel }))) return;
+    if (!(await ask(T("tour.custom_confirm_delete", { name: r?.name || d.tourDel }), { danger: true }))) return;
     state.testrecords = await api(`/api/testrecords/${encodeURIComponent(d.tourDel)}`, { method: "DELETE" });
     return renderTour();
   }
@@ -3756,7 +3822,7 @@ function renderSetup() {
     toast(T("alignment.toast_recording")); refreshSetup();
   });
   $("#del-setup").onclick = guard(async () => {
-    if (!confirm(T("alignment.confirm_delete_run"))) return;
+    if (!(await ask(T("alignment.confirm_delete_run"), { danger: true }))) return;
     await api(`/api/setups/${s.id}`, { method: "DELETE" });
     state.setup = null; state.setupSel.delete(s.id); $("#view").classList.add("hidden");
     $("#setup-detail").innerHTML = `<p class="empty">${T("alignment.select_or_create")}</p>`; loadSetups();
@@ -3765,7 +3831,7 @@ function renderSetup() {
     const t = e.target;
     if (t.dataset.jview) return showAlignment(+t.dataset.jview);
     if (t.dataset.reana) { await api(`/api/recordings/${t.dataset.reana}/analyze`, { method: "POST" }); return refreshSetup(); }
-    if (t.dataset.del) { if (confirm(T("alignment.confirm_delete_recording"))) { await api(`/api/recordings/${t.dataset.del}`, { method: "DELETE" }); refreshSetup(); } }
+    if (t.dataset.del) { if ((await ask(T("alignment.confirm_delete_recording"), { danger: true }))) { await api(`/api/recordings/${t.dataset.del}`, { method: "DELETE" }); refreshSetup(); } }
   });
 }
 
@@ -4088,7 +4154,7 @@ $("#listen-live").onclick = () => listenRestart(null);
 $("#btn-monitor").onclick = guard(async () => { await api("/api/monitor/start", { method: "POST" }); });
 $("#btn-stop").onclick = guard(async () => { await api("/api/recordings/stop", { method: "POST" }); setTimeout(() => { refreshRecord(); refreshSetup(); }, 500); });
 $("#btn-calibrate").onclick = guard(async () => {
-  if (!confirm(T("shell.calibrate_confirm"))) return;
+  if (!(await ask(T("shell.calibrate_confirm")))) return;
   await api("/api/recordings/start", { method: "POST", body: { kind: "calibration", side: "-" } });
 });
 

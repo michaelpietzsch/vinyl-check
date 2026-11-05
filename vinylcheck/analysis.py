@@ -20,6 +20,7 @@ reader's language.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 
@@ -123,6 +124,26 @@ def labels_for(times: np.ndarray, labels: dict | None, tol_s: float = 0.003) -> 
 
 
 REPEAT_RULES = ("auto", "on", "off")
+
+
+def record_repeat_rule(record: dict | None, default: str = "auto") -> dict:
+    """The repeat rule a record is counted with, and where it comes from: the record's own choice ("record"), else what
+    its Discogs genres and styles suggest ("genre", see discogs.genre_rule), else the configured default ("default").
+    `record` is a row of the records table (its `genres` column holds {"genres": [...], "styles": [...]} as JSON)."""
+    from . import discogs                                            # the classification lives with the Discogs client
+    r = record or {}
+    g: dict = {}
+    try:
+        g = json.loads(r.get("genres") or "{}") or {}
+    except (TypeError, ValueError):
+        pass
+    out = {"genres": list(g.get("genres") or []), "styles": list(g.get("styles") or [])}
+    if r.get("repeat_rule") in REPEAT_RULES:
+        return {"mode": r["repeat_rule"], "source": "record", **out}
+    sug = discogs.genre_rule(out["genres"], out["styles"])
+    if sug:
+        return {"mode": sug, "source": "genre", **out}
+    return {"mode": default if default in REPEAT_RULES else "auto", "source": "default", **out}
 GROUP_SPAN = 2.5            # a group of impulses spans at most this many times click_group_ms
 
 

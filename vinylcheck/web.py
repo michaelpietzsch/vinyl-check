@@ -210,6 +210,7 @@ class MapIn(BaseModel):
 class ConditionIn(BaseModel):
     recording_id: int | None = None   # grade of this one recording (legacy)
     copy: str | None = None           # … or the record grade of this copy ("" = no copy label)
+    instance_id: int | None = None    # the copy in the Discogs collection (several copies of one release)
 
 
 class LabelIn(BaseModel):
@@ -665,6 +666,47 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         db.update_record(r["id"], sides=json.dumps(sides))
         return sides
 
+    genres_missed: dict[int, float] = {}               # record id → when Discogs could not be asked (retry later)
+
+    def ensure_genres(r: dict) -> bool:
+        """Fetch the Discogs genres and styles of a record once and keep them on it: they give the default of its
+        repeat rule (analysis.record_repeat_rule). When that default changes the rule the record is counted with,
+        its sides are counted and graded again; returns True then."""
+        if r.get("genres") is not None or not r.get("discogs_release_id"):
+            return False
+        if time.time() - genres_missed.get(r["id"], 0) < 600:
+            return False
+        try:
+            g = dc.release_genres(int(r["discogs_release_id"]))
+        except Exception:  # noqa: BLE001 — Discogs unreachable or an odd answer: the rule stays as it was, retry later
+            genres_missed[r["id"]] = time.time()
+            return False
+        before = analysis.record_repeat_rule(r, cfg.analysis.repeat_rule)["mode"]
+        r["genres"] = json.dumps(g)
+        db.update_record(r["id"], genres=r["genres"])
+        if analysis.record_repeat_rule(r, cfg.analysis.repeat_rule)["mode"] == before:
+            return False
+        for rec in db.recordings(r["id"]):
+            learn_recount(rec["id"])
+        ref_cache["key"] = None
+        return True
+
+    def after_sync() -> None:
+        """After a Discogs sync: the condition snapshot of every record held once in the collection follows Discogs
+        (the record list shows it), and records without genres and styles get them (from the synced collection, no
+        further requests)."""
+        for r in db.q("SELECT id, discogs_release_id, discogs_media_condition FROM records WHERE discogs_release_id IS NOT NULL"):
+            cs = [e for e in dc.releases() if e.get("release_id") == int(r["discogs_release_id"])]
+            if len(cs) == 1 and cs[0].get("media") and cs[0]["media"] != r["discogs_media_condition"]:
+                db.update_record(r["id"], discogs_media_condition=cs[0]["media"])
+        for r in db.q("SELECT * FROM records WHERE genres IS NULL AND discogs_release_id IS NOT NULL"):
+            if "genres" in (dc.entry(r["discogs_release_id"]) or {}):
+                try:
+                    if ensure_genres(r):
+                        log.info("Record %s: repeat rule from its Discogs genres, sides counted again", r["id"])
+                except Exception:  # noqa: BLE001
+                    log.exception("Genres of record %s", r["id"])
+
     worker.on_master = lambda rec_id, res: push_event(
         "master", i18n.msg("api.event_master_done" if res.get("ok") else "api.event_master_mismatch", id=rec_id),
         rec_id)
@@ -700,12 +742,11 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         return learning.zero_point(db.profile(pid) if pid else None)
 
     def acfg_for(rec_id: int) -> analysis.AnalysisConfig:
-        """The analysis settings for counting a recording: the configuration, with the record's own repeat rule
-        (records.repeat_rule, set by the user) in place of the configured one."""
-        row = db.one("SELECT rc.repeat_rule, rc.mono FROM recordings r JOIN records rc ON rc.id = r.record_id "
+        """The analysis settings for counting a recording: the configuration, with the record's repeat rule (its own
+        choice, else the default from its Discogs genres, see analysis.record_repeat_rule) and its mono switch."""
+        row = db.one("SELECT rc.repeat_rule, rc.mono, rc.genres FROM recordings r JOIN records rc ON rc.id = r.record_id "
                      "WHERE r.id = ?", (rec_id,)) or {}
-        rule = row.get("repeat_rule")
-        return replace(cfg.analysis, repeat_rule=rule if rule in analysis.REPEAT_RULES else cfg.analysis.repeat_rule,
+        return replace(cfg.analysis, repeat_rule=analysis.record_repeat_rule(row, cfg.analysis.repeat_rule)["mode"],
                        mono=bool(row.get("mono")))
 
     def learn_recount(rec_id: int, r: dict | None = None) -> tuple[dict, dict] | None:
@@ -1156,10 +1197,12 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     @app.post("/api/records")
     def add_record(r: RecordIn):
         body = r.model_dump()
-        if body["mono"] is None and r.discogs_release_id and dc.enabled:
+        e = (dc.entry(r.discogs_release_id, r.artist, r.title) or {}) if r.discogs_release_id and dc.enabled else {}
+        if body["mono"] is None and e:
             # Discogs marks mono pressings in the format ("LP, Album, Mono"): such a record starts as mono
-            e = dc.entry(r.discogs_release_id, r.artist, r.title) or {}
             body["mono"] = True if "mono" in str(e.get("format") or "").lower() else None
+        if "genres" in e:                             # the default of the repeat rule (sequenced music)
+            body["genres"] = json.dumps({"genres": e["genres"], "styles": e.get("styles") or []})
         return {"id": db.add_record(**body)}
 
     @app.get("/api/records/{rid}")
@@ -1167,6 +1210,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         r = db.record(rid)
         if not r:
             raise HTTPException(404, i18n.msg("api.record_not_found"))
+        ensure_genres(r)                                             # before the grades: they may be counted again
+        r["repeat_rule_effective"] = analysis.record_repeat_rule(r, cfg.analysis.repeat_rule)
         r["recordings"] = db.recordings(rid)
         r["copies"] = db.copy_grades(rid).get(rid, [])              # record grade per copy (average of its sides)
         r["pressing"] = pressing_grade(r["copies"])
@@ -1191,18 +1236,52 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
     # Media condition as stored in the Discogs collection (the client's cache). When a record is created it is only
     # stored as a snapshot; it is changed on Discogs. The sleeve condition is not of interest here.
 
+    def instance_map(r: dict) -> dict:
+        """Which copy in the Discogs collection each copy of the record is (copy key → instance id), as chosen when
+        a condition was written."""
+        try:
+            m = json.loads(r.get("discogs_instances") or "{}")
+        except ValueError:
+            return {}
+        return m if isinstance(m, dict) else {}
+
+    def collection_copies(rel: int) -> list[dict]:
+        return [e for e in dc.releases() if e.get("release_id") == int(rel)]
+
     @app.get("/api/records/{rid}/collection")
-    def record_collection(rid: int):
+    def record_collection(rid: int, live: bool = False, copy: str | None = None):
+        """The record in the Discogs collection: from the synced collection, or with `live` as Discogs has it now
+        (one request; the cache follows). `copies` lists every copy of the release in the collection, `suggested`
+        the one chosen before for the copy `copy`."""
         r = db.record(rid)
         if not r:
             raise HTTPException(404, i18n.msg("api.record_not_found"))
         if not dc.enabled:
             raise HTTPException(404, discogs_off())
-        e = dc.entry(r.get("discogs_release_id"), r["artist"], r["title"])
-        if not e:
-            raise HTTPException(404, i18n.msg("api.not_in_collection"))
+        rel = r.get("discogs_release_id")
+        if live and rel:
+            try:
+                copies = dc.instances(int(rel))
+            except discogs.DiscogsError as e:
+                raise HTTPException(502, i18n.error_message(e)) from e
+            if not copies:
+                raise HTTPException(404, i18n.msg("discogs.not_in_collection_now"))
+        else:
+            e = dc.entry(rel, r["artist"], r["title"])
+            copies = collection_copies(e["release_id"]) if e else []
+            if not copies:
+                raise HTTPException(404, i18n.msg("api.not_in_collection"))
+        mapped = instance_map(r).get(copy_key(copy)) if copy is not None else None
+        ids = [c.get("instance_id") for c in copies]
+        e = copies[ids.index(mapped)] if mapped in ids else copies[0]
+        if len(copies) == 1 and e.get("media") and e.get("media") != r.get("discogs_media_condition"):
+            db.update_record(rid, discogs_media_condition=e["media"])      # the snapshot in the record list follows
         return {"media_condition": e.get("media"), "in_collection_since": e.get("date_added"), "notes": e.get("notes") or "",
-                "format": e.get("format"), "year": e.get("year"), "release_id": e.get("release_id"), "synced_at": dc.state["synced_at"]}
+                "format": e.get("format"), "year": e.get("year"), "release_id": e.get("release_id"),
+                "synced_at": dc.state["synced_at"], "live": bool(live and rel),
+                "copies": [{"instance_id": c.get("instance_id"), "media": c.get("media"), "date_added": c.get("date_added"),
+                            "notes": c.get("notes") or "", "folder_id": c.get("folder_id")} for c in copies],
+                "suggested": mapped if mapped in ids else None}
 
     # Covers from Discogs: the release API returns image URLs without a token too. Each release is asked once; the
     # URLs are kept in covers.json in the state directory and the browser loads the image itself from i.discogs.com.
@@ -1245,6 +1324,50 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         if not covers[key]["url"]:
             raise HTTPException(404, i18n.msg("api.discogs_no_image"))
         return {"release_id": rel, **covers[key]}
+
+    @app.post("/api/records/{rid}/discogs-refresh")
+    def refresh_from_discogs(rid: int):
+        """Take the release data again from Discogs: tracks and side lengths (replacing a hand-entered track list),
+        genres and styles, the cover. vinyl-check takes them once and keeps them; an entry corrected on Discogs
+        (durations added, tracks fixed, another image) arrives this way. Sides whose tracks changed are analysed
+        again (the track bounds are part of the analysis), a changed default of the repeat rule recounts them."""
+        r = db.record(rid)
+        if not r:
+            raise HTTPException(404, i18n.msg("api.record_not_found"))
+        rel = r.get("discogs_release_id")
+        if not rel:
+            raise HTTPException(409, i18n.msg("api.no_release_id"))
+        try:
+            tracks = dc.release_tracks(int(rel))
+            g = dc.release_genres(int(rel), fresh=True)
+        except discogs.DiscogsError as e:
+            raise HTTPException(502, i18n.error_message(e)) from e
+        try:
+            old_tracks = json.loads(r.get("tracks") or "{}")
+        except ValueError:
+            old_tracks = {}
+        rule_before = analysis.record_repeat_rule(r, cfg.analysis.repeat_rule)["mode"]
+        db.update_record(rid, tracks=json.dumps(tracks), sides=json.dumps(side_lengths(tracks)), genres=json.dumps(g))
+        if covers.pop(str(rel), None) is not None:
+            try:
+                covers_file.write_text(json.dumps(covers))
+            except OSError:
+                pass
+        changed = {"tracks": tracks != old_tracks, "rule": False, "reanalyzing": 0}
+        r = db.record(rid)
+        for rec in db.recordings(rid):
+            x = get_recording(rec["id"])
+            side = str(x.get("side") or "").strip().upper()[:1]
+            if (changed["tracks"] and (tracks.get(side) != old_tracks.get(side)) and x["audio_available"]
+                    and x["status"] in ("analyzed", "error") and x["kind"] in CHECK_KINDS):
+                worker.analyze(rec["id"])
+                changed["reanalyzing"] += 1
+        if analysis.record_repeat_rule(r, cfg.analysis.repeat_rule)["mode"] != rule_before:
+            changed["rule"] = True
+            for rec in db.recordings(rid):
+                learn_recount(rec["id"])
+        ref_cache["key"] = None
+        return {**get_record(rid), "refreshed": changed}
 
     @app.get("/api/records/{rid}/cover/image", include_in_schema=False)
     def record_cover_image(rid: int):
@@ -1782,12 +1905,27 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             if not c or c["grade"] not in GRADE_TO_DISCOGS:
                 raise HTTPException(409, i18n.msg("api.copy_no_grade"))
             grade = c["grade"]
+        key = copy_key(body.copy) if body.recording_id is None else copy_key((rec or {}).get("copy_label"))
+        mapping = instance_map(r)
+        inst = body.instance_id if body.instance_id is not None else mapping.get(key)
+        rel = int(r["discogs_release_id"])
         try:
-            out = dc.set_media_condition(int(r["discogs_release_id"]), grade)
+            try:
+                out = dc.set_media_condition(rel, grade, inst)
+            except discogs.DiscogsError as e:
+                if body.instance_id is not None or inst is None or e.instances is None:
+                    raise
+                mapping.pop(key, None)                 # the copy chosen before is gone on Discogs: as if never chosen
+                out = dc.set_media_condition(rel, grade, None)
         except discogs.DiscogsError as e:
-            raise HTTPException(502, i18n.error_message(e)) from e
-        db.update_record(rid, discogs_media_condition=out["current"])   # snapshot; Discogs stays the source of truth
-        return {"ok": True, "grade": grade, "previous": out["previous"], "current": out["current"]}
+            # several copies and none chosen (or the chosen one is gone): 409, the page asks which one
+            raise HTTPException(409 if e.instances is not None else 502, i18n.error_message(e)) from e
+        mapping[key] = out["instance_id"]
+        multi = len(collection_copies(rel)) > 1
+        db.update_record(rid, discogs_instances=json.dumps(mapping),
+                         **({} if multi else {"discogs_media_condition": out["current"]}))  # snapshot; Discogs leads
+        return {"ok": True, "grade": grade, "previous": out["previous"], "current": out["current"],
+                "instance_id": out["instance_id"]}
 
     @app.patch("/api/records/{rid}")
     def patch_record(rid: int, p: RecordPatch):
@@ -1809,7 +1947,8 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                 if r["audio_available"] and r["status"] in ("analyzed", "error") and r["kind"] in CHECK_KINDS:
                     worker.analyze(rec["id"])
             ref_cache["key"] = None
-        elif p.repeat_rule is not None and p.repeat_rule != (before.get("repeat_rule") or "auto"):
+        elif p.repeat_rule is not None and (analysis.record_repeat_rule({**before, "repeat_rule": p.repeat_rule})["mode"]
+                                            != analysis.record_repeat_rule(before, cfg.analysis.repeat_rule)["mode"]):
             # the rule changes what counts: every analysed side of the record is counted and graded again
             for rec in db.recordings(rid):
                 learn_recount(rec["id"])
@@ -2937,4 +3076,5 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                         headers={"Cache-Control": "no-cache"})
 
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
+    dc.on_synced = after_sync                         # set last: everything it uses is defined by now
     return app
