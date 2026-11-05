@@ -362,7 +362,9 @@ a note says where the value comes from: set here, from the configuration file, f
 peak level of the left and right input, or why it did not work. Play a record during the test to see the level.
 *Save* stores all values shown; they apply from the next recording or level check. While a recording or level
 check runs, the section cannot be changed. The device of the active turntable profile takes precedence over the
-device chosen here. *Back to the configuration file* removes the values saved here.
+device chosen here; the section says so when they differ. *Test* checks the device chosen here, so it can succeed
+while a profile bound to another device records silence: set the device in the profile then. *Back to the
+configuration file* removes the values saved here.
 
 **Storage.** vinyl-check keeps two folders apart. The *application folder* holds the database with every
 measurement, judgement and setting, plus keys and caches; it belongs to the installation and stays where it is. The

@@ -365,7 +365,7 @@ the conventions of the chosen language. To add a language, see [docs/translating
 
 ## Roadmap
 
-- **Updates from the interface** (planned for 1.4). Since 1.2 the station shows when a new version is out;
+- **Updates from the interface** (planned). Since 1.2 the station shows when a new version is out;
   installing it will differ per platform: a service (Raspberry Pi, Linux) fetches the release wheel, checks its
   checksum and provenance attestation and restarts once idle, as `deploy.sh` does today; the macOS and Windows apps
   download the installer, check it the same way and start it, which works without warnings only once the apps are

@@ -244,7 +244,10 @@ example `capture_channels = 4` and `input_channels = [3, 4]`).
 - **Microphone access.** macOS asks once whether vinyl-check, or the terminal app it was started from, may use the
   microphone. This covers every audio input, USB interfaces included. Without permission macOS delivers digital
   silence instead of an error, and vinyl-check shows a note after a few seconds of level check. Allow it under
-  *System Settings → Privacy & Security → Microphone* and restart vinyl-check.
+  *System Settings → Privacy & Security → Microphone* and restart vinyl-check. If the note names a device although
+  access is granted, the recording comes from another input: the device of the active turntable profile takes
+  precedence over the one under *Settings → Audio interface*, and the *Test* there checks only the device chosen
+  there. Set the profile's device under *Turntable check* and calibrate again.
 - **Input volume.** If *Audio MIDI Setup* shows an input volume for the device, set it once (usually to the
   maximum) and set the level on the interface or the phono stage. Do not touch either after calibration.
 
@@ -498,7 +501,9 @@ immediately and no new analysis is needed.
 
 **Chain noise (stylus up).** The turntable profile does this in step 2. Outside the assistant: platter spinning,
 stylus raised, *Calibration (stylus up)*, 20–30 seconds, *Stop*. A value louder than −65 dBFS is rejected, which
-usually means the stylus was down.
+usually means the stylus was down. A value below −120 dBFS is rejected too: that is digital silence, no signal reached
+vinyl-check. Usually the turntable profile records from a different device than the one you tested (the profile's
+device takes precedence over *Settings → Audio interface*), or on macOS the microphone permission is missing.
 
 **Recording level with a test record.** The 1 kHz reference tone (side 1, band 1) should read about **−20 dBFS
 (±4 dB)**. The loudest band, the anti-skating ramp at +12 dB, then still has about 8 dB of headroom, and groove
