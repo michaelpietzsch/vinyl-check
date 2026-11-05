@@ -3385,6 +3385,8 @@ function renderProfileForm(p, opts = {}) {
       <div><label for="pf-src">${T("profiles.chain_source")}</label><select id="pf-src" name="chain_source">${chainOpts("source", ["usb_turntable", "turntable_interface"])}</select></div>
       <div><label for="pf-ccart">${T("profiles.chain_cartridge")}</label><select id="pf-ccart" name="chain_cartridge">${chainOpts("cartridge", ["mm", "mc", "unknown"])}</select></div>
       <div class="wide hint">${T("profiles.chain_hint")}</div>
+      <div><label for="pf-stylus">${T("profiles.stylus")}</label><select id="pf-stylus" name="stylus">${["", "spherical", "elliptical", "line_contact"].map((x) => `<option value="${x}" ${(p?.stylus || "") === x ? "selected" : ""}>${T(`profiles.stylus_${x || "none"}`)}</option>`).join("")}</select></div>
+      <div class="wide hint">${T("profiles.stylus_hint")}</div>
       <div class="wide"><label><input type="checkbox" id="pf-fixed" ${p?.fixed_gain ? "checked" : ""}> ${T("profiles.fixed_gain")}</label>
         <div class="hint">${T("profiles.fixed_gain_hint")}</div></div>
       <div class="wide"><label for="pf-trec">${T("profiles.test_record")}</label><select id="pf-trec" name="test_record"><option value="">${T("profiles.device_searching")}</option></select>
@@ -3486,7 +3488,7 @@ function renderProfile() {
     ${tourBar()}
     <div class="row" style="justify-content:space-between;align-items:start">
       <div><h2 style="margin:0">${ico("tonearm")} ${esc(p.name)}</h2>
-        <div class="hint">${T("profiles.summary", { cartridge: esc(p.cartridge || T("profiles.no_cartridge")), force: fmtG(p.tracking_force_g), anti: esc(p.antiskating || "–"), weight: esc(p.weight || "–") })}<br>${T("profiles.targets_used", { name: esc(p.targets_used?.name || T("profiles.targets_standard")) })}${p.targets_used?.own ? "" : T("profiles.targets_global")}${trec ? ` · ${T("profiles.test_record_used", { name: esc(trecName(trec)) })}` : ""}</div></div>
+        <div class="hint">${T("profiles.summary", { cartridge: esc(p.cartridge || T("profiles.no_cartridge")), force: fmtG(p.tracking_force_g), anti: esc(p.antiskating || "–"), weight: esc(p.weight || "–") })}${p.stylus ? ` · ${T(`profiles.stylus_${p.stylus}`)}` : ""}<br>${T("profiles.targets_used", { name: esc(p.targets_used?.name || T("profiles.targets_standard")) })}${p.targets_used?.own ? "" : T("profiles.targets_global")}${trec ? ` · ${T("profiles.test_record_used", { name: esc(trecName(trec)) })}` : ""}</div></div>
       <div class="row" style="flex:0 0 auto">${p.active ? `<span class="st ok">${ico("ok", 14)} ${T("profiles.active")}</span>` : `<button data-wiz="activate" ${busy ? "disabled" : ""}>${T("profiles.use")}</button>`}
         <button class="secondary" data-wiz="edit">${T("profiles.edit")}</button><button class="link" data-wiz="delete">${T("profiles.delete")}</button></div>
     </div>

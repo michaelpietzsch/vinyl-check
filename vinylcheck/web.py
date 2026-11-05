@@ -181,6 +181,7 @@ class ProfileIn(BaseModel):
     chain_source: str | None = None        # Vinyl-Mind chain class; null = guessed from device and cartridge
     chain_cartridge: str | None = None
     test_record: str | None = None         # id from testrecords; null = the AAPT 1
+    stylus: str | None = None              # stylus profile (STYLI); null = not given
 
 
 class ProfilePatch(BaseModel):
@@ -197,6 +198,7 @@ class ProfilePatch(BaseModel):
     chain_source: str | None = None
     chain_cartridge: str | None = None
     test_record: str | None = None
+    stylus: str | None = None
 
 
 class MapIn(BaseModel):
@@ -303,13 +305,19 @@ def _check_sensitivity(v) -> None:
         raise HTTPException(422, i18n.msg("api.sensitivity_range"))
 
 
+# Stylus profiles: how much of the groove wall the stylus touches decides how it reads wear and dirt, so grades of
+# different chains are put in context with it. Stays on the station (not part of the Vinyl-Mind chain class).
+STYLI = ("spherical", "elliptical", "line_contact")
+
+
 def _check_chain(f: dict) -> None:
-    """The profile's chain class for Vinyl-Mind: the hub's values, or empty/null for "guess from the profile"."""
-    for k, allowed in (("chain_source", vinylmind.SOURCES), ("chain_cartridge", vinylmind.CARTRIDGES)):
+    """The profile's chain class for Vinyl-Mind (the hub's values, or empty/null for "guess from the profile") and
+    its stylus profile (STYLI, or empty/null for not given)."""
+    for k, allowed in (("chain_source", vinylmind.SOURCES), ("chain_cartridge", vinylmind.CARTRIDGES), ("stylus", STYLI)):
         if f.get(k) == "":
             f[k] = None
         if f.get(k) is not None and f[k] not in allowed:
-            raise HTTPException(422, i18n.msg("vinylmind.chain_invalid"))
+            raise HTTPException(422, i18n.msg("api.stylus_invalid" if k == "stylus" else "vinylmind.chain_invalid"))
 
 
 class CompareIn(BaseModel):

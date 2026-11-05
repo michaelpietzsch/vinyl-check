@@ -155,5 +155,6 @@
   "discogs_username_invalid": "Enter the Discogs user name without spaces",
   "oauth_denied": "Access was not granted or has expired. Close this window and choose “Connect to Discogs” in the settings again.",
   "oauth_failed": "Discogs did not confirm the access: {error}",
-  "recording_in_progress": "Recording #{id} is still being recorded; it is analysed by itself once the side has ended."
+  "recording_in_progress": "Recording #{id} is still being recorded; it is analysed by itself once the side has ended.",
+  "stylus_invalid": "Unknown stylus profile (spherical, elliptical, line_contact or empty)"
 }

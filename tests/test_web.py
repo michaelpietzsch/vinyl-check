@@ -991,3 +991,16 @@ def test_learn_api_status_and_retrain(client):
     st = client.get("/api/status").json()["learn"]
     assert st["model_id"] == r["model_id"] and st["usable"] == []
     assert client.put("/api/settings", json={"learn_grade": True}).json()["values"]["learn_grade"] is True
+
+
+def test_profile_stylus(client):
+    """The stylus profile of a turntable profile: one of three, or not given."""
+    pid = client.post("/api/profiles", json={"name": "Deck", "stylus": "elliptical"}).json()["id"]
+    p = [x for x in client.get("/api/profiles").json() if x["id"] == pid][0]
+    assert p["stylus"] == "elliptical"
+    assert client.patch(f"/api/profiles/{pid}", json={"stylus": "line_contact"}).status_code == 200
+    assert [x for x in client.get("/api/profiles").json() if x["id"] == pid][0]["stylus"] == "line_contact"
+    r = client.patch(f"/api/profiles/{pid}", json={"stylus": "shibata"})
+    assert r.status_code == 422 and "stylus" in r.json()["detail"].lower()
+    client.patch(f"/api/profiles/{pid}", json={"stylus": ""})
+    assert [x for x in client.get("/api/profiles").json() if x["id"] == pid][0]["stylus"] is None

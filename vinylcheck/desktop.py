@@ -232,9 +232,69 @@ def _import_webview():
         return None
 
 
-def _show_window(webview, engine: Engine) -> None:
-    """Open the window and return when it is closed."""
+def _system_lang() -> str:
+    """The system's language for the start page (the interface itself follows its own setting later)."""
     from . import i18n
+
+    cand: list[str] = []
+    if sys.platform == "darwin":
+        try:
+            import Foundation
+            cand += [str(x) for x in Foundation.NSLocale.preferredLanguages()]
+        except Exception:  # noqa: BLE001 — pyobjc missing: the environment decides
+            pass
+    import locale
+    cand += [(locale.getlocale()[0] or "").replace("_", "-"), os.environ.get("LANG", "").split(".")[0].replace("_", "-")]
+    return i18n.negotiate(",".join(c for c in cand if c))
+
+
+def _page(title: str, body: str, spinner: bool = False) -> str:
+    """A small page of its own for the window before the interface is there (starting, or why it did not start)."""
+    spin = '<div class="spin"></div>' if spinner else ""
+    return f"""<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body{{margin:0;height:100%;background:#141516;color:#e8e6e3;font:15px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif}}
+    main{{max-width:640px;margin:0 auto;padding:12vh 24px 24px}} h1{{font-size:22px;margin:0 0 .6em}}
+    code{{background:#24262a;padding:.15em .4em;border-radius:4px;word-break:break-all}} pre{{white-space:pre-wrap;
+    background:#24262a;padding:.8em;border-radius:6px;font-size:13px;max-height:40vh;overflow:auto}}
+    button{{font:inherit;background:#b7382c;color:#fff;border:0;border-radius:6px;padding:.5em 1em;cursor:pointer}}
+    .spin{{width:28px;height:28px;border:3px solid #444;border-top-color:#b7382c;border-radius:50%;
+    animation:r 1s linear infinite;margin-bottom:1em}} @keyframes r{{to{{transform:rotate(360deg)}}}}
+    </style></head><body><main>{spin}<h1>{title}</h1>{body}</main></body></html>"""
+
+
+class _WindowApi:
+    """Functions the start and error pages may call (pywebview js_api)."""
+
+    def __init__(self, log_file: Path):
+        self._log_file = log_file
+
+    def reveal_log(self) -> None:
+        """Show the log file in the Finder or Explorer (its folder elsewhere)."""
+        import subprocess
+        f = self._log_file
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(f)])
+        elif sys.platform == "win32":
+            subprocess.Popen(["explorer", f"/select,{f}"])
+        else:
+            subprocess.Popen(["xdg-open", str(f.parent)])
+
+
+STARTING_SLOW_S = 45.0      # after this long without the interface, the start page says where the log is
+
+
+def _show_window(webview, cfg, log_file: Path) -> Engine | None:
+    """Open the window at once with a start page, start the engine meanwhile and then show the interface; if the
+    engine does not start, the window says why and where the log is (a bouncing icon tells nobody anything).
+    Returns when the window is closed, with the engine (None if it never started)."""
+    from html import escape
+
+    from . import i18n
+
+    lang = _system_lang()
+    tt = lambda key, **kw: escape(i18n.t(f"desktop.{key}", lang, **kw))   # noqa: E731
+    log_html = f"<p>{tt('log_at')}<br><code>{escape(str(log_file))}</code></p>" \
+               f"<p><button onclick=\"pywebview.api.reveal_log()\">{tt('show_log')}</button></p>"
 
     for key, value in (("ALLOW_DOWNLOADS", True),              # PDF reports and WAV exports are download links
                        ("OPEN_EXTERNAL_LINKS_IN_BROWSER", True)):  # Discogs pages and the like open in the browser
@@ -242,22 +302,48 @@ def _show_window(webview, engine: Engine) -> None:
             webview.settings[key] = value
         except (AttributeError, KeyError, TypeError):            # older pywebview without this setting
             pass
-    window = webview.create_window(APP_TITLE, engine.url, width=WINDOW_SIZE[0], height=WINDOW_SIZE[1],
-                                   min_size=MIN_SIZE, text_select=True, background_color="#141516")
+    window = webview.create_window(APP_TITLE, html=_page(tt("starting"), "", spinner=True), js_api=_WindowApi(log_file),
+                                   width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=MIN_SIZE, text_select=True,
+                                   background_color="#141516")
+    state: dict = {"engine": None, "failed": False}
+
+    def boot():
+        t0 = time.time()
+        slow = threading.Timer(STARTING_SLOW_S, lambda: state["engine"] is None and not state["failed"] and window.load_html(
+            _page(tt("starting"), f"<p>{tt('starting_slow')}</p>{log_html}", spinner=True)))
+        slow.daemon = True
+        slow.start()
+        try:
+            engine = Engine(cfg)
+            engine.start()
+        except Exception as e:  # noqa: BLE001 — whatever it is, the window must say it
+            state["failed"] = True
+            log.exception("vinyl-check did not start")
+            window.load_html(_page(tt("start_failed"), f"<pre>{escape(f'{type(e).__name__}: {e}')}</pre>"
+                                                       f"<p>{tt('send_log')}</p>{log_html}"))
+            return
+        finally:
+            slow.cancel()
+        state["engine"] = engine
+        log.info("vinyl-check %s at %s after %.1f s (recordings in %s, database in %s)", __version__, engine.url,
+                 time.time() - t0, cfg.data_dir, cfg.state_dir)
+        window.load_url(engine.url)
 
     def on_closing():
         # Ask only while something would be interrupted, in the language of the interface
-        busy = engine.busy()
+        engine = state["engine"]
+        busy = bool(engine and engine.busy())
         window.confirm_close = busy
         if busy and isinstance(getattr(window, "localization", None), dict):
-            lang = engine.tap.lang or i18n.DEFAULT_LANG
-            window.localization.update({"global.quitConfirmation": i18n.t("desktop.quit_busy", lang),
-                                        "global.quit": i18n.t("desktop.quit", lang),
-                                        "global.cancel": i18n.t("desktop.cancel", lang)})
+            ui_lang = engine.tap.lang or i18n.DEFAULT_LANG
+            window.localization.update({"global.quitConfirmation": i18n.t("desktop.quit_busy", ui_lang),
+                                        "global.quit": i18n.t("desktop.quit", ui_lang),
+                                        "global.cancel": i18n.t("desktop.cancel", ui_lang)})
 
     window.events.closing += on_closing
     # private_mode=False keeps cookies and local storage (language, theme, current view) between runs
-    webview.start(private_mode=False, storage_path=str(engine.cfg.state_dir / "webview"))
+    webview.start(boot, private_mode=False, storage_path=str(cfg.state_dir / "webview"))
+    return state["engine"]
 
 
 def _wait_until_stopped() -> None:
@@ -294,19 +380,24 @@ def run(browser: bool = False) -> int:
     cfg = load() if os.environ.get("VINYLCHECK_CONFIG") else load_user()
     cfg = replace(cfg, host="127.0.0.1")
     setup_logging(cfg.state_dir / "logs")
+    log.info("vinyl-check %s starting (%s, Python %s)", __version__, sys.platform, sys.version.split()[0])
+    webview = None if browser else _import_webview()
+    if webview is not None:
+        # the window comes first and starts the engine itself, so a start that fails or hangs is seen
+        engine = _show_window(webview, cfg, cfg.state_dir / "logs" / "vinyl-check.log")
+        if engine is not None:
+            log.info("Stopping")
+            shutdown(engine)
+        return 0
     engine = Engine(cfg)
     engine.start()
     log.info("vinyl-check %s at %s (recordings in %s, database in %s)", __version__, engine.url, cfg.data_dir,
              cfg.state_dir)
     try:
-        webview = None if browser else _import_webview()
-        if webview is None:
-            import webbrowser
-            webbrowser.open(engine.url)
-            print(f"vinyl-check {__version__} is running at {engine.url}; stop it with Ctrl+C", flush=True)
-            _wait_until_stopped()
-        else:
-            _show_window(webview, engine)
+        import webbrowser
+        webbrowser.open(engine.url)
+        print(f"vinyl-check {__version__} is running at {engine.url}; stop it with Ctrl+C", flush=True)
+        _wait_until_stopped()
     finally:
         log.info("Stopping")
         shutdown(engine)

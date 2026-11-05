@@ -559,6 +559,13 @@ anything. vinyl-check prints a hint before it loads NumPy; the fix is an older N
 pip install "numpy<2.4"
 ```
 
+**The desktop app does not start.** Its window opens at once with *vinyl-check is starting …*. If the start fails,
+the window says why and where the log is (*Show the log* opens it in the Finder or Explorer); after 45 seconds
+without the interface it points to the log as well. The log lives in the user-data folder, on macOS
+`~/Library/Application Support/vinyl-check/logs/vinyl-check.log`, on Windows `%LOCALAPPDATA%\vinyl-check\logs`.
+Starting the app from a terminal prints the same lines (macOS:
+`/Applications/vinyl-check.app/Contents/MacOS/vinyl-check`).
+
 Something does not work as described, or a measurement looks wrong? Write to
 [info@vinylcheck.net](mailto:info@vinylcheck.net) with the version (shown next to the logo), the operating system and,
 if possible, the recording or a screenshot.

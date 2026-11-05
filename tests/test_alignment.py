@@ -51,6 +51,19 @@ def test_flutter_speed_eccentricity_drive():
     assert measure.weighting_db(np.array([4.0]))[0] == pytest.approx(0.0)
 
 
+def test_wow_and_flutter_apart():
+    """Wow (0.5–6 Hz) and flutter (6–100 Hz) each after the weighting, as other meters quote them."""
+    SR = 48000
+    tt = np.arange(SR * 40) / SR
+    fi_true = 3150 * (1 + 0.001 * np.sin(2 * np.pi * 4 * tt) + 0.0005 * np.sin(2 * np.pi * 20 * tt))
+    y = 0.2 * np.sin(2 * np.pi * np.cumsum(fi_true) / SR)
+    fi, rate = measure.inst_freq(y, SR, 3150)
+    w = measure.flutter(fi[int(rate):-int(rate)], rate, 3150.0, 100 / 3)
+    assert w["wow_weighted_2s_pct"] == pytest.approx(0.1, abs=0.006)                     # 4 Hz: 0 dB
+    assert w["flutter_weighted_2s_pct"] == pytest.approx(0.05 * 10 ** (-5.9 / 20), abs=0.004)   # 20 Hz: −5.9 dB
+    assert w["wf_unweighted_2s_pct"] > w["wf_weighted_2s_pct"]
+
+
 def test_side1_finds_all_bands_and_errors():
     rig = synth.Rig(balance_db=0.6, xt_lr_db=-22, xt_rl_db=-29, speed_pct=0.8, ecc_pct=0.15,
                     flutter_pct=0.05, hf_db=1.5, imd_pct=1.5)
@@ -66,6 +79,9 @@ def test_side1_finds_all_bands_and_errors():
     assert s["speed_pct"] == pytest.approx(0.8, abs=0.02)
     assert s["eccentricity_pct"] == pytest.approx(0.15, abs=0.01)
     assert s["wf_drive_pct"] == pytest.approx(0.05, abs=0.006)
+    assert {"wf_unweighted_pct", "wow_pct", "flutter_pct"} <= set(s)
+    from vinylcheck import i18n
+    assert "wow (0.5–6 Hz) 0.0" in i18n.render(items["wf_weighted_pct"]["text"], "en")
     assert s["imd_pct"] == pytest.approx(1.5, abs=0.2)
     assert s["hf_10k_db"] == pytest.approx(1.5, abs=0.3)
     assert s["ref_level_dbfs"] == pytest.approx(-18.3, abs=0.3)

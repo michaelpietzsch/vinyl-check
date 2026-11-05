@@ -1,5 +1,11 @@
 {
   "quit_busy": "Eine Aufnahme oder Analyse läuft. vinyl-check trotzdem beenden? Eine Aufnahme endet hier, eine Analyse beginnt beim nächsten Start von vinyl-check von vorn.",
   "quit": "Beenden",
-  "cancel": "Abbrechen"
+  "cancel": "Abbrechen",
+  "starting": "vinyl-check startet …",
+  "starting_slow": "Das dauert ungewöhnlich lange. Wenn sich in der nächsten Minute nichts tut, schließ bitte das Fenster und schick das Protokoll.",
+  "start_failed": "vinyl-check konnte nicht starten",
+  "send_log": "Bitte schick diese Meldung und das Protokoll an info@vinylcheck.net, damit sich die Ursache finden lässt.",
+  "log_at": "Das Protokoll liegt hier:",
+  "show_log": "Protokoll zeigen"
 }

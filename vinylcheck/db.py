@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     vm_id TEXT,
     chain_source TEXT, chain_cartridge TEXT,
     test_record TEXT,
+    stylus TEXT,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -342,7 +343,8 @@ class DB:
                     "floor_clicks_per_min REAL", "floor_ticks_per_min REAL", "sensitivity REAL",    # 0.6.0: floor
                     "fixed_gain INTEGER NOT NULL DEFAULT 0",                                        # 0.7.0: fixed gain
                     "vm_id TEXT", "chain_source TEXT", "chain_cartridge TEXT",                      # 1.1.0: Vinyl-Mind
-                    "test_record TEXT"):                                                            # 1.3.0: test record
+                    "test_record TEXT",                                                             # 1.3.0: test record
+                    "stylus TEXT"):                                                                 # 1.6.0: stylus profile
             if col.split()[0] not in pcols:
                 self.conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
         if "sensitivity" not in rcols:                                                 # 0.6.0: per-recording override
@@ -411,7 +413,7 @@ class DB:
     PROFILE_FIELDS = ("name", "cartridge", "device", "tracking_force_g", "antiskating", "weight", "notes",
                       "target_map", "calibration_id", "baseline_setup_id", "wizard_setup_id", "ref_dbfs", "chain_db", "speed_pct", "baseline",
                       "floor_clicks_per_min", "floor_ticks_per_min", "sensitivity", "fixed_gain", "accepted_at",
-                      "chain_source", "chain_cartridge", "test_record")
+                      "chain_source", "chain_cartridge", "test_record", "stylus")
 
     def profiles(self) -> list[dict]:
         return self.q("""SELECT p.*, (SELECT COUNT(*) FROM setups s WHERE s.profile_id = p.id) AS setups,

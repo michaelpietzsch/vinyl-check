@@ -199,15 +199,19 @@ def _fake_webview(on_start):
     wv.settings = {"ALLOW_DOWNLOADS": False, "OPEN_EXTERNAL_LINKS_IN_BROWSER": False}
     wv.calls = {}
 
-    def create_window(title, url, **kw):
-        win = types.SimpleNamespace(title=title, url=url, kw=kw, confirm_close=False,
+    def create_window(title, url=None, html=None, **kw):
+        win = types.SimpleNamespace(title=title, url=url, html=html, kw=kw, confirm_close=False,
                                     localization={"global.quitConfirmation": "Do you really want to quit?"},
                                     events=types.SimpleNamespace(closing=_FakeEvent()))
+        win.load_url = lambda u: setattr(win, "url", u)
+        win.load_html = lambda h: setattr(win, "html", h)
         wv.calls["window"] = win
         return win
 
-    def start(**kw):
+    def start(func=None, **kw):
         wv.calls["start"] = kw
+        if func:
+            func()                                                # the real one runs it beside the GUI loop
         on_start(wv.calls["window"])
 
     wv.create_window, wv.start = create_window, start
@@ -237,6 +241,7 @@ def test_run_shows_window_and_stops_engine(tmp_path, monkeypatch):
     assert desktop.run() == 0
     win = wv.calls["window"]
     assert win.title == "vinyl-check" and win.url.startswith("http://127.0.0.1:")
+    assert "vinyl-check" in win.html and win.kw["js_api"] is not None       # the start page came first
     assert win.kw["min_size"] == desktop.MIN_SIZE
     assert wv.calls["start"]["private_mode"] is False
     assert wv.calls["start"]["storage_path"] == str(cfg.state_dir / "webview")
@@ -418,3 +423,81 @@ def test_bundled_fonts_are_preferred(monkeypatch):
     monkeypatch.setattr(report_pdf, "FONT_DIRS", ["", str(bundled), "/nonexistent"])
     report_pdf._register_fonts()
     assert report_pdf._fonts["regular"] == "IBMPlexSans-Regular" and report_pdf._fonts["mono"] == "IBMPlexMono-Regular"
+
+
+class _FakeWindow:
+    def __init__(self, html):
+        self.pages, self.urls, self.confirm_close = [html], [], None
+        self.events = type("E", (), {"closing": _Hook()})()
+
+    def load_html(self, html):
+        self.pages.append(html)
+
+    def load_url(self, url):
+        self.urls.append(url)
+
+
+class _Hook:
+    def __init__(self):
+        self.fns = []
+
+    def __iadd__(self, fn):
+        self.fns.append(fn)
+        return self
+
+
+class _FakeWebview:
+    """pywebview stand-in: start() runs the function at once (the real one runs it beside the GUI loop)."""
+    def __init__(self):
+        self.settings, self.window = {}, None
+
+    def create_window(self, title, html=None, js_api=None, **kw):
+        self.window = _FakeWindow(html)
+        self.api = js_api
+        return self.window
+
+    def start(self, func=None, **kw):
+        func()
+        for fn in self.window.events.closing.fns:
+            fn()
+
+
+def test_the_window_shows_why_the_engine_did_not_start(tmp_path, monkeypatch):
+    """The window opens first with a start page; a start that fails shows the error and where the log is, instead
+    of an icon that bounces and nothing else."""
+    from vinylcheck import desktop as d
+
+    class Broken:
+        def __init__(self, cfg):
+            raise PermissionError("Operation not permitted: 'Application Support/vinyl-check/state.db'")
+
+    monkeypatch.setattr(d, "Engine", Broken)
+    wv = _FakeWebview()
+    cfg = replace(Config(), state_dir=tmp_path / "state", data_dir=tmp_path / "data")
+    assert d._show_window(wv, cfg, tmp_path / "state" / "logs" / "vinyl-check.log") is None
+    first, last = wv.window.pages[0], wv.window.pages[-1]
+    assert "vinyl-check" in first and "spin" in first and not wv.window.urls
+    assert "PermissionError" in last and "Operation not permitted" in last and "vinyl-check.log" in last
+    assert "info@vinylcheck.net" in last and "reveal_log" in last and wv.window.confirm_close is False
+
+
+def test_the_window_shows_the_interface_once_the_engine_runs(tmp_path, monkeypatch):
+    from vinylcheck import desktop as d
+
+    class Fine:
+        url = "http://127.0.0.1:12345/"
+
+        def __init__(self, cfg):
+            self.started = False
+
+        def start(self):
+            self.started = True
+
+        def busy(self):
+            return False
+
+    monkeypatch.setattr(d, "Engine", Fine)
+    wv = _FakeWebview()
+    cfg = replace(Config(), state_dir=tmp_path / "state", data_dir=tmp_path / "data")
+    engine = d._show_window(wv, cfg, tmp_path / "vinyl-check.log")
+    assert engine.started and wv.window.urls == ["http://127.0.0.1:12345/"] and len(wv.window.pages) == 1

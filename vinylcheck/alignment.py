@@ -281,6 +281,9 @@ SUMMARY_SPEC = {
     "wf_weighted_pct": (msg("alignment.summary.wf_weighted_pct"), "%", "lower"),
     "wf_drive_pct": (msg("alignment.summary.wf_drive_pct"), "%", "lower"),
     "eccentricity_pct": (msg("alignment.summary.eccentricity_pct"), "%", "lower"),
+    "wf_unweighted_pct": (msg("alignment.summary.wf_unweighted_pct"), "%", "lower"),
+    "wow_pct": (msg("alignment.summary.wow_pct"), "%", "lower"),
+    "flutter_pct": (msg("alignment.summary.flutter_pct"), "%", "lower"),
     "imd_pct": (msg("alignment.summary.imd_pct"), "%", "lower"),
     "mono_cancel_db": (msg("alignment.summary.mono_cancel_db"), "dB", "lower"),
     "hf_10k_db": (msg("alignment.summary.hf_10k_db"), "dB", "abs"),
@@ -1149,6 +1152,9 @@ def evaluate(bands: list[dict], silent: dict | None, cfg: AlignmentConfig) -> tu
         put("wf_weighted_pct", wf)
         put("wf_drive_pct", w["drive_weighted_2s_pct"])
         put("eccentricity_pct", w["eccentricity_pct"])
+        put("wf_unweighted_pct", w.get("wf_unweighted_2s_pct"))
+        put("wow_pct", w.get("wow_weighted_2s_pct"))
+        put("flutter_pct", w.get("flutter_weighted_2s_pct"))
         st = judge("speed_pct", sp)
         items.append(_item("speed_pct", msg("alignment.result.speed.label"), sp, "%", st,
                            msg("alignment.result.speed.text", freq=w["freq_hz"], nominal=w["nominal_hz"],
@@ -1158,8 +1164,11 @@ def evaluate(bands: list[dict], silent: dict | None, cfg: AlignmentConfig) -> tu
                                       else "alignment.result.speed.advice_slow")))
         st = judge("wf_weighted_pct", wf)
         items.append(_item("wf_weighted_pct", msg("alignment.result.wf.label"), wf, "%", st,
-                           msg("alignment.result.wf.text", ecc=w["eccentricity_pct"],
-                               drive=w["drive_weighted_2s_pct"]),
+                           msg_join([msg("alignment.result.wf.text", ecc=w["eccentricity_pct"],
+                                             drive=w["drive_weighted_2s_pct"])]
+                                    + ([msg("alignment.result.wf.split", unweighted=w["wf_unweighted_2s_pct"],
+                                            wow=w["wow_weighted_2s_pct"], flutter=w["flutter_weighted_2s_pct"])]
+                                       if "wow_weighted_2s_pct" in w else [])),
                            by["wow_flutter"]["i"], advice=msg("alignment.result.wf.advice")))
 
     if "imd" in by:

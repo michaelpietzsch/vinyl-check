@@ -1,5 +1,11 @@
 {
   "quit_busy": "A recording or an analysis is running. Quit vinyl-check anyway? A recording stops here; an analysis starts again the next time you open vinyl-check.",
   "quit": "Quit",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "starting": "vinyl-check is starting …",
+  "starting_slow": "This is taking unusually long. If nothing changes in the next minute, please close the window and send the log.",
+  "start_failed": "vinyl-check could not start",
+  "send_log": "Please send this message and the log to info@vinylcheck.net, so the cause can be found.",
+  "log_at": "The log is here:",
+  "show_log": "Show the log"
 }

@@ -23,6 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `POST /api/records/{id}/condition`; `GET /api/records/{id}/collection?live=true` lists the copies). A sync that
   was running while a condition was written keeps the written value. The condition shown in the record list
   follows Discogs after every sync.
+- **Wow and flutter apart.** Besides the weighted 2σ value (IEC 60386, AES6), the 3150 Hz band now reports the
+  unweighted 2σ and the weighted wow (0.5–6 Hz) and flutter (6–100 Hz) separately, so the figures compare with
+  other meters; the result names the weighting and the bands.
+- **Stylus profile** in the turntable profile (spherical, elliptical, line contact): how much of the groove wall the
+  stylus touches decides how it reads wear and dirt, which puts grades of different turntables in context. It stays
+  on the station.
 - **Fetch again from Discogs** on the record page (`POST /api/records/{id}/discogs-refresh`): tracks, side lengths,
   genres and cover are taken anew, for an entry corrected on Discogs since; sides whose tracks changed are analysed
   again.
@@ -32,6 +38,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Editing a recording in the page.** A double-click on the side, copy or condition cell opens a box with all
   three and *Save*/*Cancel*, instead of the browser's question followed by an editor inside the cell. The system's
   double-click speed counts as well, so a slow double-click no longer does nothing.
+- **The desktop app opens its window at once** with *vinyl-check is starting …* and starts the engine meanwhile. A
+  start that fails shows the error and where the log is (with a button that opens it) instead of an icon that
+  bounces and nothing else; a start that takes longer than 45 seconds points to the log as well.
 - **Questions in the page.** Every confirmation (deleting, moving the storage, connecting, …) is asked in a box of
   the interface instead of the browser's own dialog; for deleting, the focus is on *Cancel*.
 

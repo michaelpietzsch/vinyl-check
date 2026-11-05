@@ -537,7 +537,7 @@ the signal**, because band lengths are printed on no sleeve:
 | 1 | sweeps 1 → 20 kHz (−20 dB) and 1 kHz → 20 Hz (0 dB) | frequency response per channel, window matched to the instantaneous frequency. Highs are evaluated up to 16 kHz: the 18 kHz step was 8–10 dB lower on the pressing measured, on every turntable. | ±2 dB |
 | 1 | 100 Hz, 0 dB | bass against 1 kHz (RIAA accuracy) | ±1 dB |
 | 1 | 60 Hz + 4 kHz (4:1) | intermodulation per SMPTE, the median over 2 s blocks → VTA, lowest value wins | ≤ 3 % |
-| 1 | 3150 Hz | speed, weighted wow & flutter (IEC 60386, 2σ), eccentricity (once per revolution), drive without eccentricity | ±0.5 %; ≤ 0.1 % |
+| 1 | 3150 Hz | speed, weighted wow & flutter (IEC 60386, 2σ = not exceeded 95 % of the time, AES6), unweighted 2σ, weighted wow (0.5–6 Hz) and flutter (6–100 Hz) apart, eccentricity (once per revolution), drive without eccentricity | ±0.5 %; ≤ 0.1 % |
 | 2 | 315 Hz ramp, 0 → +12 dB | distortion per channel over level → **anti-skating** and **tracking reserve** | both clean up to +12 dB, or both break up together |
 | 2 | pink noise, lateral and vertical | broadband balance only | — |
 | 2 | 1 kHz vertical | mono cancellation (L+R against L−R) | ≤ −20 dB |

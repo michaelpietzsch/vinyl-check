@@ -169,6 +169,18 @@ def _weighted(dev: np.ndarray, rate: float) -> np.ndarray:
     return np.fft.irfft(spec * g, n=len(dev))
 
 
+# Wow and flutter apart, as other meters and the literature quote them: wow the slow part (0.5–6 Hz, eccentricity
+# included), flutter the fast one (6–100 Hz), both after the weighting
+WOW_BAND_HZ, FLUTTER_BAND_HZ = (0.5, 6.0), (6.0, 100.0)
+
+
+def _band(x: np.ndarray, rate: float, lo: float, hi: float) -> np.ndarray:
+    spec = np.fft.rfft(x)
+    fr = np.fft.rfftfreq(len(x), 1 / rate)
+    spec[(fr < lo) | (fr >= hi)] = 0
+    return np.fft.irfft(spec, n=len(x))
+
+
 def flutter(fi: np.ndarray, rate: float, nominal_hz: float, rpm: float) -> dict:
     """Speed and wow & flutter from the instantaneous frequency of a test tone (3150 Hz at 33⅓).
 
@@ -178,6 +190,7 @@ def flutter(fi: np.ndarray, rate: float, nominal_hz: float, rpm: float) -> dict:
     - Eccentricity: the component that fluctuates exactly once per revolution (centre hole of record or
       platter off-centre), fitted as a sine at the revolution frequency. "Drive" = weighted without this
       component (belt, motor, bearing).
+    - Wow and flutter apart: the weighted deviation in WOW_BAND_HZ and FLUTTER_BAND_HZ, each as 2σ.
     """
     mean = float(np.mean(fi))
     dev = fi / mean - 1.0
@@ -199,6 +212,8 @@ def flutter(fi: np.ndarray, rate: float, nominal_hz: float, rpm: float) -> dict:
         "wf_weighted_rms_pct": round(float(np.sqrt(np.mean(dw ** 2))) * 100, 4),
         "eccentricity_pct": round(ecc * 100, 4),
         "drive_weighted_2s_pct": round(float(np.percentile(np.abs(drive_w), 95)) * 100, 4),
+        "wow_weighted_2s_pct": round(float(np.percentile(np.abs(_band(dw, rate, *WOW_BAND_HZ)), 95)) * 100, 4),
+        "flutter_weighted_2s_pct": round(float(np.percentile(np.abs(_band(dw, rate, *FLUTTER_BAND_HZ)), 95)) * 100, 4),
         "rev_hz": round(f_rev, 4),
         "duration_s": round(len(dev) / rate, 1),
     }
