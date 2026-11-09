@@ -891,14 +891,14 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
                 if todo and (r.get("audio_deleted_at") or not r.get("path") or not os.path.exists(r["path"])):
                     continue
                 changed = analysis.recheck_skips(r["path"], m) if todo else False
-                with db.lock:                         # only the skips are replaced: whatever else changed stays
+                with db.lock:                         # the hits, their count and the grade change in one step
                     cur = json.loads((db.one("SELECT metrics FROM analyses WHERE recording_id = ?", (rid,)) or {})
                                      .get("metrics") or "{}")
-                    cur["skips"], cur["skips_v"] = m["skips"], skips.VERSION
+                    cur["skips"], cur["skips_v"] = m["skips"], skips.VERSION   # only the skips: the rest stays
                     db.x("UPDATE analyses SET metrics = ? WHERE recording_id = ?", (json.dumps(cur), rid))
-                if changed:
-                    learn_recount(rid)                # the user's labels, the count and the grade
-                    n += 1
+                    if changed:
+                        learn_recount(rid)            # the user's labels, the count and the grade
+                n += changed
             except Exception:  # noqa: BLE001 — one unreadable file must not stop the others
                 log.exception("Judging the groove skips of recording %s again failed", rid)
         if n:
