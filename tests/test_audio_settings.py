@@ -244,9 +244,10 @@ def test_raspberry_pi_keeps_its_configuration(tmp_path, monkeypatch):
 def test_license_page_names_the_asio_trademark(tmp_path):
     with TestClient(create_app(_cfg(tmp_path, fake_source="x.wav"))) as c:
         head = c.get("/licenses").text.split("=" * 100)[0]
-        assert "ASIO is a trademark and software of Steinberg Media Technologies GmbH." in head
+        notice = "ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries."
+        assert notice in head
         head = c.get("/licenses", params={"lang": "de"}).text.split("=" * 100)[0]
-        assert "ASIO ist eine Marke und Software der Steinberg Media Technologies GmbH." in head
+        assert notice in head                                  # the wording is prescribed: it is not translated
 
 
 def test_api_validates_and_stores(tmp_path):

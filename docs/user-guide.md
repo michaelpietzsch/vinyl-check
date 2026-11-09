@@ -511,3 +511,7 @@ the job is reported as failed and the service keeps running.
 at the first analysis and checked again before every re-analysis and comparison. A mismatch stops the job with an
 integrity error instead of computing with corrupted data. After the retention period, listening, re-analysis and
 new comparisons are no longer possible for that recording (it is marked *audio deleted*), but all results remain.
+
+---
+
+ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.

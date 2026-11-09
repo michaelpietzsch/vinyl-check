@@ -429,5 +429,6 @@ The click-detector weights in `vinylcheck/weights/` come from GrooveClean and ar
 - vinyl-check is not affiliated with Analogue Productions or with any other publisher of the test records in its
   catalogue (Unitra, Clearaudio, Ortofon, Elipson, Hi-Fi News, Cardas). The records are referenced for their
   published band layouts; the names are trademarks of their owners.
-- ASIO is a trademark and software of Steinberg Media Technologies GmbH. The Windows app records from ASIO drivers
+- ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries. The Windows
+  app records from ASIO drivers
   through PortAudio's ASIO build, used under the Steinberg ASIO SDK Licensing Agreement.

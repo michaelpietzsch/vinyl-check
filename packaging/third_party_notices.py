@@ -165,8 +165,9 @@ def special_sections(modules: set[str] | None, binaries: set[str]) -> list[tuple
                          "_sounddevice_data folder of the application).\n\n" + PORTAUDIO_LICENSE))
     if any("-asio" in b.lower() for b in binaries):
         sections.append(("Steinberg ASIO SDK (in the ASIO build of PortAudio, Windows)", "Steinberg ASIO SDK license",
-                         "libportaudio*-asio.dll contains the Steinberg Audio Stream I/O API. ASIO is a trademark and "
-                         "software of Steinberg Media Technologies GmbH. vinyl-check uses ASIO support under the "
+                         "libportaudio*-asio.dll contains the Steinberg Audio Stream I/O API. ASIO is a trademark of "
+                         "Steinberg Media Technologies GmbH, registered in Europe and other countries. vinyl-check "
+                         "uses ASIO support under the "
                          "Steinberg ASIO SDK Licensing Agreement (proprietary option). License terms: "
                          "https://www.steinberg.net/developers/"))
     if any("webview2" in b.lower() for b in binaries):

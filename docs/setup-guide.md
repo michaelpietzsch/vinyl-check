@@ -569,3 +569,7 @@ Starting the app from a terminal prints the same lines (macOS:
 Something does not work as described, or a measurement looks wrong? Write to
 [info@vinylcheck.net](mailto:info@vinylcheck.net) with the version (shown next to the logo), the operating system and,
 if possible, the recording or a screenshot.
+
+---
+
+ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.

@@ -13,5 +13,5 @@
   "alsa_channels": "„{device}“ kann nicht mit {channels} Kanälen aufnehmen (arecord: {detail}). Manche Interfaces nehmen nur mit allen Eingängen auf: capture_channels in der Konfigurationsdatei auf deren Anzahl setzen.",
   "alsa_rate": "„{device}“ kann nicht ohne Umrechnung mit {rate} Hz aufnehmen (arecord: {detail}). Eine Rate wählen, die das Gerät anbietet.",
   "alsa_error": "arecord: {detail}",
-  "asio_notice": "ASIO ist eine Marke und Software der Steinberg Media Technologies GmbH."
+  "asio_notice": "ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries."
 }

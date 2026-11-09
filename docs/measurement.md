@@ -629,3 +629,7 @@ channels breaking up together points to the tracking force instead.
   sweeps on one channel, 3000 Hz speed tones, bands between locked grooves. The reference level is taken as it is,
   without correcting for the reference velocity of a record (AAPT 1 and Unitra WT-2: 7 cm/s; Clearaudio smart test
   vinyl: 8 cm/s). Tracking distortion over the radius and lateral resonance need further test records.
+
+---
+
+ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.

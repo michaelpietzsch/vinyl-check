@@ -294,3 +294,7 @@ and an optional LAN mode for phones and tablets near the turntable.
 - Audio snippets at all, and if so, with what consent per station?
 - Licensing and redistribution terms for global models built from contributions of several stations.
 - Weighting of trained ears: should a mastering engineer's judgement count more than a casual listener's?
+
+---
+
+ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.

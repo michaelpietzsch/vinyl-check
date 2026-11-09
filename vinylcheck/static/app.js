@@ -2672,7 +2672,7 @@ function renderAudio(a) {
         <div class="help">${T("audioset.exclusive_help")} ${srcTag("wasapi_exclusive")}</div><div class="err" id="au-wasapi_exclusive-err" role="alert"></div></div>
       <div class="sfield"><label class="check"><input type="checkbox" id="au-asio" ${e.asio !== false && asio.available ? "checked" : ""} ${asio.available && !a.locked ? "" : "disabled"}> ${T("audioset.asio")}</label>
         <div class="help">${asio.available ? T("audioset.asio_help") : T("audioset.asio_unavailable")} ${srcTag("asio")}</div>
-        ${asio.restart ? `<div class="help">${ico("warn", 14)} ${T("audioset.asio_restart")}</div>` : ""}<div class="err" id="au-asio-err" role="alert"></div></div>` : ""}
+        ${asio.restart ? `<div class="help">${ico("warn", 14)} ${T("audioset.asio_restart")}</div>` : ""}<div class="help"><small>${T("audioset.asio_notice")}</small></div><div class="err" id="au-asio-err" role="alert"></div></div>` : ""}
       <div class="row">
         <button type="submit" ${a.locked ? "disabled" : ""}>${ico("ok", 18)} ${T("audioset.save")}</button>
         <button type="button" class="secondary" id="au-test-btn" ${a.locked ? "disabled" : ""} title="${T("audioset.test_hint")}">${ico("level", 18)} ${T("audioset.test")}</button>

@@ -17,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   window, a scratch in none. Hits that are no repetition are not listed any more, so the list of weak matches
   shrinks to music that really repeats. Checked against 38 reported skips back that had been listened to: the two
   real ones stay, the 36 others go.
+- **The ASIO notice has the wording the license agreement prescribes** (*ASIO is a trademark of Steinberg Media
+  Technologies GmbH, registered in Europe and other countries*): on the license page, in the third-party notices
+  of the Windows installer, under the ASIO switch of the audio settings and in every document that mentions ASIO.
+  The notice is not translated.
 - **Stored analyses are corrected at the next start.** The excerpts around the hits of earlier analyses are read
   from the audio and judged again, once; sides that lost their grade to a scratch are graded anew. Analyses whose
   audio has been deleted keep their hits.
@@ -682,6 +686,8 @@ by minor version.
 - Analysis of quiet passages and groove noise, and a suggested condition grade.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
+
+ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.
 
 [Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.6.1...HEAD
 [1.6.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.6.0...v1.6.1

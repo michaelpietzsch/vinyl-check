@@ -13,5 +13,5 @@
   "alsa_channels": "“{device}” cannot record with {channels} channels (arecord: {detail}). Some interfaces only record with all their inputs open: set capture_channels to their number in the configuration file.",
   "alsa_rate": "“{device}” cannot record at {rate} Hz without resampling (arecord: {detail}). Choose a rate the device offers.",
   "alsa_error": "arecord: {detail}",
-  "asio_notice": "ASIO is a trademark and software of Steinberg Media Technologies GmbH."
+  "asio_notice": "ASIO is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries."
 }
