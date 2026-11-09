@@ -21,7 +21,7 @@ starlette.testclient.TestClient.__init__ = _local_test_client_init
 # machine might: they ask only where they say so (tests/test_updates.py fakes the answer)
 from vinylcheck import updates  # noqa: E402
 
-updates.FIRST_AFTER_S = 10 ** 9
+updates.FIRST_AFTER_S = 10 ** 6          # eleven days; Windows refuses to wait longer than seven weeks
 
 # A test that builds an app without the lifespan (TestClient without `with`) leaves its worker and, after a heavy
 # job, the analysis child process behind; at exit the interpreter then waits for that child for good (seen on

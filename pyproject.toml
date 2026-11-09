@@ -59,6 +59,8 @@ portaudio = ["sounddevice>=0.5"]
 desktop = ["pywebview>=5.3", "segno>=1.6"]
 # jsonschema: the tests check what the station sends to Vinyl-Mind against the hub's JSON schemas
 dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "build>=1.2", "segno>=1.6", "jsonschema>=4.18"]
+# The interface in a real browser (tests/test_browser.py); the browser itself: python -m playwright install chromium
+browser = ["playwright>=1.49"]
 
 [project.scripts]
 vinyl-check = "vinylcheck.__main__:main"

@@ -72,6 +72,29 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: python -m pip install -e ".[dev,browser]"
+      - name: Install the browser
+        run: python -m playwright install --with-deps chromium
+      - name: Run the browser tests
+        # the other jobs skip these tests (no Playwright there); here a missing browser is an error
+        env:
+          VINYLCHECK_BROWSER_TESTS: "1"
+        run: python -m pytest -q tests/test_browser.py
+
   build:
     name: Package
     runs-on: ubuntu-latest

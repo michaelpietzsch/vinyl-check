@@ -58,6 +58,20 @@ node --check vinylcheck/static/app.js    # syntax of the web interface
 - Requests in tests get English by default. Prefer asserting on message keys, or on the English text, over
   asserting on German text.
 
+**The interface in a browser.** `tests/test_browser.py` drives the web interface in a real browser against a
+running station with a synthetic side: the pages render without script errors, recording, editing, deleting and
+judging work from click to database, and text with markup in it (as a Discogs entry or a note may bring it) is
+shown as text. It needs Playwright and its browser once, and is skipped without them:
+
+```bash
+pip install -e ".[dev,browser]"
+python -m playwright install chromium
+pytest tests/test_browser.py
+```
+
+A change to `vinylcheck/static/` belongs with a test there when it adds a flow or shows a new piece of text from a
+user. CI runs these tests in a job of their own.
+
 ## Building the desktop apps
 
 The desktop apps are the same engine plus a native window (`vinylcheck/desktop.py`, pywebview), packed with
