@@ -88,6 +88,42 @@ def test_side1_finds_all_bands_and_errors():
     assert not res["warnings"]
 
 
+def test_riaa_fault_values():
+    assert alignment.riaa_fault(13.1, -13.7) == "double" and alignment.riaa_fault(-13.1, 13.7) == "missing"
+    assert alignment.riaa_fault(11.0, -16.0) == "double"                 # within 3 dB each
+    assert alignment.riaa_fault(13.1, 0.4) is None                       # bass alone, treble fine: something else
+    assert alignment.riaa_fault(-2.0, -5.0) is None and alignment.riaa_fault(None, -13.7) is None
+    assert alignment.riaa_fault(0.4, -1.2) is None
+    assert alignment.riaa_fault(13.2, None) == "double" and alignment.riaa_fault(-12.0, None) == "missing"
+    assert alignment.riaa_fault(10.5, None) is None                      # without the treble: within 2 dB only
+
+
+def test_missing_riaa_is_named():
+    """Bass and treble in the mirror image of the RIAA curve: the run says so, instead of advising on the load."""
+    rig = synth.Rig(ref_dbfs=-30.0, lf_db=-13.09 * np.log10(50), hf_db=13.73)
+    res, _truth, _by, items = _res(1, rig)
+    s = res["metrics"]["summary"]
+    assert s["lf_100_db"] == pytest.approx(-13.09, abs=1.0) and s["hf_10k_db"] == pytest.approx(13.73, abs=1.5)
+    assert "mirror image of the RIAA curve" in en(res["warnings"][0]) and "not equalized" in en(res["warnings"][0])
+    for key in ("lf_100_db", "hf_10k_db"):
+        assert items[key]["status"] == "bad" and "not equalized" in en(items[key]["text"]), key
+        assert "load capacitance" not in en(items[key]["text"])
+    plain, _t, _b, it = _res(1, synth.Rig())                              # a normal chain: nothing of the kind
+    assert not [w for w in plain["warnings"] if "RIAA" in en(w)] and "equalized" not in en(it["lf_100_db"]["text"])
+
+
+def test_doubled_riaa_is_named_even_without_the_treble():
+    """Equalized twice, the 10 kHz tone drowns in the noise and the treble sweep breaks off: the bass alone, right
+    on the curve, is enough to say so."""
+    rig = synth.Rig(ref_dbfs=-30.0, lf_db=13.09 * np.log10(50), hf_db=-13.73)
+    res, _truth, by, items = _res(1, rig)
+    s = res["metrics"]["summary"]
+    assert s["lf_100_db"] == pytest.approx(13.09, abs=1.0) and "hf_10k_db" not in s and "sweep_high" not in by
+    first = en(res["warnings"][0])
+    assert "RIAA curve" in first and "equalized twice" in first and "+13." in first
+    assert "equalized twice" in en(items["lf_100_db"]["text"])
+
+
 @pytest.mark.parametrize("clip_l, clip_r, verdict", [
     (7.0, None, "too_strong"),        # left distorts first → bias too strong
     (None, 5.0, "too_weak"),          # right first → bias too weak

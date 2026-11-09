@@ -167,6 +167,8 @@
   "result.lf_100.label": "Bass (100 Hz vs. 1 kHz)",
   "result.lf_100.text": "Left {left:+.1f} dB, right {right:+.1f} dB (RIAA equalization of the phono stage).",
   "result.lf_100.advice": "Check the RIAA equalization or the input stage; compare the channels.",
+  "result.riaa.double": "Bass and treble together are the RIAA curve: the signal is equalized twice. Typical: a phono stage behind a turntable or interface that equalizes already, or the equalization switched on in software as well. Switch one of them off and measure again.",
+  "result.riaa.missing": "Bass and treble together are the mirror image of the RIAA curve: the signal is not equalized. Typical: the cartridge on a line input, or the equalization switched off in a digital phono stage. Switch it on (or use the phono input) and measure again.",
   "result.sweep_hf.label": "Frequency response, treble",
   "result.sweep_lf.label": "Frequency response, bass",
   "result.sweep_dev.khz": "Largest deviation {db:+.1f} dB at {f:.1f} kHz ({channel}).",
@@ -186,6 +188,10 @@
   "result.rumble.vertical_peak": "Vertically, {freq:.1f} Hz stands out (resonance excited by warps).",
   "result.rumble.advice": "Check bearing, motor and placement; look at the lines in the spectrum (mains hum vs. motor).",
   "warn.mono": "Mono recording: nothing that compares the channels (balance, crosstalk, azimuth, anti-skating, vertical bands) can be measured. Set channels = 2 in the configuration.",
+  "warn.riaa_double": "The frequency response is the RIAA curve (100 Hz {lf:+.1f} dB, 10 kHz {hf:+.1f} dB against 1 kHz): the signal is equalized twice. Most other findings of this run are a consequence; remove one equalization and measure again.",
+  "warn.riaa_missing": "The frequency response is the mirror image of the RIAA curve (100 Hz {lf:+.1f} dB, 10 kHz {hf:+.1f} dB against 1 kHz): the signal is not equalized. Most other findings of this run are a consequence; switch the RIAA equalization on and measure again.",
+  "warn.riaa_double_bass": "The bass is the RIAA curve (100 Hz {lf:+.1f} dB against 1 kHz) and the treble bands were too quiet to be measured: the signal is very probably equalized twice. Most other findings of this run are a consequence; remove one equalization and measure again.",
+  "warn.riaa_missing_bass": "The bass is the mirror image of the RIAA curve (100 Hz {lf:+.1f} dB against 1 kHz) and the treble could not be measured: the signal is very probably not equalized. Switch the RIAA equalization on and measure again.",
   "warn.clipped_in_bands": {
     "one": "{n} clipped sample in measurement bands: reduce the gain on the interface, the measurement cannot be used like this.",
     "other": "{n} clipped samples in measurement bands: reduce the gain on the interface, the measurement cannot be used like this."

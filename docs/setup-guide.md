@@ -365,7 +365,11 @@ of them: in the guided first alignment and next to every finding the verdict lis
   ≤ 0.1 % (2σ). Too slow often means a slipping belt. Too fast points to the motor control (for a synchronous
   motor, its supply frequency).
 - **Balance and response.** Channel balance within ±1 dB, frequency response within ±2 dB, and 100 Hz against
-  1 kHz within ±1 dB. The last one checks the RIAA accuracy of the phono stage.
+  1 kHz within ±1 dB. The last one checks the RIAA accuracy of the phono stage. If bass and treble together follow the RIAA curve itself
+  (100 Hz about +13 dB, 10 kHz about −14 dB against 1 kHz), the signal is equalized twice, and if they follow its
+  mirror image, it is not equalized at all: the run says so at the top, because most of its other findings are
+  then a consequence. Equalized twice, the treble bands are often too quiet to be found; the bass alone is then
+  enough for the hint.
 
 ## Alignment with vinyl-check and a test record
 

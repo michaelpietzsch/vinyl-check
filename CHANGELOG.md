@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [1.6.1] – 2026-11-09
 
+### Added
+
+- **The turntable check names a doubled or missing RIAA equalization.** Bass and treble that together follow the
+  RIAA curve (100 Hz +13 dB, 10 kHz −14 dB against 1 kHz, each within 3 dB) mean the signal is equalized twice,
+  their mirror image that it is not equalized at all (a cartridge on a line input, the equalization switched off
+  in a digital phono stage). The run says so at the top and in the advice of both findings, instead of pointing at
+  the stylus or the load. Equalized twice, the treble bands are often too quiet to be found: the bass alone, within
+  2 dB of the curve, is then enough.
+
 ### Fixed
 
 - **A scratch is no longer reported as a skip.** A scratch across the grooves clicks once per revolution, at

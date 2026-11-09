@@ -974,6 +974,32 @@ def click_floor(audio, sr, t0: float, t1: float, ref_db: float | None, cfg: Alig
 
 
 # ─── Evaluation ───────────────────────────────────────────────────────────────
+# The RIAA playback curve relative to 1 kHz, at the two frequencies the check measures anyway. A response that is
+# this curve itself was equalized twice (a phono stage behind a turntable or interface that equalizes already, or
+# the equalization switched on in software as well); its mirror image was not equalized at all (the cartridge on
+# a line input, or the equalization switched off in a digital phono stage).
+RIAA_100_DB, RIAA_10K_DB = 13.09, -13.73
+RIAA_TOL_DB = 3.0
+RIAA_TOL_BASS_ONLY_DB = 2.0
+
+
+def riaa_fault(lf_100_db: float | None, hf_10k_db: float | None) -> str | None:
+    """"double" or "missing" when bass (100 Hz) and treble (10 kHz) against 1 kHz together are the RIAA curve or
+    its mirror image (each within RIAA_TOL_DB), else None. Equalized twice, the treble is often too quiet for its
+    bands to be found at all: without a treble value the bass alone decides, within the tighter
+    RIAA_TOL_BASS_ONLY_DB."""
+    if lf_100_db is None:
+        return None
+    for name, sign in (("double", 1.0), ("missing", -1.0)):
+        d_lf = abs(lf_100_db - sign * RIAA_100_DB)
+        if hf_10k_db is None:
+            if d_lf <= RIAA_TOL_BASS_ONLY_DB:
+                return name
+        elif d_lf <= RIAA_TOL_DB and abs(hf_10k_db - sign * RIAA_10K_DB) <= RIAA_TOL_DB:
+            return name
+    return None
+
+
 def _item(key, label, value, unit, status, text, band=None, target=None, advice=None) -> dict:
     """One finding. `text` describes neutrally; `advice` is the recommendation, shown only for warn/bad
     (apply_targets appends it to the text), so that switching the target map never leaves a wrong sentence.
@@ -1216,6 +1242,13 @@ def evaluate(bands: list[dict], silent: dict | None, cfg: AlignmentConfig) -> tu
         items.append(_item("lf_100_db", msg("alignment.result.lf_100.label"), v, "dB", st,
                            msg("alignment.result.lf_100.text", left=d[0], right=d[1]),
                            by["lf_100"]["i"], advice=msg("alignment.result.lf_100.advice")))
+    # Both together in the shape of the RIAA curve: no cartridge or loading does that, the equalization is doubled
+    # or missing, and the advice says so instead of pointing at the stylus or the load
+    fault = riaa_fault(summ.get("lf_100_db"), summ.get("hf_10k_db"))
+    if fault:
+        for it in items:
+            if it["key"] in ("lf_100_db", "hf_10k_db"):
+                it["advice"] = msg(f"alignment.result.riaa.{fault}")
     # Treble only up to 16 kHz: the 18 kHz step of the AAPT 1 sweep lies 8–10 dB below 16 and 20 kHz on this
     # pressing, identically on two different turntables, so it is a property of the record
     for role, key, label, rng in (
@@ -1404,6 +1437,11 @@ def analyze(audio: np.ndarray, sr: int, cfg: AlignmentConfig = AlignmentConfig()
         b.pop("fit", None)
 
     warnings = []
+    fault = riaa_fault(summary.get("lf_100_db"), summary.get("hf_10k_db"))
+    if fault:                                          # explains most of the other findings: it comes first
+        hf = summary.get("hf_10k_db")
+        warnings.append(msg(f"alignment.warn.riaa_{fault}", lf=summary["lf_100_db"], hf=hf) if hf is not None
+                        else msg(f"alignment.warn.riaa_{fault}_bass", lf=summary["lf_100_db"]))
     if mono:
         warnings.append(msg("alignment.warn.mono"))
     inside = 0

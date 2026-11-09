@@ -167,6 +167,8 @@
   "result.lf_100.label": "Bass (100 Hz zu 1 kHz)",
   "result.lf_100.text": "Links {left:+.1f} dB, rechts {right:+.1f} dB (RIAA-Entzerrung der Phonostufe).",
   "result.lf_100.advice": "RIAA-Entzerrung oder Eingangsstufe prüfen; Kanäle vergleichen.",
+  "result.riaa.double": "Bass und Höhen ergeben zusammen die RIAA-Kurve: Das Signal ist doppelt entzerrt. Typisch: eine Phonostufe hinter einem Plattenspieler oder Interface, das schon entzerrt, oder die Entzerrung ist zusätzlich in der Software eingeschaltet. Eine der beiden abschalten und neu messen.",
+  "result.riaa.missing": "Bass und Höhen ergeben zusammen das Spiegelbild der RIAA-Kurve: Das Signal ist nicht entzerrt. Typisch: der Tonabnehmer an einem Line-Eingang, oder die Entzerrung ist in einer digitalen Phonostufe abgeschaltet. Einschalten (oder den Phono-Eingang nehmen) und neu messen.",
   "result.sweep_hf.label": "Frequenzgang Höhen",
   "result.sweep_lf.label": "Frequenzgang Bass",
   "result.sweep_dev.khz": "Größte Abweichung {db:+.1f} dB bei {f:.1f} kHz ({channel}).",
@@ -186,6 +188,10 @@
   "result.rumble.vertical_peak": "Vertikal ragt {freq:.1f} Hz heraus (Resonanz, angeregt durch Wellen).",
   "result.rumble.advice": "Lager, Motor und Aufstellung prüfen; Linien im Spektrum beachten (Netzbrumm vs. Motor).",
   "warn.mono": "Mono-Aufnahme: Alles, was Kanäle vergleicht (Balance, Übersprechen, Azimut, Antiskating, vertikale Bänder), ist damit nicht messbar. channels = 2 in der Konfiguration.",
+  "warn.riaa_double": "Der Frequenzgang ist die RIAA-Kurve (100 Hz {lf:+.1f} dB, 10 kHz {hf:+.1f} dB gegen 1 kHz): Das Signal ist doppelt entzerrt. Die meisten anderen Befunde dieses Laufs folgen daraus; eine Entzerrung entfernen und neu messen.",
+  "warn.riaa_missing": "Der Frequenzgang ist das Spiegelbild der RIAA-Kurve (100 Hz {lf:+.1f} dB, 10 kHz {hf:+.1f} dB gegen 1 kHz): Das Signal ist nicht entzerrt. Die meisten anderen Befunde dieses Laufs folgen daraus; die RIAA-Entzerrung einschalten und neu messen.",
+  "warn.riaa_double_bass": "Der Bass ist die RIAA-Kurve (100 Hz {lf:+.1f} dB gegen 1 kHz), und die Höhen-Bänder waren zu leise zum Messen: Das Signal ist sehr wahrscheinlich doppelt entzerrt. Die meisten anderen Befunde dieses Laufs folgen daraus; eine Entzerrung entfernen und neu messen.",
+  "warn.riaa_missing_bass": "Der Bass ist das Spiegelbild der RIAA-Kurve (100 Hz {lf:+.1f} dB gegen 1 kHz), und die Höhen ließen sich nicht messen: Das Signal ist sehr wahrscheinlich nicht entzerrt. Die RIAA-Entzerrung einschalten und neu messen.",
   "warn.clipped_in_bands": {
     "one": "{n} übersteuertes Sample in Messbändern: Gain am Interface zurücknehmen, die Messung ist so nicht verwertbar.",
     "other": "{n} übersteuerte Samples in Messbändern: Gain am Interface zurücknehmen, die Messung ist so nicht verwertbar."
