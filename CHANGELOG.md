@@ -5,6 +5,22 @@ All notable changes to vinyl-check are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] – 2026-11-09
+
+### Fixed
+
+- **A scratch is no longer reported as a skip.** A scratch across the grooves clicks once per revolution, at
+  exactly the period of a skip back, and the skip detector's phase measure ignores how loud something is: the
+  clicks alone matched, and scratched records were reported as skipping, which costs the side its grade (*F*). The
+  echo of the neighbouring groove in a quiet passage did the same. A hit now also has to be the same waveform at
+  the same level (see [Groove skips](docs/measurement.md#groove-skips)): a groove played again agrees in every
+  window, a scratch in none. Hits that are no repetition are not listed any more, so the list of weak matches
+  shrinks to music that really repeats. Checked against 38 reported skips back that had been listened to: the two
+  real ones stay, the 36 others go.
+- **Stored analyses are corrected at the next start.** The excerpts around the hits of earlier analyses are read
+  from the audio and judged again, once; sides that lost their grade to a scratch are graded anew. Analyses whose
+  audio has been deleted keep their hits.
+
 ## [1.6.0] – 2026-11-05
 
 ### Added
@@ -667,7 +683,8 @@ by minor version.
 - Before/after comparison with sample-accurate alignment.
 - Web interface with live level, recording via ALSA, systemd service on a Raspberry Pi.
 
-[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/michaelpietzsch/vinyl-check/compare/v1.3.0...v1.5.0

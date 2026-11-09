@@ -65,6 +65,35 @@ def _mmss(t: float) -> str:
     return f"{int(t // 60)}:{int(t % 60):02d}"
 
 
+def recheck_skips(path, metrics: dict) -> bool:
+    """Judge the groove skips of a stored analysis again on its audio, when they were found before the waveform
+    check (skips.VERSION): hits that are no repetition go, the others get their automatic kind anew. Only the
+    excerpts around the hits are read. Updates metrics["skips"] in place and marks it with the version; returns
+    True if a hit changed or went. The run-out groove stays; the caller's recount applies the user's labels."""
+    import soundfile as sf
+    rpm = float(metrics.get("rpm") or 100 / 3)
+    pre = 2 * skips.revolution_s(rpm) * (1 + skips.SEARCH) + 0.3        # two grooves back plus the search range
+    changed, kept = False, []
+    with sf.SoundFile(str(path)) as f:
+        sr = f.samplerate
+        for e in metrics.get("skips") or []:
+            auto = e.get("kind_auto", e.get("kind"))
+            if auto not in ("backward", "uncertain"):
+                kept.append(e)
+                continue
+            start = max(0, int((e["t"] - pre) * sr))
+            f.seek(min(start, f.frames))
+            audio = f.read(int((e["until"] - e["t"] + pre + 0.3) * sr), dtype="float32", always_2d=True)
+            j = skips.rejudge(audio, sr, e["t"] - start / sr, e["until"] - start / sr, rpm)
+            if j is None:
+                changed = True
+                continue
+            changed |= j["kind"] != auto
+            kept.append({**e, **j, "kind_auto": j["kind"]})
+    metrics["skips"], metrics["skips_v"] = kept, skips.VERSION
+    return changed
+
+
 def skip_warning(back: list[dict]) -> dict | None:
     """Warning message for the skips back of a side (None if there are none)."""
     if not back:
@@ -834,6 +863,7 @@ def analyze(audio: np.ndarray, sr: int, cfg: AnalysisConfig = AnalysisConfig(),
     metrics["scratch_count"] = len(scratches)
     metrics["scratch_clicks"] = int(sum(s["revs"] for s in scratches))
     metrics["skips"] = skip_events
+    metrics["skips_v"] = skips.VERSION
     metrics["skips_back"] = len(back)
     metrics["skips_weak"] = len(weak)
 

@@ -1289,7 +1289,7 @@ def _before_end_groove(audio: np.ndarray, sr: int, t0: float, t1: float) -> floa
     (clicks, score just above the threshold): the locked groove starts at the first piece from which the
     repetitions cover at least half of the remaining time."""
     T = skips.revolution_s(100 / 3)
-    ev = skips.find_repeats(audio[int(t0 * sr):int(t1 * sr)], sr, 100 / 3)
+    ev = skips.find_repeats(audio[int(t0 * sr):int(t1 * sr)], sr, 100 / 3, waveform=False)   # every piece counts here
     for i, x in enumerate(ev):
         cover = sum(y["until"] - y["t"] for y in ev[i:])
         if cover >= 3 * T and cover >= 0.5 * (t1 - t0 - x["t"]):

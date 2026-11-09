@@ -309,8 +309,21 @@ only sounds the same. Its noise differs.
   each compared with the window one and two revolutions earlier (±2 % speed), band 300 Hz–7 kHz, at 16 kHz. A real
   repetition gives a sharp peak near 1. Sustained tones match in only a few bins, so pedal tones and pads do not
   trigger it.
-- A **back skip** needs a similarity of at least 0.40 and a period of exactly one revolution (±0.6 %). Weaker hits
-  are reported as *unsure* and usually come from rhythm.
+- **The waveform has to be the same too.** The phase transform ignores how loud something is, so one impulse
+  counts like half a second of audio. A scratch across the grooves clicks once per revolution, at exactly the
+  period of a skip back, and its clicks match each other in every frequency: on scratched records the phase
+  measure alone reports skips (scores of 0.4–0.7 at the revolution time). The echo of the neighbouring groove in a
+  quiet passage does the same, 30 dB below its original. So for every hit in the music the two excerpts are also
+  compared as waveforms (normalised cross-correlation in the same band, for each eighth of the window; an eighth
+  only counts at the level of the revolution before, ±3 dB; the median of the eighths is the window's
+  agreement). A groove played again reaches 0.97–1.00 in every window of the repeated revolution; a hit
+  without one window above 0.7 is no repetition and is not reported at all.
+- A **back skip** needs at least three windows with the same waveform, a similarity of at least 0.40 and a period
+  of exactly one revolution (±0.6 %), each taken over those windows. Hits with the same waveform that are shorter
+  or off the revolution time are reported as *unsure* and usually come from music in strict time.
+- Analyses stored by earlier versions are checked once at the next start: the excerpts around their hits are read
+  from the audio and judged again (`analysis.recheck_skips`), and the side is graded anew. Without the audio the
+  stored hits stay.
 - A repetition that lasts until the stylus is lifted is the **end groove**, which is normal. The repetition of the
   run-out groove after the end of the music is never a skip.
 - **Forward skips** leave no reliable trace in a single recording and are only found by comparing two recordings of
@@ -318,8 +331,10 @@ only sounds the same. Its noise differs.
 - Each skip carries its time, position on the side and track, the estimated radius (12" LP, 146 → 65 mm, even
   groove pitch) and the measured speed.
 
-Validation (synthetic): skips found within ±0.4 s, also at +0.8 % speed, with no false alarms on music and pedal
-tones. Limitation: a sample-exact loop in the music that is exactly one revolution long (a bar at about 133 BPM)
+Validation (synthetic): skips found within ±0.4 s, also at +0.8 % speed, with no false alarms on music, pedal
+tones, a scratch that clicks every revolution or a groove echo. On recorded sides (some sixty, with 38 reported
+skips back that had been listened to): the two real skips keep 5 and 27 windows at 0.97–1.00, the 36 others
+(scratches, mostly) never exceed 0.51 in a single window. Limitation: a sample-exact loop in the music that is exactly one revolution long (a bar at about 133 BPM)
 looks like a skip. With many repetitions, the app asks you to listen.
 
 ## Comparing two recordings

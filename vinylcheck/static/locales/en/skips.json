@@ -77,8 +77,8 @@
   "tech_recording_value": "{dur} · groove {groove} · quiet {quiet} s · {rate} Hz, {ch} channels, {format} · {device}",
   "tech_recording_help": "Duration, detected groove (stylus down), format and recording device.",
   "weak": {
-    "one": "{n} weak match not counted (similarity below 0.40 or period not exactly one revolution): usually the rhythm of the music, not a skip.",
-    "other": "{n} weak matches not counted (similarity below 0.40 or period not exactly one revolution): usually the rhythm of the music, not a skip."
+    "one": "{n} weak match not counted (the same audio only for a moment, or not exactly one revolution apart): usually the rhythm of the music, not a skip.",
+    "other": "{n} weak matches not counted (the same audio only for a moment, or not exactly one revolution apart): usually the rhythm of the music, not a skip."
   },
   "none": "No backward skips counted{end}. Forward skips only show up when two recordings are compared.",
   "end_groove": " (run-out groove detected from {t}, normal)",

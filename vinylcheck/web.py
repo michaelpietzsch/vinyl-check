@@ -873,6 +873,39 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
         log.info("Grading scheme %s: %d analyses regraded", grading.VERSION, n)
         return n
 
+    def recheck_skips() -> int:
+        """Groove skips found before the waveform check (skips.VERSION) are judged again on the audio, once per
+        analysis: a scratch that clicks every revolution was reported as a skip back and cost the side its grade.
+        Only the excerpts around the hits are read; an analysis whose audio is gone keeps its hits. Returns the
+        number of analyses that changed."""
+        n = 0
+        for row in db.q("SELECT a.recording_id AS id FROM analyses a WHERE "
+                        "COALESCE(json_extract(a.metrics, '$.skips_v'), 1) < ?", (skips.VERSION,)):
+            rid = row["id"]
+            try:
+                r = db.recording(rid)
+                m = ((r or {}).get("analysis") or {}).get("metrics") or {}
+                if not r or r["status"] != "analyzed" or "skips" not in m or mover.active:
+                    continue
+                todo = any(e.get("kind_auto", e.get("kind")) in ("backward", "uncertain") for e in m["skips"])
+                if todo and (r.get("audio_deleted_at") or not r.get("path") or not os.path.exists(r["path"])):
+                    continue
+                changed = analysis.recheck_skips(r["path"], m) if todo else False
+                with db.lock:                         # only the skips are replaced: whatever else changed stays
+                    cur = json.loads((db.one("SELECT metrics FROM analyses WHERE recording_id = ?", (rid,)) or {})
+                                     .get("metrics") or "{}")
+                    cur["skips"], cur["skips_v"] = m["skips"], skips.VERSION
+                    db.x("UPDATE analyses SET metrics = ? WHERE recording_id = ?", (json.dumps(cur), rid))
+                if changed:
+                    learn_recount(rid)                # the user's labels, the count and the grade
+                    n += 1
+            except Exception:  # noqa: BLE001 — one unreadable file must not stop the others
+                log.exception("Judging the groove skips of recording %s again failed", rid)
+        if n:
+            ref_cache["key"] = None
+            log.info("Groove skips judged again with the waveform check: %d analyses changed", n)
+        return n
+
     @asynccontextmanager
     async def lifespan(app):
         # recordings that were still running at the last shutdown are incomplete
@@ -881,6 +914,7 @@ def create_app(cfg: Config | None = None, source_factory=None, *, desktop: bool 
             db.add_problem("recording", r["id"], i18n.msg("api.recording_interrupted"))
         worker.start()
         regrade_all()                                              # grading scheme changed? then regrade everything
+        threading.Thread(target=recheck_skips, daemon=True, name="vinylcheck-skips").start()
         if not desktop:
             threading.Thread(target=_restart_loop, daemon=True, name="vinylcheck-restart").start()
         threading.Thread(target=_learn_loop, daemon=True, name="vinylcheck-learning").start()

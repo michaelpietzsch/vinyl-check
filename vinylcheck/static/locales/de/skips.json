@@ -77,8 +77,8 @@
   "tech_recording_value": "{dur} · Rille {groove} · ruhig {quiet} s · {rate} Hz, {ch} Kanäle, {format} · {device}",
   "tech_recording_help": "Dauer, erkannte Rille (Nadel unten), Format und Aufnahmegerät.",
   "weak": {
-    "one": "{n} schwacher Treffer nicht gezählt (Ähnlichkeit unter 0,40 oder Periode nicht exakt eine Umdrehung): meist der Rhythmus der Musik, kein Sprung.",
-    "other": "{n} schwache Treffer nicht gezählt (Ähnlichkeit unter 0,40 oder Periode nicht exakt eine Umdrehung): meist der Rhythmus der Musik, kein Sprung."
+    "one": "{n} schwacher Treffer nicht gezählt (derselbe Ton nur kurz oder nicht exakt eine Umdrehung auseinander): meist der Rhythmus der Musik, kein Sprung.",
+    "other": "{n} schwache Treffer nicht gezählt (derselbe Ton nur kurz oder nicht exakt eine Umdrehung auseinander): meist der Rhythmus der Musik, kein Sprung."
   },
   "none": "Keine Rückwärtssprünge gezählt{end}. Vorwärtssprünge zeigt erst der Vergleich zweier Aufnahmen.",
   "end_groove": " (Endrille ab {t} erkannt, normal)",

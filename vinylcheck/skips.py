@@ -10,6 +10,15 @@ only). For a true repetition the phases match across all frequencies → a sharp
 long sustained notes only the few bins of those notes match → hardly any peak. This makes the detector
 insensitive to pedal points and pads.
 
+The phase transform has one weakness: it ignores how loud something is, so a single impulse counts like a whole
+half second of audio. A scratch across the grooves clicks once per revolution, at exactly the period of a skip
+back, and its clicks match each other in every frequency: scratched records were reported as skipping (scores of
+0.4–0.7 at the revolution time, the grade "F"). A hit in the music therefore also has to be the same waveform
+(`_agree`): the normalised cross-correlation of the two excerpts, per eighth of the window, at the same level.
+A groove played again reaches 0.97–1.00 in every window of the repeated revolution; the click of a scratch, the echo
+of the neighbouring groove and sustained notes stay below 0.5 (checked against the hits of some sixty recorded
+sides, two of them with real skips).
+
 Forward skips (one revolution missing) leave no trace in a single recording that could be told apart reliably
 from a normal transition. Only the comparison with a second recording of the same side reveals them
 (`relative_jumps`).
@@ -36,6 +45,12 @@ SEARCH = 0.02             # ±2 % speed around the nominal revolution
 THRESH = 0.25             # GCC-PHAT peak from which two excerpts count as the same groove
 STRONG = 0.40             # … and from which a skip back in the music counts as certain (true repetition: ≥ 0.5)
 PERIOD_TOL = 0.006        # ±0.6 % around the revolution time: a true skip back lies exactly there, rhythm does not
+SAME = 0.7                # waveform agreement (_agree) from which a window holds the same audio once more
+MIN_SAME = 3              # … and how many such windows make a skip back (one repeated revolution holds five)
+SUB = 8                   # parts of a window whose agreement is taken; their median ignores a click or two
+LEVEL_DB = 3.0            # … and a part only agrees at the level of the revolution before (an echo is far quieter)
+VERSION = 2               # of stored hits: 2 = judged with the waveform check (see rejudge)
+_SOS = signal.butter(4, BAND, btype="band", fs=RATE, output="sos")
 LP_OUTER_MM, LP_INNER_MM = 146.0, 65.0   # estimated groove radius of a 12" LP: lead-in → end of the music
 
 
@@ -101,12 +116,89 @@ def radius_mm(times, groove: tuple[float, float], music_end: float | None, rpm: 
     return [int(v) for v in np.round(LP_OUTER_MM - (LP_OUTER_MM - LP_INNER_MM) * frac)]
 
 
+def _best(y: np.ndarray, starts: np.ndarray, T: float, d: int, w: int) -> dict:
+    """Per window start: the best GCC-PHAT score one or two grooves back, with period, grooves and lag (samples)."""
+    best = {"score": np.zeros(len(starts)), "period": np.full(len(starts), T), "k": np.ones(len(starts), int),
+            "lag": np.full(len(starts), int(round(T * RATE)))}
+    for k in (1, 2):                                  # one or two grooves back
+        lag = int(round(k * T * RATE))
+        ok = starts >= lag + d
+        if not ok.any():
+            continue
+        sc, pos = _scan(y, lag, d, starts[ok], w)
+        idx = np.flatnonzero(ok)
+        better = sc > best["score"][idx]
+        best["score"][idx[better]] = sc[better]
+        best["period"][idx[better]] = ((lag + d - pos) / RATE / k)[better]
+        best["k"][idx[better]] = k
+        best["lag"][idx[better]] = (lag + d - pos)[better]
+    return best
+
+
+def _agree(y: np.ndarray, starts: np.ndarray, lags: np.ndarray, w: int) -> np.ndarray:
+    """Per window: how much of it is the audio `lag` samples earlier played again (0…1).
+
+    The normalised cross-correlation of the two waveforms, band-limited like the PHAT measure (a warp returns every
+    revolution too), taken for each of SUB parts of the window; the median of the parts counts. A groove played
+    again is the same signal at the same level, in every part. The click of a scratch agrees in one or two parts,
+    and an echo of the neighbouring groove is far quieter than its original: parts at another level count as 0."""
+    pad = 512
+    lo = max(0, int(starts.min() - lags.max()) - pad)
+    hi = min(len(y), int(starts.max()) + w + pad)
+    seg = signal.sosfiltfilt(_SOS, y[lo:hi]).astype(np.float32) if hi - lo > 64 else y[lo:hi]
+    n = w // SUB
+    lim = 10 ** (LEVEL_DB / 10)
+    out = np.zeros(len(starts))
+    for j, (i, lag) in enumerate(zip(starts, lags)):
+        i, lag = int(i) - lo, int(lag)
+        if i - lag < 0 or i + w > len(seg):
+            continue
+        a = seg[i:i + n * SUB].reshape(SUB, n)
+        b = seg[i - lag:i - lag + n * SUB].reshape(SUB, n)
+        a = a - a.mean(axis=1, keepdims=True)
+        b = b - b.mean(axis=1, keepdims=True)
+        ea, eb = (a * a).sum(axis=1), (b * b).sum(axis=1)
+        den = np.sqrt(ea * eb)
+        r = np.divide((a * b).sum(axis=1), den, out=np.zeros(SUB), where=den > 0)
+        r[(ea > eb * lim) | (eb > ea * lim)] = 0.0
+        out[j] = float(np.median(r))
+    return out
+
+
+def _judge(y: np.ndarray, starts: np.ndarray, best: dict, a: int, b: int, T: float, w: int,
+           waveform: bool = True) -> dict | None:
+    """A run of hits in the music (windows a…b): a skip back ("backward"), uncertain, or nothing at all (None).
+
+    Nothing: no window is the same waveform as a revolution before, so the match came from impulses (a scratch),
+    an echo or sustained notes. Uncertain: the same audio, but for less than MIN_SAME windows, or not at the
+    revolution time (music in strict time: a riff produced 20 "skips back" with scores of 0.25–0.46 and periods at
+    the edges of the search window). Runs of two revolutions and more need no further proof than the waveform."""
+    score = float(np.median(best["score"][a:b]))
+    per = float(np.median(best["period"][a:b]))
+    n_same = None
+    if waveform:
+        same = _agree(y, starts[a:b], best["lag"][a:b], w) >= SAME
+        n_same = int(same.sum())
+        if not n_same:
+            return None
+        if n_same >= MIN_SAME:                         # score and period of the repeated part, not of its fringes
+            score = float(np.median(best["score"][a:b][same]))
+            per = float(np.median(best["period"][a:b][same]))
+    kind = "backward"
+    short = b - a < 2 * max(1, int(T / HOP_S))
+    if (n_same is not None and n_same < MIN_SAME) or ((score < STRONG or abs(per / T - 1) > PERIOD_TOL) and short):
+        kind = "uncertain"
+    return {"kind": kind, "score": score, "period": per, "same": n_same}
+
+
 def find_repeats(audio: np.ndarray, sr: int, rpm: float = 100 / 3, groove: tuple[float, float] | None = None,
-                 music_end: float | None = None, y: np.ndarray | None = None) -> list[dict]:
+                 music_end: float | None = None, y: np.ndarray | None = None, waveform: bool = True) -> list[dict]:
     """Skips back (a groove repeats) and the run-out groove. Times in seconds of the recording.
 
-    Each event has kind "backward" (skip back), "uncertain" (probably rhythm) or "run_out" (run-out groove),
-    plus how many grooves it jumped, repeats, measured period/rpm, score and position."""
+    Each event has kind "backward" (skip back), "uncertain" (the same audio, but too short or not at the revolution
+    time) or "run_out" (run-out groove), plus how many grooves it jumped, repeats, measured period/rpm, score,
+    position and `same` (windows with the same waveform). `waveform=False` reports every hit of the phase measure,
+    as versions before the waveform check did (for finding a locked groove in a quiet section)."""
     y = prepare(audio, sr) if y is None else y
     dur = len(y) / RATE
     groove = groove or (0.0, dur)
@@ -117,50 +209,59 @@ def find_repeats(audio: np.ndarray, sr: int, rpm: float = 100 / 3, groove: tuple
     starts = np.arange(max(lag1 + d, int(groove[0] * RATE)), min(len(y) - w, int(groove[1] * RATE) - w), hop)
     if len(starts) == 0:
         return []
-    best = {"starts": starts, "score": np.zeros(len(starts)), "period": np.full(len(starts), T),
-            "k": np.ones(len(starts), int)}
-    for k in (1, 2):                                  # one or two grooves back
-        lag = int(round(k * T * RATE))
-        ok = starts >= lag + d
-        if not ok.any():
-            continue
-        sc, pos = _scan(y, lag, d, starts[ok], w)
-        period = (lag + d - pos) / RATE / k
-        idx = np.flatnonzero(ok)
-        better = sc > best["score"][idx]
-        best["score"][idx[better]] = sc[better]
-        best["period"][idx[better]] = period[better]
-        best["k"][idx[better]] = k
+    best = _best(y, starts, T, d, w)
     hit = best["score"] >= THRESH
     # bridge single gaps (one window with a click or similar)
     gaps = np.flatnonzero(~hit[1:-1] & hit[:-2] & hit[2:]) + 1
     hit[gaps] = True
     events = []
     for a, b in runs(hit):
-        t0 = best["starts"][a] / RATE
-        t1 = (best["starts"][b - 1] + w) / RATE
+        t0 = starts[a] / RATE
+        t1 = (starts[b - 1] + w) / RATE
         k = int(np.bincount(best["k"][a:b]).argmax())
-        per = float(np.median(best["period"][a:b]))
         if t1 - t0 < 0.5 * T * k:
             continue
         # Run-out groove: runs until the stylus is lifted, or lies behind the end of the music. Clicks often break
         # the repetition of the run-out groove into several sections; without the second condition the earlier
         # ones were reported as skips back (observed: 3 false alarms at 100 % of the side).
         ends = t1 >= min(groove[1], dur) - 1.5 or (music_end is not None and t0 >= music_end - 1.0)
-        kind = "run_out" if ends else "backward"
-        # Rhythmic music (a riff in strict time produced 20 "skips back" with scores of 0.25–0.46 and periods at
-        # the edges of the search window) counts as uncertain: only hits with high similarity AND a period right
-        # at the revolution time count as a skip back. The (quiet) run-out groove stays as it is.
-        score = float(np.median(best["score"][a:b]))
-        if (kind == "backward" and (score < STRONG or abs(per / T - 1) > PERIOD_TOL)
-                and b - a < 2 * max(1, int(T / HOP_S))):
-            kind = "uncertain"
-        ev = {"t": round(float(t0), 2), "until": round(float(t1), 2), "kind": kind, "grooves": k,
+        if ends:                                       # the (quiet) run-out groove stays as the phase measure found it
+            j = {"kind": "run_out", "score": float(np.median(best["score"][a:b])),
+                 "period": float(np.median(best["period"][a:b])), "same": None}
+        else:
+            j = _judge(y, starts, best, a, b, T, w, waveform)
+            if j is None:
+                continue
+        per = j["period"]
+        ev = {"t": round(float(t0), 2), "until": round(float(t1), 2), "kind": j["kind"], "grooves": k,
               "repeats": max(1, int(round((t1 - t0) / (per * k)))), "period_s": round(per, 4),
-              "rpm_measured": round(60 / per, 3), "score": round(float(np.median(best["score"][a:b])), 3)}
+              "rpm_measured": round(60 / per, 3), "score": round(j["score"], 3)}
+        if j["same"] is not None:
+            ev["same"] = j["same"]
         ev |= position(t0, groove, music_end, rpm)
         events.append(ev)
     return events
+
+
+def rejudge(audio: np.ndarray, sr: int, t: float, until: float, rpm: float = 100 / 3) -> dict | None:
+    """A hit in the music stored before the waveform check (VERSION 1), judged again on an excerpt of its audio.
+
+    `audio` has to reach two revolutions (plus the search range) back from the hit; `t`, `until`: the hit within
+    the excerpt. Returns None if it is no repetition, else kind ("backward"/"uncertain"), score, period_s,
+    rpm_measured and same."""
+    y = prepare(audio, sr)
+    T = revolution_s(rpm)
+    w, hop = int(WIN_S * RATE), int(HOP_S * RATE)
+    d = int(SEARCH * T * RATE)
+    first = max(int(round(T * RATE)) + d, int(round(t * RATE)))
+    starts = np.arange(first, min(len(y) - w, int(round(until * RATE)) - w) + 1, hop)
+    if len(starts) == 0:
+        return None
+    j = _judge(y, starts, _best(y, starts, T, d, w), 0, len(starts), T, w)
+    if j is None:
+        return None
+    return {"kind": j["kind"], "score": round(j["score"], 3), "period_s": round(j["period"], 4),
+            "rpm_measured": round(60 / j["period"], 3), "same": j["same"]}
 
 
 def _resample_at(y: np.ndarray, pos: np.ndarray) -> np.ndarray:
