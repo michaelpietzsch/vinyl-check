@@ -10,8 +10,12 @@
 # The target is passed in and never stored in the repository. SSH must work with a key, sudo without a password.
 # Note: the tests on the Pi take a good ten minutes of CPU. Do not start them next to a running recording.
 #
-# The code first goes to /opt/vinyl-check.staged. If nothing is running on the Pi, the service is restarted right
-# away; ExecStartPre of the unit swaps the code into /opt/vinyl-check (root:root, read-only for the service). If a
+# The code first goes to /opt/vinyl-check.new, where the tests run on it. Only code that passed them becomes
+# /opt/vinyl-check.staged, which the service takes at its next start: a failed or interrupted deploy leaves nothing
+# behind that a later restart could pick up. If nothing is running on the Pi, the service is restarted right
+# away; ExecStartPre of the unit swaps the code into /opt/vinyl-check (root:root, read-only for the service) and
+# keeps the code it replaced as /opt/vinyl-check.prev. If the service does not answer after that restart, this
+# script puts the previous code back (the failed one stays in /opt/vinyl-check.failed to look at). If a
 # recording or analysis is running, the script sets the marker /var/lib/vinyl-check/restart-when-idle and returns:
 # the service restarts itself as soon as nothing is running. Versions before 1.0 look for the marker under its old
 # name restart-wenn-frei, so both are written. An older version on the Pi that does not know the marker at all is
@@ -61,20 +65,33 @@ install -d -m 755 -o root -g root /opt/vinyl-check /etc/vinyl-check
 if mountpoint -q /mnt/data; then install -d -m 750 -o vinylcheck -g vinylcheck /mnt/data/vinyl-check; fi
 REMOTE
 
-echo "[3/5] Code (to /opt/vinyl-check.staged) + unit"
-# Code as a tarball over the master connection into the staging directory; it is swapped in when the service starts
-tar -C "$DIR" --exclude='__pycache__' --exclude='.pytest_cache' -czf - vinylcheck tests \
-  | "${SSH[@]}" "sudo bash -c 'rm -rf /opt/vinyl-check.staged && mkdir /opt/vinyl-check.staged && tar -xzf - -C /opt/vinyl-check.staged \
-      && chown -R root:root /opt/vinyl-check.staged && chmod -R go-w /opt/vinyl-check.staged'"
+echo "[3/5] Code (to /opt/vinyl-check.new) + unit"
+# Code as a tarball over the master connection. What the working copy carries besides the code stays behind: no
+# AppleDouble files or extended attributes from macOS, and not the files' modes. A file that only its owner may read
+# stops the service, which runs as another user (a synced folder had made two files 0700): on the Pi everything is
+# readable, executable where it was, and writable for root alone.
+COPYFILE_DISABLE=1 tar -C "$DIR" --no-xattrs --exclude='__pycache__' --exclude='.pytest_cache' --exclude='._*' \
+    -czf - vinylcheck tests \
+  | "${SSH[@]}" "sudo bash -c 'rm -rf /opt/vinyl-check.new /opt/vinyl-check.staged && mkdir /opt/vinyl-check.new \
+      && tar -xzf - -C /opt/vinyl-check.new --warning=no-unknown-keyword \
+      && chown -R root:root /opt/vinyl-check.new && chmod -R u=rwX,go=rX /opt/vinyl-check.new'"
 "${SSH[@]}" "sudo install -m 644 -o root -g root /dev/stdin /etc/systemd/system/vinyl-check.service && sudo systemctl daemon-reload" < "$DIR/systemd/vinyl-check.service"
 "${SSH[@]}" "sudo test -f /etc/vinyl-check/config.toml || sudo install -m 640 -o root -g vinylcheck /dev/stdin /etc/vinyl-check/config.toml" < "$DIR/config.example.toml"
 
 if [ $RUN_TESTS -eq 1 ]; then
   echo "[4/5] Tests on the Pi (Debian package versions)"
-  "${SSH[@]}" "cd /tmp && PYTHONPATH=/opt/vinyl-check.staged PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider /opt/vinyl-check.staged/tests 2>&1 | tail -3"
+  # pipefail: the result of the tests counts, not that of tail. A run that fails stops the deploy here, before
+  # anything is staged or restarted (it used to go on: code that could not even be imported was put into service).
+  if ! "${SSH[@]}" "bash -o pipefail -c 'cd /tmp && PYTHONPATH=/opt/vinyl-check.new PYTHONDONTWRITEBYTECODE=1 \
+      python3 -m pytest -q -p no:cacheprovider /opt/vinyl-check.new/tests 2>&1 | tail -3'"; then
+    echo "ERROR: the tests failed on the Pi. Nothing was staged or restarted; the service runs as before." >&2
+    echo "       The code that failed is in /opt/vinyl-check.new on the Pi." >&2
+    exit 1
+  fi
 else
   echo "[4/5] Tests skipped"
 fi
+"${SSH[@]}" "sudo mv /opt/vinyl-check.new /opt/vinyl-check.staged"
 
 # Is anything running? Output: "<busy 0/1> <knows the restart marker 0/1>"; no answer (service down) gives "0 0"
 busy_state() {
@@ -106,9 +123,22 @@ if [ "$BUSY" = "1" ] && [ $NOW -eq 0 ]; then
   exit 0
 fi
 echo "[5/5] Restarting the service"
-"${SSH[@]}" "sudo systemctl enable -q vinyl-check && sudo systemctl restart vinyl-check \
+if ! "${SSH[@]}" "sudo systemctl enable -q vinyl-check && sudo systemctl restart vinyl-check \
   && for i in 1 2 3 4 5 6 7 8 9 10; do sleep 2; curl -fsS localhost:8080/api/health 2>/dev/null && echo && break; done \
-  && systemctl is-active vinyl-check"
+  && systemctl is-active vinyl-check"; then
+  echo "ERROR: the service does not answer after the restart. The end of its log:" >&2
+  "${SSH[@]}" "journalctl -u vinyl-check -n 15 --no-pager 2>/dev/null | cut -c1-220" >&2 || true
+  # Back to the code that ran before (kept by the unit's ExecStartPre). A database the new version has already
+  # migrated stays as it is: the versions only add tables and columns, which the previous code leaves alone.
+  if "${SSH[@]}" "sudo test -d /opt/vinyl-check.prev"; then
+    "${SSH[@]}" "sudo bash -c 'systemctl stop vinyl-check; rm -rf /opt/vinyl-check.failed \
+        && mv /opt/vinyl-check /opt/vinyl-check.failed && mv /opt/vinyl-check.prev /opt/vinyl-check \
+        && systemctl start vinyl-check' && sleep 6 && curl -fsS -m 5 localhost:8080/api/health && echo" \
+      && echo "The previous version runs again. The code that failed is in /opt/vinyl-check.failed on the Pi." >&2 \
+      || echo "Putting the previous code back did not work either: look at the Pi (journalctl -u vinyl-check)." >&2
+  fi
+  exit 1
+fi
 LIVE="$("${SSH[@]}" "curl -fsS -m 5 localhost:8080/api/status 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"version\"])' 2>/dev/null || echo '?'")"
 if [ "$LIVE" != "$VERSION" ]; then
   echo "ERROR: the Pi reports version $LIVE, expected $VERSION (code not swapped in? journalctl -u vinyl-check)"

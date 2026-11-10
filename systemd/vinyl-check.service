@@ -25,9 +25,10 @@ Environment=PYTHONPATH=/opt/vinyl-check
 Environment=PYTHONDONTWRITEBYTECODE=1
 WorkingDirectory=/opt/vinyl-check
 # Deploy when idle: deploy.sh puts the code into /opt/vinyl-check.staged; on the next start ExecStartPre (as root,
-# "+") swaps it in. The service ends itself as soon as nothing is running (marker
-# /var/lib/vinyl-check/restart-when-idle), hence Restart=always instead of on-failure.
-ExecStartPre=+/bin/sh -c 'if [ -d /opt/vinyl-check.staged ]; then rm -rf /opt/vinyl-check.old && mv /opt/vinyl-check /opt/vinyl-check.old && mv /opt/vinyl-check.staged /opt/vinyl-check && rm -rf /opt/vinyl-check.old; fi'
+# "+") swaps it in and keeps the code it replaces as /opt/vinyl-check.prev, the way back if the new one does not
+# start. The service ends itself as soon as nothing is running (marker /var/lib/vinyl-check/restart-when-idle),
+# hence Restart=always instead of on-failure.
+ExecStartPre=+/bin/sh -c 'if [ -d /opt/vinyl-check.staged ]; then rm -rf /opt/vinyl-check.prev && mv /opt/vinyl-check /opt/vinyl-check.prev && mv /opt/vinyl-check.staged /opt/vinyl-check; fi'
 ExecStart=/usr/bin/python3 -m vinylcheck
 Restart=always
 RestartSec=3

@@ -44,6 +44,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   their own; when two of them met, the later one wrote what it had read before the earlier one (a verdict given
   while the side was analysed again could put the old analysis back). They now go through one place that holds
   the analysis from reading to writing and writes it in one statement.
+- **`deploy.sh` no longer puts code into service that failed its tests.** The result of the test run on the Pi
+  was not looked at (only that of the command that shortened its output), so a run that failed went on to the
+  restart. Now a failed run stops the deploy before anything is staged; the code is tested in
+  `/opt/vinyl-check.new` and becomes `/opt/vinyl-check.staged` only after it passed, so an interrupted deploy
+  leaves nothing a later restart could pick up. File modes of the working copy no longer reach the Pi (a file
+  readable only by its owner stopped the service, which runs as another user), nor do macOS's extended attributes.
+  The unit keeps the code it replaces as `/opt/vinyl-check.prev`, and when the service does not answer after the
+  restart, the script puts it back.
 - **Stored analyses are corrected at the next start.** The excerpts around the hits of earlier analyses are read
   from the audio and judged again, once; sides that lost their grade to a scratch are graded anew. Analyses whose
   audio has been deleted keep their hits.
