@@ -189,10 +189,7 @@ def install(app: FastAPI, station: Station) -> None:
         hit = db.set_label(rec_id, p.t, p.label)
         if not hit:
             raise HTTPException(404, i18n.msg("api.no_event_at_time"))
-        metrics, grading = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
-                                            learned=station.learn_model(), learn_grade=cfg.learn_grade,
-                                            zero_point=station.learn_zp(r), acfg=station.acfg_for(rec_id))
-        db.update_analysis(rec_id, metrics, grading)
+        metrics, grading = station.recount(rec_id) or (r["analysis"]["metrics"], r["analysis"]["grading"])
         ref_cache["key"] = None
         return {"t": p.t, "label": p.label, "grade": grading.get("grade"), "score": grading.get("score"),
                 "counts": metrics.get("counts"), "clicks_quiet_per_min": metrics.get("clicks_quiet_per_min"),
@@ -210,12 +207,7 @@ def install(app: FastAPI, station: Station) -> None:
         if not any(abs(e["t"] - p.t) <= 2.0 for e in r["analysis"]["metrics"].get("skips") or []):
             raise HTTPException(404, i18n.msg("api.no_skip_at_time"))
         db.set_skip_label(rec_id, p.t, p.label)
-        warnings = list(r["analysis"].get("warnings") or [])
-        metrics, grading = analysis.recount(r["analysis"]["metrics"], db.events(rec_id), cfg.grading,
-                                            skip_labels=db.skip_labels(rec_id), warnings=warnings,
-                                            learned=station.learn_model(), learn_grade=cfg.learn_grade,
-                                            zero_point=station.learn_zp(r), acfg=station.acfg_for(rec_id))
-        db.update_analysis(rec_id, metrics, grading, warnings)
+        metrics, grading = station.recount(rec_id) or (r["analysis"]["metrics"], r["analysis"]["grading"])
         ref_cache["key"] = None
         return {"t": p.t, "label": p.label, "grade": grading.get("grade"), "skips_back": metrics.get("skips_back"),
                 "skips_weak": metrics.get("skips_weak")}

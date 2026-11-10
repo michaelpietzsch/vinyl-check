@@ -117,6 +117,13 @@ it on.
   Match the style of the surrounding code, and do not reformat code you do not otherwise change.
 - **No new platform assumptions.** vinyl-check is moving towards Linux, macOS and Windows. Do not add new
   hard-coded paths, Linux-only calls or shell dependencies outside the capture layer and the deployment scripts.
+- **Where the web API's code lives.** `web.create_app()` only builds the app. What the areas share is in the
+  `Station` (`vinylcheck/station.py`); the routes are in `vinylcheck/api/`, one module per area, each with an
+  `install(app, station)`; request bodies and names are in `api/common.py`. A helper that only one area needs stays
+  in that area's module, and moves to the `Station` when a second one needs it.
+- **A stored analysis changes in one place:** `Station.recount()`. It holds the analysis from reading to writing
+  and writes it in one statement. Do not read an analysis, change it and write it back anywhere else: two such
+  changes overwrite each other.
 - **The web interface uses no external libraries and no build step.** Plain JavaScript, CSS custom properties from
   the [design system](docs/design-system.md) and the SVG icon sprite. It must work without internet access.
 - Never commit recordings, databases or configuration files with credentials (see `.gitignore`).

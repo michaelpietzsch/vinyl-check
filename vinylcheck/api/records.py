@@ -256,7 +256,7 @@ def install(app: FastAPI, station: Station) -> None:
         if analysis.record_repeat_rule(r, cfg.analysis.repeat_rule)["mode"] != rule_before:
             changed["rule"] = True
             for rec in db.recordings(rid):
-                station.learn_recount(rec["id"])
+                station.recount(rec["id"])
         ref_cache["key"] = None
         return {**get_record(rid), "refreshed": changed}
 
@@ -364,7 +364,7 @@ def install(app: FastAPI, station: Station) -> None:
                                             != analysis.record_repeat_rule(before, cfg.analysis.repeat_rule)["mode"]):
             # the rule changes what counts: every analysed side of the record is counted and graded again
             for rec in db.recordings(rid):
-                station.learn_recount(rec["id"])
+                station.recount(rec["id"])
             ref_cache["key"] = None
         return get_record(rid)
 

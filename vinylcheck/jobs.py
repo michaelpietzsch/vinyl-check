@@ -365,10 +365,11 @@ class Worker:
                                  self.db.skip_labels(rec_id), trim["fixed_gain"], self.db.so_cache(rec.get("sha256")))
             self.db.save_so_cache(rec.get("sha256"), res.pop("so_new", None) or {})
             res["metrics"]["profile"] = trim
-        if not self._still_there(rec):
-            log.info("Recording %s was deleted during its analysis: result discarded", rec_id)
-            return
-        self.db.save_analysis(rec_id, res, __version__, time.time() - t0)
+        with self.db.analysis_lock:                   # not in the middle of a recount of the analysis it replaces
+            if not self._still_there(rec):
+                log.info("Recording %s was deleted during its analysis: result discarded", rec_id)
+                return
+            self.db.save_analysis(rec_id, res, __version__, time.time() - t0)
         self.db.update_recording(rec_id, status="analyzed", chain_db=chain)
         if rec["kind"] == "alignment":
             self._update_floor(rec, res)

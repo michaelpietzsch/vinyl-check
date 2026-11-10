@@ -39,6 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Technologies GmbH, registered in Europe and other countries*): on the license page, in the third-party notices
   of the Windows installer, under the ASIO switch of the audio settings and in every document that mentions ASIO.
   The notice is not translated.
+- **Two changes of the same stored analysis can no longer overwrite each other.** A verdict, the regrade, the
+  learned model, the skip check and a fresh analysis each read the stored analysis, changed it and wrote it back on
+  their own; when two of them met, the later one wrote what it had read before the earlier one (a verdict given
+  while the side was analysed again could put the old analysis back). They now go through one place that holds
+  the analysis from reading to writing and writes it in one statement.
 - **Stored analyses are corrected at the next start.** The excerpts around the hits of earlier analyses are read
   from the audio and judged again, once; sides that lost their grade to a scratch are graded anew. Analyses whose
   audio has been deleted keep their hits.

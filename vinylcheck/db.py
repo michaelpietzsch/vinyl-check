@@ -242,6 +242,10 @@ class DB:
         self.conn = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
         self.conn.row_factory = sqlite3.Row
         self.lock = threading.RLock()
+        # Held from reading a stored analysis to writing it again (Station.recount) and while the worker stores a
+        # fresh one: without it two changes of the same analysis could overwrite each other, the later one writing
+        # what it had read before the earlier one. Not needed for reading.
+        self.analysis_lock = threading.RLock()
         with self.lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA foreign_keys=ON")
@@ -912,10 +916,14 @@ class DB:
                           WHERE e.label IS NOT NULL ORDER BY e.recording_id, e.t""")
 
     def update_analysis(self, rec_id: int, metrics: dict, grading: dict, warnings: list | None = None) -> None:
-        self.x("UPDATE analyses SET metrics = ?, grading = ?, grade = ?, score = ? WHERE recording_id = ?",
-               (json.dumps(metrics), json.dumps(grading), grading.get("grade"), grading.get("score"), rec_id))
+        """Replace metrics, grading and (if given) warnings of a stored analysis, in one statement: whoever reads
+        the analysis sees it before or after, never half of each. Call it through Station.recount."""
+        sets = {"metrics": json.dumps(metrics), "grading": json.dumps(grading), "grade": grading.get("grade"),
+                "score": grading.get("score")}
         if warnings is not None:
-            self.x("UPDATE analyses SET warnings = ? WHERE recording_id = ?", (json.dumps(warnings), rec_id))
+            sets["warnings"] = json.dumps(warnings)
+        self.x(f"UPDATE analyses SET {', '.join(f'{k} = ?' for k in sets)} WHERE recording_id = ?",
+               (*sets.values(), rec_id))
 
     # ─── Second opinion: network values per file (checksum) and time, so re-analysis need not ask again ───
     def so_cache(self, sha256: str | None) -> dict:

@@ -289,7 +289,7 @@ class Station:
         if analysis.record_repeat_rule(r, self.cfg.analysis.repeat_rule)["mode"] == before:
             return False
         for rec in self.db.recordings(r["id"]):
-            self.learn_recount(rec["id"])
+            self.recount(rec["id"])
         self.ref_cache["key"] = None
         return True
 
@@ -329,18 +329,36 @@ class Station:
         rule = analysis.record_repeat_rule(row, self.cfg.analysis.repeat_rule)["mode"]
         return replace(self.cfg.analysis, repeat_rule=rule, mono=bool(row.get("mono")))
 
-    def learn_recount(self, rec_id: int, r: dict | None = None) -> tuple[dict, dict] | None:
-        """Recount a stored analysis with event judgments, skip judgments and the current learned model, and save it."""
-        r = r or self.db.recording(rec_id)
-        if not r or not r.get("analysis") or not (r["analysis"].get("metrics") or {}).get("counts"):
-            return None
-        warnings = list(r["analysis"].get("warnings") or [])
-        metrics, grading_ = analysis.recount(r["analysis"]["metrics"], self.db.events(rec_id), self.cfg.grading,
-                                             skip_labels=self.db.skip_labels(rec_id), warnings=warnings,
-                                             learned=self.learn_model(), learn_grade=self.cfg.learn_grade,
-                                             zero_point=self.learn_zp(r), acfg=self.acfg_for(rec_id))
-        self.db.update_analysis(rec_id, metrics, grading_, warnings)
-        return metrics, grading_
+    def recount(self, rec_id: int, change=None, count: bool = True) -> tuple[dict, dict] | None:
+        """Count and grade a stored analysis again from its events, with the verdicts on events and skips, the
+        record's repeat rule and the learned model, and store it.
+
+        This is the one place where a stored analysis changes after the worker wrote it. From reading it to writing
+        it nothing else changes it (db.analysis_lock, which the worker holds as well when it stores a fresh
+        analysis), so no change is lost to another one; and it is written in one statement, so whoever reads it
+        sees it before or after, never new hits with the old count.
+
+        `change(metrics)` alters the metrics before the count (returning False leaves the analysis as it is);
+        `count=False` stores what `change` did without counting again. Returns (metrics, grading), or None if the
+        recording has no analysis, or nothing in it to count and nothing changed."""
+        with self.db.analysis_lock:
+            r = self.db.recording(rec_id)
+            a = (r or {}).get("analysis")
+            if not a:
+                return None
+            metrics, grading_ = a.get("metrics") or {}, a.get("grading") or {}
+            warnings = list(a.get("warnings") or [])
+            if change is not None and change(metrics) is False:
+                return None
+            if count and metrics.get("counts"):
+                metrics, grading_ = analysis.recount(metrics, self.db.events(rec_id), self.cfg.grading,
+                                                     skip_labels=self.db.skip_labels(rec_id), warnings=warnings,
+                                                     learned=self.learn_model(), learn_grade=self.cfg.learn_grade,
+                                                     zero_point=self.learn_zp(r), acfg=self.acfg_for(rec_id))
+            elif change is None:
+                return None                           # analyses without counts (very old ones) are left alone
+            self.db.update_analysis(rec_id, metrics, grading_, warnings)
+            return metrics, grading_
 
     def learn_train(self) -> dict:
         """Retrain (takes a fraction of a second) and store the model. A Vinyl-Mind prior (an adopted global model or
@@ -371,7 +389,7 @@ class Station:
             if r["mid"] == mid and (bool(r["gr"]) == want_graded or not mid):
                 continue
             try:
-                self.learn_recount(r["recording_id"])
+                self.recount(r["recording_id"])
                 n += 1
             except Exception:  # noqa: BLE001
                 log.exception("Recount with learned model failed: recording %s", r["recording_id"])
@@ -423,21 +441,13 @@ class Station:
         if not force and self.db.setting("grading_version") == str(grading.VERSION):
             return 0
         n = 0
-        for r in self.db.q("SELECT a.recording_id, a.metrics, r.profile_id FROM analyses a "
-                           "LEFT JOIN recordings r ON r.id = a.recording_id"):
+        for row in self.db.q("SELECT recording_id FROM analyses"):
+            # from the stored events: a new scheme may also change the metrics (e.g. pops counted only in the music);
+            # the audio is not recomputed
             try:
-                m = json.loads(r["metrics"] or "{}")
-            except ValueError:
+                n += bool(self.recount(row["recording_id"]))
+            except ValueError:                                    # metrics that are no JSON: nothing to regrade
                 continue
-            if not m.get("counts"):
-                continue
-            # recount from the stored events: a new scheme may also change the metrics (e.g. pops counted only in
-            # the music); the audio is not recomputed
-            m, g = analysis.recount(m, self.db.events(r["recording_id"]), self.cfg.grading,
-                                    learned=self.learn_model(), learn_grade=self.cfg.learn_grade,
-                                    zero_point=self.learn_zp(r), acfg=self.acfg_for(r["recording_id"]))
-            self.db.update_analysis(r["recording_id"], m, g)
-            n += 1
         self.db.set_setting("grading_version", str(grading.VERSION))
         self.ref_cache["key"] = None
         log.info("Grading scheme %s: %d analyses regraded", grading.VERSION, n)
@@ -461,13 +471,13 @@ class Station:
                 if todo and (r.get("audio_deleted_at") or not r.get("path") or not os.path.exists(r["path"])):
                     continue
                 changed = analysis.recheck_skips(r["path"], m) if todo else False
-                with self.db.lock:                    # the hits, their count and the grade change in one step
-                    cur = json.loads((self.db.one("SELECT metrics FROM analyses WHERE recording_id = ?", (rid,)) or {})
-                                     .get("metrics") or "{}")
-                    cur["skips"], cur["skips_v"] = m["skips"], skips.VERSION   # only the skips: the rest stays
-                    self.db.x("UPDATE analyses SET metrics = ? WHERE recording_id = ?", (json.dumps(cur), rid))
-                    if changed:
-                        self.learn_recount(rid)       # the user's labels, the count and the grade
+
+                def put(cur: dict, hits=m["skips"]):
+                    if cur.get("skips_v", 1) >= skips.VERSION:
+                        return False                  # analysed anew in the meantime: its hits are current
+                    cur["skips"], cur["skips_v"] = hits, skips.VERSION      # only the skips: the rest stays
+                # the hits, their count and the grade in one write; unchanged hits only get their mark
+                self.recount(rid, change=put, count=bool(changed))
                 n += changed
             except Exception:  # noqa: BLE001 — one unreadable file must not stop the others
                 log.exception("Judging the groove skips of recording %s again failed", rid)
