@@ -14,8 +14,9 @@
 # /opt/vinyl-check.staged, which the service takes at its next start: a failed or interrupted deploy leaves nothing
 # behind that a later restart could pick up. If nothing is running on the Pi, the service is restarted right
 # away; ExecStartPre of the unit swaps the code into /opt/vinyl-check (root:root, read-only for the service) and
-# keeps the code it replaced as /opt/vinyl-check.prev. If the service does not answer after that restart, this
-# script puts the previous code back (the failed one stays in /opt/vinyl-check.failed to look at). If a
+# keeps the code it replaced as /opt/vinyl-check.prev. If the service starts again and again after that restart
+# instead of answering, this script puts the previous code back (the failed one stays in /opt/vinyl-check.failed
+# to look at). If a
 # recording or analysis is running, the script sets the marker /var/lib/vinyl-check/restart-when-idle and returns:
 # the service restarts itself as soon as nothing is running. Versions before 1.0 look for the marker under its old
 # name restart-wenn-frei, so both are written. An older version on the Pi that does not know the marker at all is
@@ -123,17 +124,31 @@ if [ "$BUSY" = "1" ] && [ $NOW -eq 0 ]; then
   exit 0
 fi
 echo "[5/5] Restarting the service"
-if ! "${SSH[@]}" "sudo systemctl enable -q vinyl-check && sudo systemctl restart vinyl-check \
-  && for i in 1 2 3 4 5 6 7 8 9 10; do sleep 2; curl -fsS localhost:8080/api/health 2>/dev/null && echo && break; done \
-  && systemctl is-active vinyl-check"; then
+# The answer of the remote part: 0 = the service answers; 1 = it starts again and again (the new code does not
+# run); 2 = no answer within two minutes, but it has not restarted either (a slow start: a version that regrades
+# every analysis first can take that long on a Pi).
+rc=0
+"${SSH[@]}" "sudo systemctl enable -q vinyl-check && sudo systemctl restart vinyl-check || exit 1
+  n0=\$(systemctl show vinyl-check -p NRestarts --value)
+  for i in \$(seq 1 60); do
+    sleep 2
+    if curl -fsS -m 3 localhost:8080/api/health 2>/dev/null; then echo; systemctl is-active vinyl-check; exit 0; fi
+    n=\$(systemctl show vinyl-check -p NRestarts --value)
+    [ \$((n - n0)) -ge 2 ] && exit 1
+  done
+  exit 2" || rc=$?
+if [ $rc -ne 0 ]; then
   echo "ERROR: the service does not answer after the restart. The end of its log:" >&2
   "${SSH[@]}" "journalctl -u vinyl-check -n 15 --no-pager 2>/dev/null | cut -c1-220" >&2 || true
-  # Back to the code that ran before (kept by the unit's ExecStartPre). A database the new version has already
-  # migrated stays as it is: the versions only add tables and columns, which the previous code leaves alone.
-  if "${SSH[@]}" "sudo test -d /opt/vinyl-check.prev"; then
+  if [ $rc -ne 1 ]; then
+    echo "It is not starting again and again, so the previous code was not put back: it may only be slow to start." >&2
+    echo "Look at it: ssh $TARGET journalctl -u vinyl-check -f" >&2
+  elif "${SSH[@]}" "sudo test -d /opt/vinyl-check.prev"; then
+    # Back to the code that ran before (kept by the unit's ExecStartPre). A database the new version has already
+    # migrated stays as it is: the versions only add tables and columns, which the previous code leaves alone.
     "${SSH[@]}" "sudo bash -c 'systemctl stop vinyl-check; rm -rf /opt/vinyl-check.failed \
         && mv /opt/vinyl-check /opt/vinyl-check.failed && mv /opt/vinyl-check.prev /opt/vinyl-check \
-        && systemctl start vinyl-check' && sleep 6 && curl -fsS -m 5 localhost:8080/api/health && echo" \
+        && systemctl start vinyl-check' && sleep 8 && curl -fsS -m 5 localhost:8080/api/health && echo" \
       && echo "The previous version runs again. The code that failed is in /opt/vinyl-check.failed on the Pi." >&2 \
       || echo "Putting the previous code back did not work either: look at the Pi (journalctl -u vinyl-check)." >&2
   fi

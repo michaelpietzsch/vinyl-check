@@ -50,8 +50,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `/opt/vinyl-check.new` and becomes `/opt/vinyl-check.staged` only after it passed, so an interrupted deploy
   leaves nothing a later restart could pick up. File modes of the working copy no longer reach the Pi (a file
   readable only by its owner stopped the service, which runs as another user), nor do macOS's extended attributes.
-  The unit keeps the code it replaces as `/opt/vinyl-check.prev`, and when the service does not answer after the
-  restart, the script puts it back.
+  The unit keeps the code it replaces as `/opt/vinyl-check.prev`, and when the service starts again and again
+  after the restart instead of answering, the script puts it back (a start that is only slow is left alone).
 - **Stored analyses are corrected at the next start.** The excerpts around the hits of earlier analyses are read
   from the audio and judged again, once; sides that lost their grade to a scratch are graded anew. Analyses whose
   audio has been deleted keep their hits.
