@@ -195,8 +195,8 @@ def test_wrong_side_points_to_other_master(side_a):
 
 
 def _report_data(out: dict) -> tuple[dict, dict]:
-    """Approval and recording report data shaped like web.approval_report_data() / recording_report_data(), built
-    from a master.check result (its labels, verdicts and warnings are i18n messages)."""
+    """Approval and recording report data shaped like approval_report_data() / recording_report_data() of
+    api/masters.py, built from a master.check result (its labels, verdicts and warnings are i18n messages)."""
     k, sp, wo, fr, ga = out["clicks"], out["speed"], out["wow"], out["freq"], out["gaps"]
     img = (np.arange(40 * 300) % 256).astype(np.uint8).reshape(40, 300)
     sg = {"img": img, "t0": 0.0, "t1": 96.0, "fmin": 20.0, "fmax": 20000.0}
@@ -271,7 +271,7 @@ def test_reports_render_in_each_language(pressed, caplog, lang):
         notes = "Freigabe mit Hinweisen" if lang == "de" else "Approval with notes"
         assert report_pdf._verdict("approve_with_notes") == (notes, "warn")           # without a text: own label
         text = i18n.render(i18n.msg("labels.verdict.reject"))
-        assert report_pdf._verdict("reject", text) == (text, "bad")                   # web.py's text, colour by code
+        assert report_pdf._verdict("reject", text) == (text, "bad")                   # the API's text, colour by code
         assert report_pdf._polarity("left_inverted") == ("links verpolt" if lang == "de" else "left channel inverted")
     for pdf, subject in zip(pdfs, SUBJECTS[lang]):
         assert pdf[:5] == b"%PDF-" and b"/Count" in pdf and len(pdf) > 10000

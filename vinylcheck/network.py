@@ -54,7 +54,7 @@ CODE_LEN = 8
 COOKIE_MAX_AGE = 180 * 24 * 3600         # a phone stays signed in for half a year, or until the code changes
 MAX_FAILURES, LOCK_S = 5, 60.0           # wrong codes from one address before a pause of LOCK_S seconds
 LAN_HOST = "0.0.0.0"
-# Keys in the settings table of the database (not part of web.SETTINGS: they are not edited in the settings form)
+# Keys in the settings table of the database (not part of api.common.SETTINGS: they are not edited in the settings form)
 S_LAN, S_CODE, S_SECRET, S_PORT = "lan_access", "access_code", "access_secret", "lan_port"
 
 

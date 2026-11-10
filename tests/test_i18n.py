@@ -45,7 +45,7 @@ def test_catalog_files_are_flat_json():
 def test_keys_used_in_code_exist():
     """Literal keys in msg()/t()/T() calls must be in the English catalogs (dynamic keys are not checked)."""
     server, web = i18n.catalog("en"), i18n.catalog("en", web=True)
-    for f in (ROOT / "vinylcheck").glob("*.py"):
+    for f in (ROOT / "vinylcheck").rglob("*.py"):
         if f.name == "i18n.py":                                      # examples in the docstring
             continue
         for k in re.findall(r"""\b(?:msg|i18n\.t|t)\(\s*["']([a-z0-9_]+\.[a-z0-9_.]+)["']""", f.read_text(encoding="utf-8")):

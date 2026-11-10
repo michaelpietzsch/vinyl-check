@@ -10,14 +10,14 @@ namespace of the server catalogs (``i18n.t``), numbers and dates use the reader'
 other modules may be i18n messages or plain strings (results stored before 1.0); they always pass through
 ``_text`` (``i18n.render``) before they are placed on the page.
 
-- ``build(data)``: test pressing approval. Input from web.approval_report_data() (approval, defects shared by several
-  copies, per copy the master comparison and the real clicks, spectrograms as uint8 matrices). Layout: cover page
-  with recommendation, key facts and an overview per side; one new page per record side with checks, copies, audible
-  stamper defects, timeline, spectrogram, close-ups, frequency response, wow and level per track; appendix with
-  method and thresholds. Header with the record, footer with "page x of y".
+- ``build(data)``: test pressing approval. Input from approval_report_data() in api/masters.py (approval, defects
+  shared by several copies, per copy the master comparison and the real clicks, spectrograms as uint8 matrices).
+  Layout: cover page with recommendation, key facts and an overview per side; one new page per record side with
+  checks, copies, audible stamper defects, timeline, spectrogram, close-ups, frequency response, wow and level per
+  track; appendix with method and thresholds. Header with the record, footer with "page x of y".
 - ``build_recording(data)``: report of one recording (grade, key figures, clicks across the side, level, spectrogram,
   tracks, grades per metric, skips, strongest detections, master comparison, technical data, grading scale). Input
-  from web.recording_report_data().
+  from recording_report_data() in api/masters.py.
 """
 from __future__ import annotations
 
@@ -50,8 +50,8 @@ STATUS = {"ok": "#2f8f5b", "warn": "#c7871a", "bad": "#c03a48", "info": "#7a8696
 KIND = {"pop": "#d64545", "click": "#e0a526", "tick": "#8c96a3"}
 COPY_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#17becf", "#7f7f7f"]
 SG_SCALE = [(0, 0, 4), (40, 12, 70), (101, 21, 110), (159, 42, 99), (212, 72, 66), (245, 125, 21), (250, 193, 39), (252, 253, 191)]
-# Approval verdicts (values of web.approval()) → status colour. The text comes with the verdict (`verdict_text`);
-# without one the report uses its own label for the status.
+# Approval verdicts (values of the approval route, api/masters.py) → status colour. The text comes with the verdict
+# (`verdict_text`); without one the report uses its own label for the status.
 VERDICT_STATUS = {"approve": "ok", "approve_with_notes": "warn", "reject": "bad"}
 VERDICT_LABEL = {"ok": "report.verdict_ok", "warn": "report.verdict_warn", "bad": "report.verdict_bad"}
 # Event kinds (stored enum values) → catalog keys
@@ -111,7 +111,7 @@ def _styles() -> dict:
 # ─── Text and number formatting ──────────────────────────────────────────────
 def fmt_num(v, d: int = 1, sign: bool = False, unit: str = "") -> str:
     """A number for display in the request language: `d` decimals, local decimal separator, typographic minus, a sign
-    on request and an optional unit; "–" without a value. (web.py formats its table values with it as well.)"""
+    on request and an optional unit; "–" without a value. (The API formats its table values with it as well.)"""
     if v is None or (isinstance(v, float) and not math.isfinite(v)):
         return "–"
     s = i18n.num(v, d)

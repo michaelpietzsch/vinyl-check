@@ -9,7 +9,7 @@
 ## Today: one station
 
 ```
-Browser / desktop window ──HTTP/WebSocket──► FastAPI (web.py)
+Browser / desktop window ──HTTP/WebSocket──► FastAPI (web.py, api/)
                               ├── capture.py      arecord (ALSA hw:) or PortAudio (Core Audio, WASAPI, ASIO)
                               │     └── measure.LiveMeter   fundamental, THD+N L/R five times per second
                               ├── jobs.py         one worker: analysis, alignment, comparison, master check

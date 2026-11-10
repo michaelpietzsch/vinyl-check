@@ -507,7 +507,7 @@ def test_index_has_versioned_assets_and_no_cache(client):
 # ─── Record covers from Discogs ──────────────────────────────────────────────
 def test_record_cover_is_fetched_once_and_cached(client, monkeypatch):
     import io
-    from vinylcheck import web
+    from vinylcheck.api import records as records_api
     calls = []
 
     def fake_urlopen(req, timeout=0, context=None):
@@ -516,7 +516,7 @@ def test_record_cover_is_fetched_once_and_cached(client, monkeypatch):
                                       {"type": "primary", "uri": "https://i.discogs.com/a.jpg", "uri150": "https://i.discogs.com/a150.jpg"}]})
         return io.BytesIO(body.encode())
 
-    monkeypatch.setattr(web.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(records_api.urllib.request, "urlopen", fake_urlopen)
     rid = client.post("/api/records", json={"artist": "Test Artist", "title": "Test Album",
                                             "discogs_release_id": 1234567}).json()["id"]
     for _ in range(2):
@@ -695,12 +695,12 @@ def test_interrupted_recording_error_is_rendered_per_reader(tmp_path):
 def test_dynamic_label_keys_exist():
     """Label keys built at runtime (kinds, findings, settings, polarity, verdicts, approval checks, technical data)
     are in the catalog; test_i18n only checks literal keys."""
-    from vinylcheck import web
+    from vinylcheck.api import common
     en = i18n.catalog("en")
-    keys = [m["$t"] for m in (*web.KIND_LABEL.values(), *web.FINDINGS_LABEL.values(), *web.POLARITY_LABEL.values(),
-                              *web.VERDICT_TEXT.values())]
-    keys += [web.SETTINGS[k][p]["$t"] for k in web.SETTINGS for p in ("label", "help")]
-    src = Path(web.__file__).read_text(encoding="utf-8")
+    keys = [m["$t"] for m in (*common.KIND_LABEL.values(), *common.FINDINGS_LABEL.values(),
+                              *common.POLARITY_LABEL.values(), *common.VERDICT_TEXT.values())]
+    keys += [common.SETTINGS[k][p]["$t"] for k in common.SETTINGS for p in ("label", "help")]
+    src = "".join(f.read_text(encoding="utf-8") for f in Path(common.__file__).parent.glob("*.py"))
     keys += [f"labels.approval_check.{k}" for k in re.findall(r'check\("([a-z_]+)"', src)]
     keys += [f"labels.tech.{k}" for k in re.findall(r'lab\("([a-z_]+)"\)', src)]
     assert len(keys) > 50 and [k for k in keys if k not in en] == []
@@ -834,7 +834,8 @@ def test_targets_api_and_profile_override(jclient):
 
 def test_measured_grade_can_be_written_to_collection(tmp_path, monkeypatch):
     import io
-    from vinylcheck import discogs, web
+    from vinylcheck import discogs
+    from vinylcheck.api.common import GRADE_TO_DISCOGS
     audio, _ = synth.make_side(duration_s=40, seed=5, clicks_per_min=30)
     wav = tmp_path / "side.wav"
     sf.write(wav, audio, SR, subtype="PCM_16")
@@ -871,12 +872,12 @@ def test_measured_grade_can_be_written_to_collection(tmp_path, monkeypatch):
         assert grade
         r = c.post(f"/api/records/{rid}/condition", json={"recording_id": rec["id"]})
         assert r.status_code == 200, r.text
-        assert r.json() == {"ok": True, "grade": grade, "previous": "Good (G)", "current": web.GRADE_TO_DISCOGS[grade],
+        assert r.json() == {"ok": True, "grade": grade, "previous": "Good (G)", "current": GRADE_TO_DISCOGS[grade],
                             "instance_id": 42}
         assert "/folders/1/releases/1234567/instances/42/fields/1" in written["url"]
-        assert written["value"] == web.GRADE_TO_DISCOGS[grade]
-        assert c.get(f"/api/records/{rid}").json()["discogs_media_condition"] == web.GRADE_TO_DISCOGS[grade]
-        assert c.get(f"/api/records/{rid}/collection").json()["media_condition"] == web.GRADE_TO_DISCOGS[grade]
+        assert written["value"] == GRADE_TO_DISCOGS[grade]
+        assert c.get(f"/api/records/{rid}").json()["discogs_media_condition"] == GRADE_TO_DISCOGS[grade]
+        assert c.get(f"/api/records/{rid}/collection").json()["media_condition"] == GRADE_TO_DISCOGS[grade]
         r = c.post(f"/api/records/{rid}/condition", json={"copy": ""})            # record grade of the copy
         assert r.status_code == 200 and r.json()["grade"] == grade, r.text
         assert c.post(f"/api/records/{rid}/condition", json={"copy": "Copy 9"}).status_code == 409

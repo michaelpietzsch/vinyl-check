@@ -16,6 +16,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the stylus or the load. Equalized twice, the treble bands are often too quiet to be found: the bass alone, within
   2 dB of the curve, is then enough.
 
+### Changed
+
+- **The web API's code is split up, with no change in behaviour.** The one function that held every route and
+  helper (`web.create_app`, 2,700 lines) is now a `Station` class with what the areas share (`station.py`) and one
+  module per area in `vinylcheck/api/`: records, recordings, recorder, masters and reports, turntables, the Discogs
+  account, system. Routes, their order where it matters, and every function body are the same.
+- **Tests in a browser.** `tests/test_browser.py` drives the interface in a real browser (Playwright) against a
+  running station, in a CI job of its own: see CONTRIBUTING.
+
 ### Fixed
 
 - **A scratch is no longer reported as a skip.** A scratch across the grooves clicks once per revolution, at

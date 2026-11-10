@@ -113,7 +113,7 @@ jobs:
           python - <<'EOF'
           import glob, zipfile
           names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
-          for needed in ("vinylcheck/static/index.html", "vinylcheck/static/i18n.js",
+          for needed in ("vinylcheck/static/index.html", "vinylcheck/static/i18n.js", "vinylcheck/api/system.py",
                          "vinylcheck/static/locales/en/meta.json", "vinylcheck/locales/en/common.json",
                          "vinylcheck/weights/grooveclean-detector.pt"):
               assert needed in names, f"missing in wheel: {needed}"
