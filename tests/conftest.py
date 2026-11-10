@@ -52,18 +52,47 @@ def _close_workers_at_the_end():
             pass
 
 
-# A run has to end when its tests have ended. At exit the interpreter waits for every thread that is not a daemon,
-# and the manager thread of a process pool is one: when a pool cannot shut down (its child terminated in the middle
-# of a job; Python 3.11 can then wait for good), a green run hangs until the CI's time limit (macOS, 2026-11-01;
-# Linux with Python 3.11, 2026-11-10: "412 passed", then 35 minutes of nothing). So after the summary is written,
-# whatever is still alive gets a moment to finish; what is left then is named, child processes are terminated, and
-# the process ends with the result of the tests.
+# A run has to end when its tests have ended. At exit the interpreter waits for threads that are no daemons, joins
+# the feeder threads of multiprocessing queues and the manager threads of process pools; when one of them never
+# returns, a green run hangs until the CI's time limit (macOS, 2026-11-01; Linux with Python 3.11 and 3.12,
+# 2026-11-10: "416 passed", then 35 minutes of nothing). Two guards:
+#  - after the summary, threads and child processes that are still alive get a moment; what is left then is named,
+#    child processes are terminated, and the process ends with the result of the tests;
+#  - a watchdog: if the process is still there a good minute after its tests, it writes the stack of every thread
+#    (which shows what the exit is waiting for) and ends the process with the result of the tests. Should even that
+#    thread be unable to run, faulthandler ends the process a minute later (then with status 1).
 _result: dict = {"status": None}
 EXIT_GRACE_S = 10.0
+EXIT_WATCH_S = 75.0
+
+
+def _watch_the_exit(status: int) -> None:
+    import faulthandler
+    import multiprocessing
+    import os
+    import threading
+    import time
+
+    def run():
+        time.sleep(EXIT_WATCH_S)
+        err = sys.__stderr__
+        try:
+            err.write(f"\nThe test process is still alive {EXIT_WATCH_S:.0f} s after its tests ended (result {status}). "
+                      "It is ended now; the threads were:\n")
+            err.flush()
+            faulthandler.dump_traceback(file=err, all_threads=True)
+            kids = [f"{p.name} (pid {p.pid}, alive {p.is_alive()})" for p in multiprocessing.active_children()]
+            err.write(f"Child processes: {', '.join(kids) or 'none'}\n")
+            err.flush()
+        finally:
+            os._exit(status)
+    threading.Thread(target=run, daemon=True, name="tests-exit-watchdog").start()
+    faulthandler.dump_traceback_later(EXIT_WATCH_S + 60, exit=True, file=sys.__stderr__)
 
 
 def pytest_sessionfinish(session, exitstatus):
     _result["status"] = int(exitstatus)
+    _watch_the_exit(int(exitstatus))
 
 
 @pytest.hookimpl(trylast=True)
